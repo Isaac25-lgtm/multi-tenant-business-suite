@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+*.db
+.env
+uploads/
+migrations/versions/*.py
+!migrations/versions/__init__.py
+.DS_Store

@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-primary-dark text-text font-sans;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  }
+  
+  .btn-primary {
+    @apply btn bg-accent text-white hover:bg-accent-hover;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-secondary text-text hover:bg-opacity-80;
+  }
+  
+  .btn-danger {
+    @apply btn bg-danger text-white hover:bg-opacity-90;
+  }
+  
+  .card {
+    @apply bg-card rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow duration-200;
+  }
+  
+  .input {
+    @apply w-full px-4 py-2 bg-secondary border border-border rounded-lg text-text placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent;
+  }
+  
+  .label {
+    @apply block text-sm font-medium text-text mb-2;
+  }
+  
+  .badge {
+    @apply px-3 py-1 rounded-full text-xs font-medium;
+  }
+  
+  .badge-success {
+    @apply badge bg-success bg-opacity-20 text-success;
+  }
+  
+  .badge-warning {
+    @apply badge bg-warning bg-opacity-20 text-warning;
+  }
+  
+  .badge-danger {
+    @apply badge bg-danger bg-opacity-20 text-danger;
+  }
+}
