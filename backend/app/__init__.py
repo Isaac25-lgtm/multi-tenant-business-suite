@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 from flask_cors import CORS
 from app.extensions import db, jwt, migrate
 from app.config import Config
@@ -8,13 +8,34 @@ import os
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
-    
+
     # Initialize extensions
     db.init_app(app)
     jwt.init_app(app)
     migrate.init_app(app, db)
-    CORS(app)
-    
+
+    # Configure CORS to allow Authorization header
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": "*",
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        }
+    })
+
+    # JWT error handlers
+    @jwt.invalid_token_loader
+    def invalid_token_callback(error_string):
+        return jsonify({'error': 'Invalid token', 'message': error_string}), 401
+
+    @jwt.unauthorized_loader
+    def unauthorized_callback(error_string):
+        return jsonify({'error': 'Missing authorization token'}), 401
+
+    @jwt.expired_token_loader
+    def expired_token_callback(jwt_header, jwt_payload):
+        return jsonify({'error': 'Token has expired'}), 401
+
     # Create upload folder if it doesn't exist
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
     

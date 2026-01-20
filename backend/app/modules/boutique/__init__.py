@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.user import User
 from app.models.customer import Customer
@@ -14,6 +14,7 @@ from app.utils.helpers import (
 )
 from datetime import datetime, date, timedelta
 from sqlalchemy import and_, or_
+from app.utils.pdf_generator import generate_receipt_pdf
 
 boutique_bp = Blueprint('boutique', __name__)
 
@@ -671,3 +672,33 @@ def record_credit_payment(id):
         'sale': sale.to_dict(),
         'payment': payment.to_dict()
     }), 201
+
+
+# ============= RECEIPT =============
+
+@boutique_bp.route('/sales/<int:id>/receipt', methods=['GET'])
+@jwt_required()
+@business_access_required('boutique')
+def get_sale_receipt(id):
+    """Generate PDF receipt for a sale"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    sale = BoutiqueSale.query.get(id)
+
+    if not sale or sale.is_deleted:
+        return jsonify({'error': 'Sale not found'}), 404
+
+    # Check access for employees
+    if user.role == 'employee' and sale.created_by != user_id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    # Generate PDF
+    pdf_buffer = generate_receipt_pdf(sale, 'BOUTIQUE')
+
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'receipt_{sale.reference_number}.pdf'
+    )

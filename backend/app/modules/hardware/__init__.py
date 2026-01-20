@@ -13,6 +13,7 @@ from app.utils.helpers import (
     log_audit, generate_reference_number
 )
 from datetime import datetime, date, timedelta
+from app.utils.pdf_generator import generate_receipt_pdf
 
 hardware_bp = Blueprint('hardware', __name__)
 
@@ -401,5 +402,292 @@ def create_hardware_sale():
     return create_sale_handler('hardware', HardwareSale, HardwareSaleItem, HardwareStock, 'DNV-H-')
 
 
-# Additional hardware endpoints follow the same pattern as boutique
-# Omitted for brevity - they would be identical with hardware models
+# ============= SALES =============
+
+@hardware_bp.route('/sales', methods=['GET'])
+@jwt_required()
+@business_access_required('hardware')
+def get_sales():
+    """Get all hardware sales"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    # Get date filter
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    created_by = request.args.get('created_by')
+
+    query = HardwareSale.query.filter_by(is_deleted=False)
+
+    # Apply date filter based on user role
+    if user.role == 'employee':
+        # Employees see only today and yesterday
+        date_filter = get_date_filter_for_user(user)
+        if date_filter:
+            query = query.filter(HardwareSale.sale_date.in_(date_filter))
+        # Employees see only their own sales
+        query = query.filter_by(created_by=user_id)
+    else:
+        # Manager can filter by date range
+        if start_date:
+            query = query.filter(HardwareSale.sale_date >= start_date)
+        if end_date:
+            query = query.filter(HardwareSale.sale_date <= end_date)
+        if created_by:
+            query = query.filter_by(created_by=created_by)
+
+    sales = query.order_by(HardwareSale.sale_date.desc()).all()
+
+    return jsonify({
+        'sales': [sale.to_dict() for sale in sales]
+    }), 200
+
+
+@hardware_bp.route('/sales/<int:id>', methods=['GET'])
+@jwt_required()
+@business_access_required('hardware')
+def get_sale(id):
+    """Get hardware sale details"""
+    sale = HardwareSale.query.get(id)
+
+    if not sale or sale.is_deleted:
+        return jsonify({'error': 'Sale not found'}), 404
+
+    # Check access
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if user.role == 'employee' and sale.created_by != user_id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    return jsonify({
+        'sale': sale.to_dict(include_items=True)
+    }), 200
+
+
+@hardware_bp.route('/sales/<int:id>', methods=['DELETE'])
+@jwt_required()
+@business_access_required('hardware')
+def delete_sale(id):
+    """Soft delete hardware sale"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if not user.can_delete:
+        return jsonify({'error': 'You do not have permission to delete sales'}), 403
+
+    sale = HardwareSale.query.get(id)
+
+    if not sale or sale.is_deleted:
+        return jsonify({'error': 'Sale not found'}), 404
+
+    # Check access for employees
+    if user.role == 'employee' and sale.created_by != user_id:
+        return jsonify({'error': 'You can only delete your own sales'}), 403
+
+    # Validate date for employees
+    if user.role == 'employee':
+        can_delete, error_msg = validate_date_for_user(user, sale.sale_date)
+        if not can_delete:
+            return jsonify({'error': 'You can only delete recent sales'}), 403
+
+    # Soft delete
+    sale.is_deleted = True
+    sale.deleted_at = datetime.utcnow()
+    sale.deleted_by = user_id
+
+    # Restore stock quantities
+    for item in sale.items:
+        if item.stock_id and not item.is_other_item:
+            stock = HardwareStock.query.get(item.stock_id)
+            if stock:
+                stock.quantity += item.quantity
+
+    db.session.commit()
+
+    log_audit(
+        user_id=user_id,
+        action='delete',
+        module='hardware',
+        entity_type='sale',
+        entity_id=sale.id,
+        description=f"Deleted sale {sale.reference_number}",
+        is_flagged=True,
+        flag_reason="Sale deleted"
+    )
+
+    return jsonify({'message': 'Sale deleted successfully'}), 200
+
+
+# ============= CREDITS =============
+
+@hardware_bp.route('/credits', methods=['GET'])
+@jwt_required()
+@business_access_required('hardware')
+def get_credits():
+    """Get pending hardware credits"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    query = HardwareSale.query.filter_by(
+        payment_type='part',
+        is_credit_cleared=False,
+        is_deleted=False
+    ).filter(HardwareSale.balance > 0)
+
+    # Employees see only their own credits
+    if user.role == 'employee':
+        query = query.filter_by(created_by=user_id)
+
+    credits = query.order_by(HardwareSale.sale_date.desc()).all()
+
+    return jsonify({
+        'credits': [credit.to_dict() for credit in credits]
+    }), 200
+
+
+@hardware_bp.route('/credits/cleared', methods=['GET'])
+@jwt_required()
+@manager_required
+@business_access_required('hardware')
+def get_cleared_credits():
+    """Get cleared hardware credits (Manager only)"""
+    credits = HardwareSale.query.filter_by(
+        payment_type='part',
+        is_credit_cleared=True,
+        is_deleted=False
+    ).order_by(HardwareSale.updated_at.desc()).all()
+
+    return jsonify({
+        'credits': [credit.to_dict() for credit in credits]
+    }), 200
+
+
+@hardware_bp.route('/credits/<int:id>', methods=['GET'])
+@jwt_required()
+@business_access_required('hardware')
+def get_credit_details(id):
+    """Get hardware credit details with payment history"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    sale = HardwareSale.query.get(id)
+
+    if not sale or sale.is_deleted or sale.payment_type != 'part':
+        return jsonify({'error': 'Credit not found'}), 404
+
+    # Check access for employees
+    if user.role == 'employee' and sale.created_by != user_id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    # Get payment history
+    payments = HardwareCreditPayment.query.filter_by(
+        sale_id=sale.id
+    ).order_by(HardwareCreditPayment.payment_date.desc()).all()
+
+    return jsonify({
+        'sale': sale.to_dict(include_items=True),
+        'payments': [payment.to_dict() for payment in payments]
+    }), 200
+
+
+@hardware_bp.route('/credits/<int:id>/payment', methods=['POST'])
+@jwt_required()
+@business_access_required('hardware')
+def record_credit_payment(id):
+    """Record hardware credit payment"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    if not user.can_clear_credits:
+        return jsonify({'error': 'You do not have permission to clear credits'}), 403
+
+    sale = HardwareSale.query.get(id)
+
+    if not sale or sale.is_deleted or sale.payment_type != 'part':
+        return jsonify({'error': 'Credit not found'}), 404
+
+    if sale.is_credit_cleared:
+        return jsonify({'error': 'Credit already cleared'}), 400
+
+    data = request.get_json()
+
+    if not data.get('amount'):
+        return jsonify({'error': 'Payment amount is required'}), 400
+
+    amount = float(data['amount'])
+
+    if amount <= 0:
+        return jsonify({'error': 'Payment amount must be greater than zero'}), 400
+
+    if amount > float(sale.balance):
+        return jsonify({'error': 'Payment amount exceeds balance'}), 400
+
+    # Parse payment date
+    payment_date_str = data.get('payment_date', date.today().isoformat())
+    payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
+
+    # Update sale
+    sale.amount_paid = float(sale.amount_paid) + amount
+    sale.balance = float(sale.balance) - amount
+
+    if sale.balance <= 0:
+        sale.is_credit_cleared = True
+        sale.balance = 0
+
+    # Record payment
+    payment = HardwareCreditPayment(
+        sale_id=sale.id,
+        payment_date=payment_date,
+        amount=amount,
+        remaining_balance=sale.balance,
+        created_by=user_id
+    )
+
+    db.session.add(payment)
+    db.session.commit()
+
+    log_audit(
+        user_id=user_id,
+        action='create',
+        module='hardware',
+        entity_type='credit_payment',
+        entity_id=payment.id,
+        description=f"Recorded credit payment of UGX {amount:,.0f} for sale {sale.reference_number}"
+    )
+
+    return jsonify({
+        'message': 'Payment recorded successfully',
+        'sale': sale.to_dict(),
+        'payment': payment.to_dict()
+    }), 201
+
+
+# ============= RECEIPT =============
+
+@hardware_bp.route('/sales/<int:id>/receipt', methods=['GET'])
+@jwt_required()
+@business_access_required('hardware')
+def get_sale_receipt(id):
+    """Generate PDF receipt for a hardware sale"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+
+    sale = HardwareSale.query.get(id)
+
+    if not sale or sale.is_deleted:
+        return jsonify({'error': 'Sale not found'}), 404
+
+    # Check access for employees
+    if user.role == 'employee' and sale.created_by != user_id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    # Generate PDF
+    pdf_buffer = generate_receipt_pdf(sale, 'HARDWARE')
+
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'receipt_{sale.reference_number}.pdf'
+    )

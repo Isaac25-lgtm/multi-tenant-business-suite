@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useToastStore } from '../context/ToastContext';
 
 const API_BASE_URL = '/api';
 
@@ -23,11 +24,38 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
+    const toast = useToastStore.getState();
+
+    // Handle different error types
+    if (error.response) {
+      const status = error.response.status;
+      const message = error.response.data?.error || error.response.data?.message;
+
+      switch (status) {
+        case 401:
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          toast.error('Session expired. Please login again.');
+          window.location.href = '/login';
+          break;
+        case 403:
+          // Only show toast if there's a specific message
+          if (message) {
+            toast.error(message);
+          }
+          break;
+        case 500:
+          toast.error('Server error. Please try again later.');
+          break;
+        // Don't show toasts for 400, 404, 422 - let components handle these
+        default:
+          break;
+      }
+    } else if (error.request) {
+      // Network error
+      toast.error('Network error. Please check your connection.');
     }
+
     return Promise.reject(error);
   }
 );
@@ -64,20 +92,21 @@ export const boutiqueAPI = {
   // Categories
   getCategories: () => api.get('/boutique/categories'),
   createCategory: (data) => api.post('/boutique/categories', data),
-  
+
   // Stock
   getStock: (params) => api.get('/boutique/stock', { params }),
   addStock: (data) => api.post('/boutique/stock', data),
   updateStock: (id, data) => api.put(`/boutique/stock/${id}`, data),
   adjustQuantity: (id, data) => api.put(`/boutique/stock/${id}/quantity`, data),
   deleteStock: (id) => api.delete(`/boutique/stock/${id}`),
-  
+
   // Sales
   getSales: (params) => api.get('/boutique/sales', { params }),
   getSale: (id) => api.get(`/boutique/sales/${id}`),
   createSale: (data) => api.post('/boutique/sales', data),
   deleteSale: (id) => api.delete(`/boutique/sales/${id}`),
-  
+  getReceipt: (id) => api.get(`/boutique/sales/${id}/receipt`, { responseType: 'blob' }),
+
   // Credits
   getCredits: () => api.get('/boutique/credits'),
   getClearedCredits: () => api.get('/boutique/credits/cleared'),
@@ -90,20 +119,21 @@ export const hardwareAPI = {
   // Categories
   getCategories: () => api.get('/hardware/categories'),
   createCategory: (data) => api.post('/hardware/categories', data),
-  
+
   // Stock
   getStock: (params) => api.get('/hardware/stock', { params }),
   addStock: (data) => api.post('/hardware/stock', data),
   updateStock: (id, data) => api.put(`/hardware/stock/${id}`, data),
   adjustQuantity: (id, data) => api.put(`/hardware/stock/${id}/quantity`, data),
   deleteStock: (id) => api.delete(`/hardware/stock/${id}`),
-  
+
   // Sales
   getSales: (params) => api.get('/hardware/sales', { params }),
   getSale: (id) => api.get(`/hardware/sales/${id}`),
   createSale: (data) => api.post('/hardware/sales', data),
   deleteSale: (id) => api.delete(`/hardware/sales/${id}`),
-  
+  getReceipt: (id) => api.get(`/hardware/sales/${id}/receipt`, { responseType: 'blob' }),
+
   // Credits
   getCredits: () => api.get('/hardware/credits'),
   getClearedCredits: () => api.get('/hardware/credits/cleared'),

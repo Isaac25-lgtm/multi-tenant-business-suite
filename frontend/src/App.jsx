@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api, { authAPI, boutiqueAPI, hardwareAPI, employeesAPI, customersAPI, dashboardAPI } from './services/api';
+import ToastContainer from './components/Toast';
+import { useToastStore } from './context/ToastContext';
 
 const App = () => {
   const [currentView, setCurrentView] = useState('login');
@@ -40,9 +42,17 @@ const App = () => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     const savedUser = localStorage.getItem('user');
-    if (token && savedUser) {
+
+    // Validate token is a proper JWT (has 3 parts separated by dots)
+    const isValidJWT = token && token.split('.').length === 3;
+
+    if (isValidJWT && savedUser) {
       setUser(JSON.parse(savedUser));
       setCurrentView(JSON.parse(savedUser).role === 'manager' ? 'manager' : 'employee');
+    } else if (token && !isValidJWT) {
+      // Clear invalid/demo token
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
     }
   }, []);
 
@@ -91,7 +101,7 @@ const App = () => {
       return;
     }
     
-    // Try to login with backend first
+    // Login with backend
     try {
       const response = await authAPI.login(loginForm);
       const { access_token, user } = response.data;
@@ -101,25 +111,10 @@ const App = () => {
       setCurrentView(user.role === 'manager' ? 'manager' : 'employee');
       setActiveNav('dashboard');
     } catch (err) {
-      // If backend login fails, use demo mode
-      console.log('Backend login failed, using demo mode');
-      const demoUser = {
-        id: Date.now(),
-        username: loginForm.username,
-        name: isManager ? 'Manager' : loginForm.username,
-        role: isManager ? 'manager' : 'employee',
-        assigned_business: isManager ? 'all' : loginForm.assigned_business,
-        is_active: true,
-        can_edit: true,
-        can_delete: isManager,
-        can_backdate: isManager,
-        can_clear_credits: true,
-      };
-      localStorage.setItem('user', JSON.stringify(demoUser));
-      localStorage.setItem('token', 'demo-token-' + Date.now());
-      setUser(demoUser);
-      setCurrentView(isManager ? 'manager' : 'employee');
-      setActiveNav('dashboard');
+      // Show the actual error
+      const errorMessage = err.response?.data?.error || 'Login failed. Make sure the backend server is running.';
+      setError(errorMessage);
+      console.error('Login failed:', err);
     } finally {
       setLoading(false);
     }
@@ -135,35 +130,71 @@ const App = () => {
 
   const loadBoutiqueData = async () => {
     try {
-      const [stockRes, catRes, salesRes, creditsRes] = await Promise.all([
+      const isManager = user?.role === 'manager' || user?.assigned_business === 'all';
+      const promises = [
         boutiqueAPI.getStock(),
         boutiqueAPI.getCategories(),
         boutiqueAPI.getSales({ limit: 50 }),
         boutiqueAPI.getCredits()
-      ]);
+      ];
+      
+      // Only load cleared credits for managers
+      if (isManager) {
+        promises.push(boutiqueAPI.getClearedCredits());
+      }
+      
+      const results = await Promise.all(promises);
+      const stockRes = results[0];
+      const catRes = results[1];
+      const salesRes = results[2];
+      const creditsRes = results[3];
+      const clearedRes = results[4];
+      
       setBoutiqueStock(stockRes.data.stock || []);
       setBoutiqueCategories(catRes.data.categories || []);
       setBoutiqueSales(salesRes.data.sales || []);
       setBoutiqueCredits(creditsRes.data.credits || []);
+      setBoutiqueClearedCredits(clearedRes?.data?.credits || []);
     } catch (err) {
-      console.error('Error loading boutique data:', err);
+      // Silently handle 403 (access denied) - expected for employees without access
+      if (err.response?.status !== 403) {
+        console.error('Error loading boutique data:', err);
+      }
     }
   };
 
   const loadHardwareData = async () => {
     try {
-      const [stockRes, catRes, salesRes, creditsRes] = await Promise.all([
+      const isManager = user?.role === 'manager' || user?.assigned_business === 'all';
+      const promises = [
         hardwareAPI.getStock(),
         hardwareAPI.getCategories(),
         hardwareAPI.getSales({ limit: 50 }),
         hardwareAPI.getCredits()
-      ]);
+      ];
+      
+      // Only load cleared credits for managers
+      if (isManager) {
+        promises.push(hardwareAPI.getClearedCredits());
+      }
+      
+      const results = await Promise.all(promises);
+      const stockRes = results[0];
+      const catRes = results[1];
+      const salesRes = results[2];
+      const creditsRes = results[3];
+      const clearedRes = results[4];
+      
       setHardwareStock(stockRes.data.stock || []);
       setHardwareCategories(catRes.data.categories || []);
       setHardwareSales(salesRes.data.sales || []);
       setHardwareCredits(creditsRes.data.credits || []);
+      setHardwareClearedCredits(clearedRes?.data?.credits || []);
     } catch (err) {
-      console.error('Error loading hardware data:', err);
+      // Silently handle 403 (access denied) - expected for employees without access
+      if (err.response?.status !== 403) {
+        console.error('Error loading hardware data:', err);
+      }
     }
   };
 
@@ -187,16 +218,26 @@ const App = () => {
 
   // Load data based on active nav
   useEffect(() => {
-    if (currentView !== 'login') {
-      if (activeNav === 'boutique') loadBoutiqueData();
-      if (activeNav === 'hardware') loadHardwareData();
-      if (activeNav === 'employees') loadEmployees();
-      if (activeNav === 'dashboard') {
+    if (currentView !== 'login' && user) {
+      const isManager = user.role === 'manager' || user.assigned_business === 'all';
+      const hasBoutiqueAccess = isManager || user.assigned_business === 'boutique';
+      const hasHardwareAccess = isManager || user.assigned_business === 'hardware';
+      
+      if (activeNav === 'boutique' && hasBoutiqueAccess) {
         loadBoutiqueData();
+      }
+      if (activeNav === 'hardware' && hasHardwareAccess) {
         loadHardwareData();
       }
+      if (activeNav === 'employees' && isManager) {
+        loadEmployees();
+      }
+      if (activeNav === 'dashboard') {
+        if (hasBoutiqueAccess) loadBoutiqueData();
+        if (hasHardwareAccess) loadHardwareData();
+      }
     }
-  }, [activeNav, currentView]);
+  }, [activeNav, currentView, user]);
 
   // Render login page
   if (currentView === 'login') {
@@ -676,6 +717,7 @@ const App = () => {
 
   // Generic Business Page (Boutique/Hardware)
   const BusinessPage = ({ type }) => {
+    const toast = useToastStore();
     const isBoutique = type === 'boutique';
     const stock = isBoutique ? boutiqueStock : hardwareStock;
     const categories = isBoutique ? boutiqueCategories : hardwareCategories;
@@ -690,6 +732,7 @@ const App = () => {
         setShowModal(null);
         setFormData({});
         isBoutique ? loadBoutiqueData() : loadHardwareData();
+        toast.success('Stock item added successfully');
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to add item');
       }
@@ -702,6 +745,7 @@ const App = () => {
         setFormData({});
         setEditingItem(null);
         isBoutique ? loadBoutiqueData() : loadHardwareData();
+        toast.success('Stock item updated successfully');
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to update item');
       }
@@ -712,6 +756,7 @@ const App = () => {
       try {
         await stockAPI.deleteStock(id);
         isBoutique ? loadBoutiqueData() : loadHardwareData();
+        toast.success('Stock item deleted successfully');
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to delete item');
       }
@@ -723,8 +768,25 @@ const App = () => {
         setShowModal(null);
         setFormData({});
         isBoutique ? loadBoutiqueData() : loadHardwareData();
+        toast.success('Category added successfully');
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to add category');
+      }
+    };
+
+    const handleDownloadReceipt = async (saleId) => {
+      try {
+        const response = await stockAPI.getReceipt(saleId);
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `receipt_${saleId}.pdf`;
+        link.click();
+        window.URL.revokeObjectURL(url);
+        toast.success('Receipt downloaded');
+      } catch (err) {
+        toast.error('Failed to download receipt');
       }
     };
 
@@ -875,7 +937,11 @@ const App = () => {
                       </td>
                       <td className="px-4 py-3">
                         <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">👁️</button>
-                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">🖨️</button>
+                        <button
+                          onClick={() => handleDownloadReceipt(sale.id)}
+                          className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
+                          title="Download Receipt"
+                        >🖨️</button>
                       </td>
                     </tr>
                   ))}
@@ -1118,6 +1184,7 @@ const App = () => {
 
   // New Sale Modal Component (used by both Manager and Employee)
   const NewSaleModal = ({ stock, stockAPI, onClose, onSuccess, formatMoney }) => {
+    const toast = useToastStore();
     const [saleItems, setSaleItems] = useState([]);
     const [paymentType, setPaymentType] = useState('full');
     const [selectedItemId, setSelectedItemId] = useState('');
@@ -1224,6 +1291,7 @@ const App = () => {
       setSaleLoading(true);
       try {
         await stockAPI.createSale(saleData);
+        toast.success('Sale completed successfully!');
         onSuccess();
       } catch (err) {
         setSaleError(err.response?.data?.error || 'Failed to complete sale. Please try again.');
@@ -1433,12 +1501,15 @@ const App = () => {
 
   // Employees Page
   const EmployeesPage = () => {
+    const toast = useToastStore();
+
     const handleAddEmployee = async () => {
       try {
         await employeesAPI.create(formData);
         setShowModal(null);
         setFormData({});
         loadEmployees();
+        toast.success('Employee added successfully');
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to add employee');
       }
@@ -1451,16 +1522,18 @@ const App = () => {
         setFormData({});
         setEditingItem(null);
         loadEmployees();
+        toast.success('Employee updated successfully');
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to update employee');
       }
     };
 
     const handleDeleteEmployee = async (id) => {
-      if (!window.confirm('Are you sure you want to delete this employee?')) return;
+      if (!window.confirm('Are you sure you want to deactivate this employee?')) return;
       try {
         await employeesAPI.delete(id);
         loadEmployees();
+        toast.success('Employee deactivated successfully');
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to delete employee');
       }
@@ -2974,6 +3047,7 @@ const App = () => {
   // Main App Layout
   const MainLayout = ({ children, title, subtitle, isManager }) => (
     <div className="min-h-screen bg-slate-900 flex">
+      <ToastContainer />
       <Sidebar isManager={isManager} />
       <main className="flex-1 p-6 overflow-auto">
         <div className="flex justify-between items-start mb-6">
@@ -2999,7 +3073,12 @@ const App = () => {
 
   // Render based on current view
   if (currentView === 'login') {
-    return <LoginPage />;
+    return (
+      <>
+        <ToastContainer />
+        <LoginPage />
+      </>
+    );
   }
 
   if (currentView === 'manager') {
