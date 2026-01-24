@@ -23,20 +23,26 @@ def get_manager_dashboard():
     today = date.today()
     yesterday = today - timedelta(days=1)
     
-    # Today's revenue by business
-    boutique_today = db.session.query(
-        func.sum(BoutiqueSale.amount_paid)
+    # Today's revenue and transaction count by business
+    boutique_today_query = db.session.query(
+        func.sum(BoutiqueSale.amount_paid),
+        func.count(BoutiqueSale.id)
     ).filter(
         BoutiqueSale.sale_date == today,
         BoutiqueSale.is_deleted == False
-    ).scalar() or 0
+    ).first()
+    boutique_today = boutique_today_query[0] or 0
+    boutique_today_count = boutique_today_query[1] or 0
     
-    hardware_today = db.session.query(
-        func.sum(HardwareSale.amount_paid)
+    hardware_today_query = db.session.query(
+        func.sum(HardwareSale.amount_paid),
+        func.count(HardwareSale.id)
     ).filter(
         HardwareSale.sale_date == today,
         HardwareSale.is_deleted == False
-    ).scalar() or 0
+    ).first()
+    hardware_today = hardware_today_query[0] or 0
+    hardware_today_count = hardware_today_query[1] or 0
     
     total_today = float(boutique_today) + float(hardware_today)
     
@@ -57,7 +63,7 @@ def get_manager_dashboard():
     
     total_yesterday = float(boutique_yesterday) + float(hardware_yesterday)
     
-    # Credits outstanding
+    # Credits outstanding (pending)
     boutique_credits = db.session.query(
         func.sum(BoutiqueSale.balance)
     ).filter(
@@ -75,6 +81,23 @@ def get_manager_dashboard():
     ).scalar() or 0
     
     total_credits = float(boutique_credits) + float(hardware_credits)
+    
+    # Today's cleared credits
+    boutique_cleared_today = db.session.query(
+        func.sum(BoutiqueSale.amount_paid - BoutiqueSale.total_amount + BoutiqueSale.balance)
+    ).filter(
+        BoutiqueSale.sale_date == today,
+        BoutiqueSale.is_credit_cleared == True,
+        BoutiqueSale.is_deleted == False
+    ).scalar() or 0
+    
+    hardware_cleared_today = db.session.query(
+        func.sum(HardwareSale.amount_paid - HardwareSale.total_amount + HardwareSale.balance)
+    ).filter(
+        HardwareSale.sale_date == today,
+        HardwareSale.is_credit_cleared == True,
+        HardwareSale.is_deleted == False
+    ).scalar() or 0
     
     # Low stock alerts
     boutique_low_stock = BoutiqueStock.query.filter(
@@ -118,19 +141,24 @@ def get_manager_dashboard():
             'today_revenue': total_today,
             'yesterday_revenue': total_yesterday,
             'credits_outstanding': total_credits,
-            'low_stock_alerts': boutique_low_stock + hardware_low_stock
+            'low_stock_alerts': boutique_low_stock + hardware_low_stock,
+            'transactions_today': boutique_today_count + hardware_today_count
         },
         'by_business': {
             'boutique': {
                 'today': float(boutique_today),
                 'yesterday': float(boutique_yesterday),
                 'credits': float(boutique_credits),
+                'cleared_today': float(boutique_cleared_today),
+                'transactions': boutique_today_count,
                 'low_stock': boutique_low_stock
             },
             'hardware': {
                 'today': float(hardware_today),
                 'yesterday': float(hardware_yesterday),
                 'credits': float(hardware_credits),
+                'cleared_today': float(hardware_cleared_today),
+                'transactions': hardware_today_count,
                 'low_stock': hardware_low_stock
             }
         },

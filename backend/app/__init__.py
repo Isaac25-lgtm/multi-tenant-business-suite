@@ -46,6 +46,7 @@ def create_app(config_class=Config):
     from app.modules.hardware import hardware_bp
     from app.modules.customers import customers_bp
     from app.modules.dashboard import dashboard_bp
+    from app.modules.finance import finance_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(employees_bp, url_prefix='/api/employees')
@@ -53,5 +54,6 @@ def create_app(config_class=Config):
     app.register_blueprint(hardware_bp, url_prefix='/api/hardware')
     app.register_blueprint(customers_bp, url_prefix='/api/customers')
     app.register_blueprint(dashboard_bp, url_prefix='/api/dashboard')
+    app.register_blueprint(finance_bp, url_prefix='/api/finance')
     
     return app

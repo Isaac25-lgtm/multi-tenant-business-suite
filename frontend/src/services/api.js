@@ -148,4 +148,31 @@ export const dashboardAPI = {
   getNotifications: () => api.get('/dashboard/notifications'),
 };
 
+// Finance API
+export const financeAPI = {
+  // Clients
+  getClients: () => api.get('/finance/clients'),
+  createClient: (data) => api.post('/finance/clients', data),
+
+  // Individual Loans
+  getLoans: () => api.get('/finance/loans'),
+  getLoan: (id) => api.get(`/finance/loans/${id}`),
+  createLoan: (data) => api.post('/finance/loans', data),
+  deleteLoan: (id) => api.delete(`/finance/loans/${id}`),
+  recordLoanPayment: (id, data) => api.post(`/finance/loans/${id}/payment`, data),
+
+  // Group Loans
+  getGroupLoans: () => api.get('/finance/group-loans'),
+  createGroupLoan: (data) => api.post('/finance/group-loans', data),
+  deleteGroupLoan: (id) => api.delete(`/finance/group-loans/${id}`),
+  recordGroupPayment: (id, data) => api.post(`/finance/group-loans/${id}/payment`, data),
+
+  // All Payments
+  getAllPayments: () => api.get('/finance/payments'),
+
+  // Stats
+  getStats: () => api.get('/finance/stats'),
+};
+
 export default api;
+

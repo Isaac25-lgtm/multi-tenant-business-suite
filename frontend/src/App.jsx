@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import api, { authAPI, boutiqueAPI, hardwareAPI, employeesAPI, customersAPI, dashboardAPI } from './services/api';
+import api, { authAPI, boutiqueAPI, hardwareAPI, employeesAPI, customersAPI, dashboardAPI, financeAPI } from './services/api';
 import ToastContainer from './components/Toast';
 import { useToastStore } from './context/ToastContext';
 
@@ -12,7 +12,7 @@ const App = () => {
   const [activeTab, setActiveTab] = useState('inventory');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   // Data states
   const [boutiqueStock, setBoutiqueStock] = useState([]);
   const [boutiqueCategories, setBoutiqueCategories] = useState([]);
@@ -32,7 +32,7 @@ const App = () => {
   const [loanPayments, setLoanPayments] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [saleItems, setSaleItems] = useState([]);
-  
+
   // Form states
   const [formData, setFormData] = useState({});
   const [editingItem, setEditingItem] = useState(null);
@@ -82,25 +82,25 @@ const App = () => {
   const handleLogin = async () => {
     setLoading(true);
     setError('');
-    
+
     // For development: Allow any login
     // Manager login: if username is "manager" or contains "manager"
     // Employee login: requires business unit selection
-    
+
     const isManager = loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin';
-    
+
     if (!loginForm.username || !loginForm.password) {
       setError('Please enter username and password');
       setLoading(false);
       return;
     }
-    
+
     if (!isManager && !loginForm.assigned_business) {
       setError('Employees must select a business unit');
       setLoading(false);
       return;
     }
-    
+
     // Login with backend
     try {
       const response = await authAPI.login(loginForm);
@@ -137,19 +137,19 @@ const App = () => {
         boutiqueAPI.getSales({ limit: 50 }),
         boutiqueAPI.getCredits()
       ];
-      
+
       // Only load cleared credits for managers
       if (isManager) {
         promises.push(boutiqueAPI.getClearedCredits());
       }
-      
+
       const results = await Promise.all(promises);
       const stockRes = results[0];
       const catRes = results[1];
       const salesRes = results[2];
       const creditsRes = results[3];
       const clearedRes = results[4];
-      
+
       setBoutiqueStock(stockRes.data.stock || []);
       setBoutiqueCategories(catRes.data.categories || []);
       setBoutiqueSales(salesRes.data.sales || []);
@@ -172,19 +172,19 @@ const App = () => {
         hardwareAPI.getSales({ limit: 50 }),
         hardwareAPI.getCredits()
       ];
-      
+
       // Only load cleared credits for managers
       if (isManager) {
         promises.push(hardwareAPI.getClearedCredits());
       }
-      
+
       const results = await Promise.all(promises);
       const stockRes = results[0];
       const catRes = results[1];
       const salesRes = results[2];
       const creditsRes = results[3];
       const clearedRes = results[4];
-      
+
       setHardwareStock(stockRes.data.stock || []);
       setHardwareCategories(catRes.data.categories || []);
       setHardwareSales(salesRes.data.sales || []);
@@ -222,7 +222,8 @@ const App = () => {
       const isManager = user.role === 'manager' || user.assigned_business === 'all';
       const hasBoutiqueAccess = isManager || user.assigned_business === 'boutique';
       const hasHardwareAccess = isManager || user.assigned_business === 'hardware';
-      
+
+      // Initial load
       if (activeNav === 'boutique' && hasBoutiqueAccess) {
         loadBoutiqueData();
       }
@@ -236,6 +237,23 @@ const App = () => {
         if (hasBoutiqueAccess) loadBoutiqueData();
         if (hasHardwareAccess) loadHardwareData();
       }
+
+      // Set up polling for real-time updates (every 30 seconds)
+      let interval = null;
+      if (activeNav === 'boutique' && hasBoutiqueAccess) {
+        interval = setInterval(loadBoutiqueData, 30000);
+      } else if (activeNav === 'hardware' && hasHardwareAccess) {
+        interval = setInterval(loadHardwareData, 30000);
+      } else if (activeNav === 'dashboard') {
+        interval = setInterval(() => {
+          if (hasBoutiqueAccess) loadBoutiqueData();
+          if (hasHardwareAccess) loadHardwareData();
+        }, 30000);
+      }
+
+      return () => {
+        if (interval) clearInterval(interval);
+      };
     }
   }, [activeNav, currentView, user]);
 
@@ -245,7 +263,7 @@ const App = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
         <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-teal-500/5 rounded-full blur-3xl"></div>
-        
+
         <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 w-full max-w-md relative z-10 shadow-2xl">
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
@@ -269,43 +287,42 @@ const App = () => {
               {error}
             </div>
           )}
-          
+
           <div className="space-y-5">
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Username</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Enter your username"
                 value={loginForm.username}
-                onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
+                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
                 className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/50"
               />
             </div>
-            
+
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Password</label>
-              <input 
-                type="password" 
+              <input
+                type="password"
                 placeholder="Enter your password"
                 value={loginForm.password}
-                onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
+                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
                 onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
                 className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
               />
             </div>
-            
+
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
                 Business Unit {loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin' ? '(not required for managers)' : '(required for employees)'}
               </label>
-              <select 
+              <select
                 value={loginForm.assigned_business}
-                onChange={(e) => setLoginForm({...loginForm, assigned_business: e.target.value})}
+                onChange={(e) => setLoginForm({ ...loginForm, assigned_business: e.target.value })}
                 disabled={loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin'}
-                className={`w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-teal-500 ${
-                  loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin' ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
+                className={`w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-teal-500 ${loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin' ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
               >
                 <option value="">-- Select Business --</option>
                 <option value="boutique">👗 Boutique</option>
@@ -314,17 +331,17 @@ const App = () => {
               </select>
               {loginForm.username && (
                 <p className={`text-xs mt-2 ${loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin' ? 'text-teal-400' : 'text-amber-400'}`}>
-                  {loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin' 
-                    ? '✓ You will login as Manager with access to all businesses' 
-                    : loginForm.assigned_business 
+                  {loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin'
+                    ? '✓ You will login as Manager with access to all businesses'
+                    : loginForm.assigned_business
                       ? `✓ You will login as Employee in ${loginForm.assigned_business.charAt(0).toUpperCase() + loginForm.assigned_business.slice(1)}`
                       : '⚠ Please select which business you work in'
                   }
                 </p>
               )}
             </div>
-            
-            <button 
+
+            <button
               onClick={handleLogin}
               disabled={loading || !loginForm.username || !loginForm.password}
               className="w-full py-3.5 bg-teal-500 hover:bg-teal-600 text-slate-900 font-semibold rounded-lg transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -336,7 +353,7 @@ const App = () => {
           <div className="mt-8 pt-6 border-t border-slate-700">
             <p className="text-xs text-slate-500 text-center mb-3">Quick Login:</p>
             <div className="grid grid-cols-1 gap-2 text-xs">
-              <button 
+              <button
                 onClick={() => {
                   setLoginForm({ username: 'manager', password: 'admin123', assigned_business: '' });
                 }}
@@ -345,19 +362,19 @@ const App = () => {
                 👔 Login as Manager (full access to all businesses)
               </button>
               <div className="grid grid-cols-3 gap-2 mt-2">
-                <button 
+                <button
                   onClick={() => setLoginForm({ username: 'sarah', password: 'pass123', assigned_business: 'boutique' })}
                   className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
                 >
                   👗 Boutique Staff
                 </button>
-                <button 
+                <button
                   onClick={() => setLoginForm({ username: 'david', password: 'pass123', assigned_business: 'hardware' })}
                   className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
                 >
                   🔧 Hardware Staff
                 </button>
-                <button 
+                <button
                   onClick={() => setLoginForm({ username: 'grace', password: 'pass123', assigned_business: 'finances' })}
                   className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
                 >
@@ -394,29 +411,29 @@ const App = () => {
     const isFinanceEmployee = !isManager && user?.assigned_business === 'finances';
     const isBoutiqueEmployee = !isManager && user?.assigned_business === 'boutique';
     const isHardwareEmployee = !isManager && user?.assigned_business === 'hardware';
-    
+
     return (
       <aside className="w-64 bg-slate-800 border-r border-slate-700 min-h-screen flex flex-col">
         <div className="p-5 border-b border-slate-700">
           <Logo />
           <p className="text-xs text-slate-500 mt-1">Business Management</p>
         </div>
-        
+
         <nav className="flex-1 p-4 overflow-y-auto">
           {isManager ? (
             <>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-3">Overview</p>
               <NavItem icon="📊" label="Dashboard" id="dashboard" active={activeNav} onClick={setActiveNav} />
-              
+
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 mt-6 px-3">Business Units</p>
               <NavItem icon="👗" label="Boutique" id="boutique" active={activeNav} onClick={setActiveNav} />
               <NavItem icon="🔧" label="Hardware" id="hardware" active={activeNav} onClick={setActiveNav} />
               <NavItem icon="💰" label="Finances" id="finances" active={activeNav} onClick={setActiveNav} />
-              
+
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 mt-6 px-3">Analytics</p>
               <NavItem icon="📈" label="Reports" id="reports" active={activeNav} onClick={setActiveNav} />
               <NavItem icon="📋" label="Audit Trail" id="audit" active={activeNav} onClick={setActiveNav} />
-              
+
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 mt-6 px-3">Administration</p>
               <NavItem icon="👥" label="Employees" id="employees" active={activeNav} onClick={setActiveNav} />
               <NavItem icon="⚙️" label="Settings" id="settings" active={activeNav} onClick={setActiveNav} />
@@ -440,7 +457,7 @@ const App = () => {
             </>
           )}
         </nav>
-        
+
         <div className="p-4 border-t border-slate-700">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-teal-500 rounded-lg flex items-center justify-center font-bold text-slate-900">
@@ -451,7 +468,7 @@ const App = () => {
               <p className="text-xs text-slate-400 capitalize">{user?.role === 'manager' ? 'Administrator' : user?.assigned_business}</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={handleLogout}
             className="w-full py-2 border border-slate-600 rounded-lg text-slate-400 text-sm hover:border-red-500 hover:text-red-400 transition-colors flex items-center justify-center gap-2"
           >
@@ -465,11 +482,10 @@ const App = () => {
   const NavItem = ({ icon, label, id, active, onClick }) => (
     <button
       onClick={() => onClick(id)}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 ${
-        active === id 
-          ? 'bg-teal-500/10 text-teal-400' 
-          : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'
-      }`}
+      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-1 ${active === id
+        ? 'bg-teal-500/10 text-teal-400'
+        : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'
+        }`}
     >
       <span>{icon}</span>
       {label}
@@ -496,17 +512,46 @@ const App = () => {
 
   // Manager Dashboard
   const ManagerDashboard = () => {
+    const [dashboardData, setDashboardData] = useState(null);
+    const [dashboardLoading, setDashboardLoading] = useState(true);
+    const toast = useToastStore();
+
+    // Load dashboard data on mount and set up polling
+    useEffect(() => {
+      loadDashboardData();
+      // Refresh every 30 seconds for real-time updates
+      const interval = setInterval(loadDashboardData, 30000);
+      return () => clearInterval(interval);
+    }, []);
+
+    const loadDashboardData = async () => {
+      try {
+        const res = await dashboardAPI.getManager();
+        setDashboardData(res.data);
+      } catch (err) {
+        console.error('Error loading dashboard:', err);
+      } finally {
+        setDashboardLoading(false);
+      }
+    };
+
     const lowStockBoutique = boutiqueStock.filter(item => item.quantity <= item.low_stock_threshold).length;
     const lowStockHardware = hardwareStock.filter(item => item.quantity <= item.low_stock_threshold).length;
     const totalAlerts = lowStockBoutique + lowStockHardware + loans.filter(l => l.status === 'overdue').length;
-    
-    // Calculate totals
-    const todayRevenue = boutiqueSales.filter(s => isToday(s.sale_date)).reduce((sum, s) => sum + (s.total_amount || 0), 0) +
-                         hardwareSales.filter(s => isToday(s.sale_date)).reduce((sum, s) => sum + (s.total_amount || 0), 0);
-    const outstandingCredits = boutiqueCredits.reduce((sum, c) => sum + (c.balance || 0), 0) +
-                               hardwareCredits.reduce((sum, c) => sum + (c.balance || 0), 0);
+
+    // Use dashboard API data if available, otherwise calculate from local state
+    const todayRevenue = dashboardData?.stats?.today_revenue ||
+      boutiqueSales.filter(s => isToday(s.sale_date)).reduce((sum, s) => sum + (s.total_amount || 0), 0) +
+      hardwareSales.filter(s => isToday(s.sale_date)).reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const outstandingCredits = dashboardData?.stats?.credits_outstanding ||
+      boutiqueCredits.reduce((sum, c) => sum + (c.balance || 0), 0) +
+      hardwareCredits.reduce((sum, c) => sum + (c.balance || 0), 0);
     const outstandingLoans = loans.reduce((sum, l) => sum + (l.balance || 0), 0);
     const todayProfit = todayRevenue * 0.3; // Simplified profit calculation
+
+    // Business-specific data from dashboard API
+    const boutiqueToday = dashboardData?.by_business?.boutique || { today: 0, transactions: 0, credits: 0, cleared_today: 0 };
+    const hardwareToday = dashboardData?.by_business?.hardware || { today: 0, transactions: 0, credits: 0, cleared_today: 0 };
 
     // Helper function
     function isToday(dateStr) {
@@ -533,31 +578,31 @@ const App = () => {
 
         {/* Stats Cards Row - 4 boxes */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <StatCard 
-            title="Today's Revenue" 
-            value={formatMoney(todayRevenue)} 
+          <StatCard
+            title="Today's Revenue"
+            value={formatMoney(todayRevenue)}
             change="↑ 12% from yesterday"
             changeType="up"
             icon="💰"
             iconBg="bg-green-500/15"
           />
-          <StatCard 
-            title="Outstanding Credits" 
-            value={formatMoney(outstandingCredits)} 
+          <StatCard
+            title="Outstanding Credits"
+            value={formatMoney(outstandingCredits)}
             change={`${boutiqueCredits.length + hardwareCredits.length} customers`}
             icon="💳"
             iconBg="bg-amber-500/15"
           />
-          <StatCard 
-            title="Outstanding Loans" 
-            value={formatMoney(outstandingLoans)} 
+          <StatCard
+            title="Outstanding Loans"
+            value={formatMoney(outstandingLoans)}
             change={`${loans.filter(l => l.status !== 'paid').length} active loans`}
             icon="🏦"
             iconBg="bg-blue-500/15"
           />
-          <StatCard 
-            title="Today's Profit" 
-            value={formatMoney(todayProfit)} 
+          <StatCard
+            title="Today's Profit"
+            value={formatMoney(todayProfit)}
             change="↑ 8% from yesterday"
             changeType="up"
             icon="📈"
@@ -573,8 +618,8 @@ const App = () => {
               <LineChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `${v/1000000}M`} />
-                <Tooltip 
+                <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `${v / 1000000}M`} />
+                <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
                   formatter={(value) => formatMoney(value)}
                 />
@@ -589,7 +634,7 @@ const App = () => {
               <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500"></div><span className="text-xs text-slate-400">Finance</span></div>
             </div>
           </div>
-          
+
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
             <h3 className="font-semibold text-white mb-4">Revenue by Business</h3>
             <ResponsiveContainer width="100%" height={200}>
@@ -624,45 +669,53 @@ const App = () => {
                 <span className="text-xl">👗</span>
                 <h4 className="font-semibold text-white">BOUTIQUE</h4>
               </div>
-              <span className="text-green-400 text-sm">↑ 15% vs yday</span>
+              {boutiqueToday.yesterday > 0 && (
+                <span className={`text-sm ${boutiqueToday.today >= boutiqueToday.yesterday ? 'text-green-400' : 'text-red-400'}`}>
+                  {boutiqueToday.today >= boutiqueToday.yesterday ? '↑' : '↓'} {Math.abs(Math.round((boutiqueToday.today - boutiqueToday.yesterday) / boutiqueToday.yesterday * 100))}% vs yday
+                </span>
+              )}
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-slate-400">Sales:</span><span className="text-white font-mono">{formatMoney(620000)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Transactions:</span><span className="text-white">12</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Credits:</span><span className="text-amber-400 font-mono">{formatMoney(85000)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Cleared:</span><span className="text-green-400 font-mono">{formatMoney(120000)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Sales:</span><span className="text-white font-mono">{formatMoney(boutiqueToday.today)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Transactions:</span><span className="text-white">{boutiqueToday.transactions}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Credits:</span><span className="text-amber-400 font-mono">{formatMoney(boutiqueToday.credits)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Cleared:</span><span className="text-green-400 font-mono">{formatMoney(boutiqueToday.cleared_today)}</span></div>
             </div>
           </div>
-          
+
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 hover:border-blue-500/50 transition-colors">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🔧</span>
                 <h4 className="font-semibold text-white">HARDWARE</h4>
               </div>
-              <span className="text-green-400 text-sm">↑ 8% vs yday</span>
+              {hardwareToday.yesterday > 0 && (
+                <span className={`text-sm ${hardwareToday.today >= hardwareToday.yesterday ? 'text-green-400' : 'text-red-400'}`}>
+                  {hardwareToday.today >= hardwareToday.yesterday ? '↑' : '↓'} {Math.abs(Math.round((hardwareToday.today - hardwareToday.yesterday) / hardwareToday.yesterday * 100))}% vs yday
+                </span>
+              )}
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-slate-400">Sales:</span><span className="text-white font-mono">{formatMoney(780000)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Transactions:</span><span className="text-white">8</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Credits:</span><span className="text-amber-400 font-mono">{formatMoney(150000)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Cleared:</span><span className="text-green-400 font-mono">{formatMoney(200000)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Sales:</span><span className="text-white font-mono">{formatMoney(hardwareToday.today)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Transactions:</span><span className="text-white">{hardwareToday.transactions}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Credits:</span><span className="text-amber-400 font-mono">{formatMoney(hardwareToday.credits)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Cleared:</span><span className="text-green-400 font-mono">{formatMoney(hardwareToday.cleared_today)}</span></div>
             </div>
           </div>
-          
+
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 hover:border-amber-500/50 transition-colors">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <span className="text-xl">💰</span>
                 <h4 className="font-semibold text-white">FINANCES</h4>
               </div>
-              <span className="text-red-400 text-sm">↓ 5% vs yday</span>
+              <span className="text-slate-400 text-sm">{loans.filter(l => l.status !== 'paid').length} active</span>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-slate-400">Received:</span><span className="text-white font-mono">{formatMoney(350000)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">New Loans:</span><span className="text-white font-mono">{formatMoney(500000)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Overdue:</span><span className="text-red-400 font-mono">{formatMoney(230000)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Active:</span><span className="text-white">{loans.length || 12} loans</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Outstanding:</span><span className="text-white font-mono">{formatMoney(outstandingLoans)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Active Loans:</span><span className="text-white">{loans.filter(l => l.status !== 'paid').length}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Overdue:</span><span className="text-red-400 font-mono">{loans.filter(l => l.status === 'overdue').length} loans</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Total Loans:</span><span className="text-white">{loans.length}</span></div>
             </div>
           </div>
         </div>
@@ -689,7 +742,7 @@ const App = () => {
               )}
             </div>
           </div>
-          
+
           <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-700 flex justify-between items-center">
               <h3 className="font-semibold text-white">Hardware Low Stock</h3>
@@ -805,6 +858,13 @@ const App = () => {
       setShowModal('editStock');
     };
 
+    const [selectedSale, setSelectedSale] = useState(null);
+
+    const viewSaleDetails = (sale) => {
+      setSelectedSale(sale);
+      setShowModal('viewSale');
+    };
+
     return (
       <div>
         <div className="flex gap-2 mb-6 border-b border-slate-700 pb-2">
@@ -817,9 +877,8 @@ const App = () => {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab.id ? 'bg-teal-500/15 text-teal-400' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === tab.id ? 'bg-teal-500/15 text-teal-400' : 'text-slate-400 hover:text-white'
+                }`}
             >
               {tab.label}
             </button>
@@ -830,14 +889,14 @@ const App = () => {
           <>
             <div className="flex gap-3 mb-4">
               <div className="flex-1 relative">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="Search items..."
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
                 />
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
               </div>
-              <button 
+              <button
                 onClick={() => { setShowModal('addStock'); setFormData({ unit: 'pieces', low_stock_threshold: 5 }); }}
                 className="px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 font-medium rounded-lg flex items-center gap-2 transition-colors"
               >
@@ -870,14 +929,14 @@ const App = () => {
                       </td>
                       <td className="px-4 py-3 text-slate-400 font-mono">{Number(item.cost_price).toLocaleString()}</td>
                       <td className="px-4 py-3 text-white font-mono">
-                        {Math.round(item.min_selling_price/1000)}K - {Math.round(item.max_selling_price/1000)}K
+                        {Math.round(item.min_selling_price / 1000)}K - {Math.round(item.max_selling_price / 1000)}K
                       </td>
                       <td className="px-4 py-3">
-                        <button 
+                        <button
                           onClick={() => openEditModal(item)}
                           className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
                         >✏️</button>
-                        <button 
+                        <button
                           onClick={() => handleDeleteStock(item.id)}
                           className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400"
                         >🗑️</button>
@@ -900,7 +959,7 @@ const App = () => {
         {activeTab === 'sales' && (
           <div>
             <div className="flex gap-3 mb-4">
-              <button 
+              <button
                 onClick={() => setShowModal('newSale')}
                 className="px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 font-medium rounded-lg flex items-center gap-2 transition-colors"
               >
@@ -912,10 +971,10 @@ const App = () => {
                 <thead>
                   <tr className="bg-slate-900/50">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Date</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Reference</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Customer</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Items</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Total</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Sold By</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Actions</th>
                   </tr>
                 </thead>
@@ -923,20 +982,22 @@ const App = () => {
                   {sales.map((sale, i) => (
                     <tr key={i} className="hover:bg-slate-700/30">
                       <td className="px-4 py-3 text-slate-400">{new Date(sale.sale_date).toLocaleDateString()}</td>
-                      <td className="px-4 py-3 text-white font-mono">{sale.reference_number}</td>
-                      <td className="px-4 py-3 text-white">{sale.customer_name || 'Walk-in'}</td>
+                      <td className="px-4 py-3 text-white">
+                        {sale.items?.map(item => `${item.item_name}${item.quantity > 1 ? ` (${item.quantity})` : ''}`).join(', ') || sale.customer_name || 'Walk-in'}
+                      </td>
                       <td className="px-4 py-3 text-white font-mono">{formatMoney(sale.total_amount)}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${
-                          sale.payment_status === 'paid' ? 'bg-green-500/15 text-green-400' : 
-                          sale.payment_status === 'partial' ? 'bg-amber-500/15 text-amber-400' : 
-                          'bg-red-500/15 text-red-400'
-                        }`}>
+                        <span className={`px-2 py-0.5 text-xs rounded-full ${sale.payment_status === 'paid' ? 'bg-green-500/15 text-green-400' :
+                          sale.payment_status === 'partial' ? 'bg-amber-500/15 text-amber-400' :
+                            'bg-red-500/15 text-red-400'
+                          }`}>
                           {sale.payment_status}
                         </span>
                       </td>
+                      <td className="px-4 py-3 text-slate-400">{sale.created_by_name || sale.employee_name || 'Unknown'}</td>
                       <td className="px-4 py-3">
-                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">👁️</button>
+                        <button onClick={() => viewSaleDetails(sale)} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="View Details">👁️</button>
+                        <button onClick={() => toast.info('Edit functionality coming soon')} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="Edit Sale">✏️</button>
                         <button
                           onClick={() => handleDownloadReceipt(sale.id)}
                           className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
@@ -974,7 +1035,7 @@ const App = () => {
                   <div><p className="text-slate-500">Total Amount</p><p className="text-white font-mono">{formatMoney(credit.total_amount)}</p></div>
                   <div><p className="text-slate-500">Balance Due</p><p className="text-amber-400 font-mono font-semibold">{formatMoney(credit.balance)}</p></div>
                 </div>
-                <button 
+                <button
                   onClick={() => { setShowModal('recordPayment'); setEditingItem(credit); setFormData({ amount: credit.balance }); }}
                   className="mt-2 w-full py-2 bg-teal-500/15 text-teal-400 rounded-lg font-medium hover:bg-teal-500/25 transition-colors"
                 >
@@ -1037,19 +1098,19 @@ const App = () => {
               <div className="p-5 space-y-4 max-h-96 overflow-y-auto">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Item Name *</label>
-                  <input 
+                  <input
                     type="text"
                     value={formData.item_name || ''}
-                    onChange={(e) => setFormData({...formData, item_name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
                     placeholder="e.g., Ladies Dress - Floral"
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Category</label>
-                  <select 
+                  <select
                     value={formData.category_id || ''}
-                    onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   >
                     <option value="">-- Select Category --</option>
@@ -1061,19 +1122,19 @@ const App = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Quantity *</label>
-                    <input 
+                    <input
                       type="number"
                       value={formData.quantity || ''}
-                      onChange={(e) => setFormData({...formData, quantity: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
                       placeholder="0"
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Unit</label>
-                    <select 
+                    <select
                       value={formData.unit || 'pieces'}
-                      onChange={(e) => setFormData({...formData, unit: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     >
                       <option value="pieces">pieces</option>
@@ -1088,10 +1149,10 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Cost Price (UGX) *</label>
-                  <input 
+                  <input
                     type="number"
                     value={formData.cost_price || ''}
-                    onChange={(e) => setFormData({...formData, cost_price: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
                     placeholder="e.g., 45000"
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
@@ -1099,20 +1160,20 @@ const App = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Min Selling Price *</label>
-                    <input 
+                    <input
                       type="number"
                       value={formData.min_selling_price || ''}
-                      onChange={(e) => setFormData({...formData, min_selling_price: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, min_selling_price: e.target.value })}
                       placeholder="e.g., 80000"
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Max Selling Price *</label>
-                    <input 
+                    <input
                       type="number"
                       value={formData.max_selling_price || ''}
-                      onChange={(e) => setFormData({...formData, max_selling_price: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, max_selling_price: e.target.value })}
                       placeholder="e.g., 95000"
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
@@ -1120,10 +1181,10 @@ const App = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Low Stock Alert Threshold</label>
-                  <input 
+                  <input
                     type="number"
                     value={formData.low_stock_threshold || 5}
-                    onChange={(e) => setFormData({...formData, low_stock_threshold: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, low_stock_threshold: e.target.value })}
                     placeholder="5"
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
@@ -1131,7 +1192,7 @@ const App = () => {
               </div>
               <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
                 <button onClick={() => { setShowModal(null); setFormData({}); setEditingItem(null); }} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
-                <button 
+                <button
                   onClick={showModal === 'addStock' ? handleAddStock : handleEditStock}
                   className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold"
                 >
@@ -1152,10 +1213,10 @@ const App = () => {
               </div>
               <div className="p-5">
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Category Name</label>
-                <input 
+                <input
                   type="text"
                   value={formData.categoryName || ''}
-                  onChange={(e) => setFormData({...formData, categoryName: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, categoryName: e.target.value })}
                   placeholder="e.g., Dresses, Shoes, Building Materials"
                   className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                 />
@@ -1168,12 +1229,61 @@ const App = () => {
           </div>
         )}
 
+        {/* View Sale Details Modal */}
+        {showModal === 'viewSale' && selectedSale && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl">
+              <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
+                <h3 className="font-semibold text-white">Sale Details</h3>
+                <button onClick={() => { setShowModal(null); setSelectedSale(null); }} className="text-slate-400 hover:text-white text-xl">✕</button>
+              </div>
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div><span className="text-slate-400">Sale ID:</span><br /><span className="text-white font-mono">#{selectedSale.id}</span></div>
+                  <div><span className="text-slate-400">Date:</span><br /><span className="text-white">{new Date(selectedSale.sale_date).toLocaleDateString()}</span></div>
+                  <div><span className="text-slate-400">Customer:</span><br /><span className="text-white">{selectedSale.customer_name || 'Walk-in'}</span></div>
+                  <div><span className="text-slate-400">Sold By:</span><br /><span className="text-white">{selectedSale.created_by_name || 'Unknown'}</span></div>
+                </div>
+
+                <div className="border-t border-slate-700 pt-4">
+                  <h4 className="text-xs font-medium text-slate-400 uppercase mb-2">Items</h4>
+                  <div className="space-y-2">
+                    {selectedSale.items?.map((item, i) => (
+                      <div key={i} className="flex justify-between text-sm bg-slate-900/50 rounded-lg p-3">
+                        <span className="text-white">{item.item_name} × {item.quantity}</span>
+                        <span className="text-white font-mono">{formatMoney(item.price_per_unit * item.quantity)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-700 pt-4 space-y-2 text-sm">
+                  <div className="flex justify-between"><span className="text-slate-400">Total Amount:</span><span className="text-white font-mono font-semibold">{formatMoney(selectedSale.total_amount)}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Amount Paid:</span><span className="text-green-400 font-mono">{formatMoney(selectedSale.amount_paid)}</span></div>
+                  {selectedSale.balance > 0 && (
+                    <div className="flex justify-between"><span className="text-slate-400">Balance:</span><span className="text-amber-400 font-mono">{formatMoney(selectedSale.balance)}</span></div>
+                  )}
+                  <div className="flex justify-between"><span className="text-slate-400">Payment Status:</span>
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${selectedSale.payment_status === 'paid' ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                      {selectedSale.payment_status}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
+                <button onClick={() => handleDownloadReceipt(selectedSale.id)} className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm">🖨️ Print Receipt</button>
+                <button onClick={() => { setShowModal(null); setSelectedSale(null); }} className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-medium">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* New Sale Modal */}
         {showModal === 'newSale' && (
-          <NewSaleModal 
-            stock={stock} 
-            stockAPI={stockAPI} 
-            onClose={() => setShowModal(null)} 
+          <NewSaleModal
+            stock={stock}
+            stockAPI={stockAPI}
+            onClose={() => setShowModal(null)}
             onSuccess={() => { setShowModal(null); isBoutique ? loadBoutiqueData() : loadHardwareData(); }}
             formatMoney={formatMoney}
           />
@@ -1197,9 +1307,9 @@ const App = () => {
     const [otherItemName, setOtherItemName] = useState('');
     const [saleError, setSaleError] = useState('');
     const [saleLoading, setSaleLoading] = useState(false);
-    
+
     const selectedItem = stock.find(item => item.id === parseInt(selectedItemId));
-    
+
     const addItemToSale = () => {
       if (!selectedItemId) {
         setSaleError('Please select an item');
@@ -1213,7 +1323,7 @@ const App = () => {
         setSaleError('Please enter a valid quantity');
         return;
       }
-      
+
       if (selectedItemId !== 'other' && selectedItem) {
         if (price < selectedItem.min_selling_price || price > selectedItem.max_selling_price) {
           setSaleError(`Price must be between ${formatMoney(selectedItem.min_selling_price)} and ${formatMoney(selectedItem.max_selling_price)}`);
@@ -1224,7 +1334,7 @@ const App = () => {
           return;
         }
       }
-      
+
       const newItem = {
         id: Date.now(),
         stock_id: selectedItemId === 'other' ? null : parseInt(selectedItemId),
@@ -1234,7 +1344,7 @@ const App = () => {
         total: parseInt(quantity) * parseFloat(price),
         is_other: selectedItemId === 'other'
       };
-      
+
       setSaleItems([...saleItems, newItem]);
       setSelectedItemId('');
       setQuantity(1);
@@ -1242,22 +1352,22 @@ const App = () => {
       setOtherItemName('');
       setSaleError('');
     };
-    
+
     const removeItem = (itemId) => {
       setSaleItems(saleItems.filter(item => item.id !== itemId));
     };
-    
+
     const totalAmount = saleItems.reduce((sum, item) => sum + item.total, 0);
     const balanceDue = paymentType === 'partial' ? totalAmount - (parseFloat(amountPaid) || 0) : 0;
-    
+
     const handleCompleteSale = async () => {
       setSaleError('');
-      
+
       if (saleItems.length === 0) {
         setSaleError('Please add at least one item to the sale');
         return;
       }
-      
+
       if (paymentType === 'partial') {
         if (!customerName.trim()) {
           setSaleError('Customer name is required for credit sales');
@@ -1272,7 +1382,7 @@ const App = () => {
           return;
         }
       }
-      
+
       const saleData = {
         sale_date: saleDate === 'today' ? new Date().toISOString().split('T')[0] : new Date(Date.now() - 86400000).toISOString().split('T')[0],
         items: saleItems.map(item => ({
@@ -1287,7 +1397,7 @@ const App = () => {
         customer_name: paymentType === 'partial' ? customerName : null,
         customer_phone: paymentType === 'partial' ? customerPhone : null
       };
-      
+
       setSaleLoading(true);
       try {
         await stockAPI.createSale(saleData);
@@ -1298,7 +1408,7 @@ const App = () => {
         setSaleLoading(false);
       }
     };
-    
+
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -1306,7 +1416,7 @@ const App = () => {
             <h3 className="text-lg font-semibold text-white">New Sale</h3>
             <button onClick={onClose} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
           </div>
-          
+
           <div className="p-5 space-y-4">
             {saleError && (
               <div className="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm flex justify-between items-center">
@@ -1314,11 +1424,11 @@ const App = () => {
                 <button onClick={() => setSaleError('')} className="text-red-400 hover:text-red-300">✕</button>
               </div>
             )}
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Date</label>
-                <select 
+                <select
                   value={saleDate}
                   onChange={(e) => setSaleDate(e.target.value)}
                   className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
@@ -1329,7 +1439,7 @@ const App = () => {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Select Item</label>
-                <select 
+                <select
                   value={selectedItemId}
                   onChange={(e) => {
                     setSelectedItemId(e.target.value);
@@ -1348,49 +1458,49 @@ const App = () => {
                 </select>
               </div>
             </div>
-            
+
             {selectedItemId === 'other' && (
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Item Name</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={otherItemName}
                   onChange={(e) => setOtherItemName(e.target.value)}
                   placeholder="Enter item name"
-                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                 />
               </div>
             )}
-            
+
             {selectedItem && (
               <div className="bg-slate-900/50 rounded-lg p-3 text-sm">
                 <p className="text-slate-400">Price range: <span className="text-white font-mono">{formatMoney(selectedItem.min_selling_price)} - {formatMoney(selectedItem.max_selling_price)}</span></p>
               </div>
             )}
-            
+
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Quantity</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={quantity}
                   onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                  min="1" 
-                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                  min="1"
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                 />
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Price (UGX)</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
-                  placeholder="Enter price" 
-                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                  placeholder="Enter price"
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                 />
               </div>
               <div className="flex items-end">
-                <button 
+                <button
                   onClick={addItemToSale}
                   className="w-full px-4 py-2.5 bg-teal-500/15 text-teal-400 rounded-lg font-medium hover:bg-teal-500/25"
                 >
@@ -1398,7 +1508,7 @@ const App = () => {
                 </button>
               </div>
             </div>
-            
+
             {saleItems.length > 0 && (
               <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
                 <h4 className="text-sm font-medium text-slate-400 mb-3">ITEMS IN THIS SALE</h4>
@@ -1423,7 +1533,7 @@ const App = () => {
                 </div>
               </div>
             )}
-            
+
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Payment Type</label>
               <div className="flex gap-4">
@@ -1437,40 +1547,40 @@ const App = () => {
                 </label>
               </div>
             </div>
-            
+
             {paymentType === 'partial' && (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-4">
                 <h4 className="text-amber-400 font-medium">Customer Details</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Customer Name *</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder="Enter name" 
-                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                      placeholder="Enter name"
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Phone *</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={customerPhone}
                       onChange={(e) => setCustomerPhone(e.target.value)}
-                      placeholder="0700 000 000" 
-                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                      placeholder="0700 000 000"
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
                   </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Amount Paying Now *</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     value={amountPaid}
                     onChange={(e) => setAmountPaid(e.target.value)}
-                    placeholder="Enter amount" 
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                    placeholder="Enter amount"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
                   {amountPaid && totalAmount > 0 && (
                     <p className="text-amber-400 text-sm mt-2">Balance Due: {formatMoney(balanceDue)}</p>
@@ -1479,17 +1589,16 @@ const App = () => {
               </div>
             )}
           </div>
-          
+
           <div className="p-5 border-t border-slate-700 flex gap-3 justify-end sticky bottom-0 bg-slate-800">
             <button onClick={onClose} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
-            <button 
+            <button
               onClick={handleCompleteSale}
               disabled={saleItems.length === 0 || saleLoading}
-              className={`px-5 py-2.5 rounded-lg font-semibold ${
-                saleItems.length === 0 || saleLoading
-                  ? 'bg-slate-600 text-slate-400 cursor-not-allowed' 
-                  : 'bg-teal-500 hover:bg-teal-600 text-slate-900'
-              }`}
+              className={`px-5 py-2.5 rounded-lg font-semibold ${saleItems.length === 0 || saleLoading
+                ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                : 'bg-teal-500 hover:bg-teal-600 text-slate-900'
+                }`}
             >
               {saleLoading ? 'Processing...' : 'Complete Sale'}
             </button>
@@ -1542,7 +1651,7 @@ const App = () => {
     return (
       <div>
         <div className="flex gap-3 mb-4">
-          <button 
+          <button
             onClick={() => { setShowModal('addEmployee'); setFormData({ is_active: true, can_edit: true, can_delete: false, can_backdate: false, can_clear_credits: true }); }}
             className="px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 font-medium rounded-lg flex items-center gap-2 transition-colors"
           >
@@ -1567,11 +1676,10 @@ const App = () => {
                   <td className="px-4 py-3 text-white">{emp.name}</td>
                   <td className="px-4 py-3 text-slate-400 font-mono">{emp.username}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${
-                      emp.assigned_business === 'boutique' ? 'bg-teal-500/15 text-teal-400' :
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${emp.assigned_business === 'boutique' ? 'bg-teal-500/15 text-teal-400' :
                       emp.assigned_business === 'hardware' ? 'bg-blue-500/15 text-blue-400' :
-                      'bg-amber-500/15 text-amber-400'
-                    }`}>
+                        'bg-amber-500/15 text-amber-400'
+                      }`}>
                       {emp.assigned_business}
                     </span>
                   </td>
@@ -1581,7 +1689,7 @@ const App = () => {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button 
+                    <button
                       onClick={() => {
                         setEditingItem(emp);
                         setFormData({
@@ -1598,7 +1706,7 @@ const App = () => {
                       }}
                       className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
                     >✏️</button>
-                    <button 
+                    <button
                       onClick={() => handleDeleteEmployee(emp.id)}
                       className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400"
                     >🗑️</button>
@@ -1625,20 +1733,20 @@ const App = () => {
               <div className="p-5 space-y-4 max-h-96 overflow-y-auto">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Full Name *</label>
-                  <input 
+                  <input
                     type="text"
                     value={formData.name || ''}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="e.g., Sarah Nakato"
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Username *</label>
-                  <input 
+                  <input
                     type="text"
                     value={formData.username || ''}
-                    onChange={(e) => setFormData({...formData, username: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     placeholder="e.g., sarah"
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
@@ -1646,10 +1754,10 @@ const App = () => {
                 {showModal === 'addEmployee' && (
                   <div>
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Password *</label>
-                    <input 
+                    <input
                       type="password"
                       value={formData.password || ''}
-                      onChange={(e) => setFormData({...formData, password: e.target.value})}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       placeholder="Enter password"
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
@@ -1657,9 +1765,9 @@ const App = () => {
                 )}
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Assigned Business *</label>
-                  <select 
+                  <select
                     value={formData.assigned_business || ''}
-                    onChange={(e) => setFormData({...formData, assigned_business: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, assigned_business: e.target.value })}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   >
                     <option value="">-- Select Business --</option>
@@ -1672,23 +1780,23 @@ const App = () => {
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Permissions</label>
                   <div className="space-y-2">
                     <label className="flex items-center gap-2 text-white text-sm">
-                      <input type="checkbox" checked={formData.can_edit || false} onChange={(e) => setFormData({...formData, can_edit: e.target.checked})} className="rounded" />
+                      <input type="checkbox" checked={formData.can_edit || false} onChange={(e) => setFormData({ ...formData, can_edit: e.target.checked })} className="rounded" />
                       Can edit sales
                     </label>
                     <label className="flex items-center gap-2 text-white text-sm">
-                      <input type="checkbox" checked={formData.can_delete || false} onChange={(e) => setFormData({...formData, can_delete: e.target.checked})} className="rounded" />
+                      <input type="checkbox" checked={formData.can_delete || false} onChange={(e) => setFormData({ ...formData, can_delete: e.target.checked })} className="rounded" />
                       Can delete sales
                     </label>
                     <label className="flex items-center gap-2 text-white text-sm">
-                      <input type="checkbox" checked={formData.can_backdate || false} onChange={(e) => setFormData({...formData, can_backdate: e.target.checked})} className="rounded" />
+                      <input type="checkbox" checked={formData.can_backdate || false} onChange={(e) => setFormData({ ...formData, can_backdate: e.target.checked })} className="rounded" />
                       Can backdate entries
                     </label>
                     <label className="flex items-center gap-2 text-white text-sm">
-                      <input type="checkbox" checked={formData.can_clear_credits || false} onChange={(e) => setFormData({...formData, can_clear_credits: e.target.checked})} className="rounded" />
+                      <input type="checkbox" checked={formData.can_clear_credits || false} onChange={(e) => setFormData({ ...formData, can_clear_credits: e.target.checked })} className="rounded" />
                       Can clear credits
                     </label>
                     <label className="flex items-center gap-2 text-white text-sm">
-                      <input type="checkbox" checked={formData.is_active !== false} onChange={(e) => setFormData({...formData, is_active: e.target.checked})} className="rounded" />
+                      <input type="checkbox" checked={formData.is_active !== false} onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })} className="rounded" />
                       Account is active
                     </label>
                   </div>
@@ -1696,7 +1804,7 @@ const App = () => {
               </div>
               <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
                 <button onClick={() => { setShowModal(null); setFormData({}); setEditingItem(null); }} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
-                <button 
+                <button
                   onClick={showModal === 'addEmployee' ? handleAddEmployee : handleEditEmployee}
                   className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold"
                 >
@@ -1773,7 +1881,7 @@ const App = () => {
             <BarChart data={revenueData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis dataKey="day" stroke="#64748b" />
-              <YAxis stroke="#64748b" tickFormatter={(v) => `${v/1000000}M`} />
+              <YAxis stroke="#64748b" tickFormatter={(v) => `${v / 1000000}M`} />
               <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155' }} formatter={(v) => formatMoney(v)} />
               <Bar dataKey="boutique" fill="#14b8a6" radius={[4, 4, 0, 0]} name="Boutique" />
               <Bar dataKey="hardware" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Hardware" />
@@ -1821,24 +1929,58 @@ const App = () => {
   // Finance Page (Manager View)
   const FinancePage = () => {
     const [financeTab, setFinanceTab] = useState('individual');
-    
-    // Sample loan data
-    const sampleLoans = [
-      { id: 1, client: 'John Mukasa', nin: 'CM1234567890', principal: 500000, rate: 10, total: 550000, balance: 400000, dueDate: '2026-02-17', status: 'active' },
-      { id: 2, client: 'Grace Nambi', nin: 'CF9876543210', principal: 300000, rate: 10, total: 330000, balance: 330000, dueDate: '2026-01-20', status: 'overdue' },
-      { id: 3, client: 'Peter Okello', nin: 'CM5566778899', principal: 1000000, rate: 12, total: 1120000, balance: 920000, dueDate: '2026-03-01', status: 'active' },
-    ];
-    
-    const sampleGroupLoans = [
-      { id: 1, name: 'Kyebando Women', members: 5, total: 2750000, perPeriod: 275000, periodsLeft: 8, totalPeriods: 10, status: 'active' },
-      { id: 2, name: 'Kawempe Traders', members: 8, total: 4400000, perPeriod: 550000, periodsLeft: 6, totalPeriods: 8, status: 'active' },
-    ];
-    
-    const samplePayments = [
-      { date: '2026-01-20', client: 'John Mukasa', amount: 50000, balanceAfter: 400000, receivedBy: 'Grace' },
-      { date: '2026-01-20', client: 'Kyebando Women', amount: 275000, balanceAfter: 2200000, receivedBy: 'Grace' },
-      { date: '2026-01-19', client: 'Peter Okello', amount: 200000, balanceAfter: 920000, receivedBy: 'Manager' },
-    ];
+    const [loans, setLoans] = useState([]);
+    const [groupLoans, setGroupLoans] = useState([]);
+    const [payments, setPayments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const toast = useToastStore();
+
+    // Load finance data
+    useEffect(() => {
+      loadFinanceData();
+    }, []);
+
+    const loadFinanceData = async () => {
+      setLoading(true);
+      try {
+        const [loansRes, groupLoansRes, paymentsRes] = await Promise.all([
+          financeAPI.getLoans(),
+          financeAPI.getGroupLoans(),
+          financeAPI.getAllPayments()
+        ]);
+        setLoans(loansRes.data);
+        setGroupLoans(groupLoansRes.data);
+        setPayments(paymentsRes.data);
+      } catch (err) {
+        console.error('Error loading finance data:', err);
+        toast.error('Failed to load finance data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleDeleteLoan = async (id) => {
+      if (!confirm('Are you sure you want to delete this loan?')) return;
+      try {
+        await financeAPI.deleteLoan(id);
+        toast.success('Loan deleted successfully');
+        loadFinanceData();
+      } catch (err) {
+        toast.error('Failed to delete loan');
+      }
+    };
+
+    const handleDeleteGroupLoan = async (id) => {
+      if (!confirm('Are you sure you want to delete this group loan?')) return;
+      try {
+        await financeAPI.deleteGroupLoan(id);
+        toast.success('Group loan deleted successfully');
+        loadFinanceData();
+      } catch (err) {
+        toast.error('Failed to delete group loan');
+      }
+    };
+
 
     return (
       <div>
@@ -1851,9 +1993,8 @@ const App = () => {
             <button
               key={tab.id}
               onClick={() => setFinanceTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                financeTab === tab.id ? 'bg-teal-500/15 text-teal-400' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${financeTab === tab.id ? 'bg-teal-500/15 text-teal-400' : 'text-slate-400 hover:text-white'
+                }`}
             >
               {tab.label}
             </button>
@@ -1887,24 +2028,28 @@ const App = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {sampleLoans.map((loan, i) => (
-                    <tr key={i} className="hover:bg-slate-700/30">
-                      <td className="px-4 py-3 text-white">{loan.client}</td>
-                      <td className="px-4 py-3 text-slate-400 font-mono text-sm">{loan.nin}</td>
+                  {loading ? (
+                    <tr><td colSpan="9" className="px-4 py-8 text-center text-slate-400">Loading loans...</td></tr>
+                  ) : loans.length === 0 ? (
+                    <tr><td colSpan="9" className="px-4 py-8 text-center text-slate-400">No loans found. Create a new loan to get started.</td></tr>
+                  ) : loans.map((loan) => (
+                    <tr key={loan.id} className="hover:bg-slate-700/30">
+                      <td className="px-4 py-3 text-white">{loan.client?.name || 'Unknown'}</td>
+                      <td className="px-4 py-3 text-slate-400 font-mono text-sm">{loan.client?.nin || '-'}</td>
                       <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.principal)}</td>
-                      <td className="px-4 py-3 text-slate-400">{loan.rate}%</td>
-                      <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.total)}</td>
+                      <td className="px-4 py-3 text-slate-400">{loan.interest_rate}%</td>
+                      <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.total_amount)}</td>
                       <td className="px-4 py-3 text-amber-400 font-mono font-semibold">{formatMoney(loan.balance)}</td>
-                      <td className="px-4 py-3 text-slate-400">{new Date(loan.dueDate).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 text-slate-400">{new Date(loan.due_date).toLocaleDateString()}</td>
                       <td className="px-4 py-3">
-                        <span className={`text-lg ${loan.status === 'overdue' ? '' : ''}`}>
-                          {loan.status === 'overdue' ? '🔴' : loan.status === 'due_soon' ? '🟡' : '🟢'}
+                        <span className="text-lg">
+                          {loan.status === 'overdue' ? '🔴' : loan.status === 'due_soon' ? '🟡' : loan.status === 'paid' ? '✅' : '🟢'}
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">👁️</button>
-                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">💰</button>
-                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">🖨️</button>
+                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="View">👁️</button>
+                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="Record Payment">💰</button>
+                        <button onClick={() => handleDeleteLoan(loan.id)} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400" title="Delete">🗑️</button>
                       </td>
                     </tr>
                   ))}
@@ -1935,17 +2080,22 @@ const App = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {sampleGroupLoans.map((loan, i) => (
-                    <tr key={i} className="hover:bg-slate-700/30">
-                      <td className="px-4 py-3 text-white font-medium">{loan.name}</td>
-                      <td className="px-4 py-3 text-slate-400">{loan.members}</td>
-                      <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.total)}</td>
-                      <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.perPeriod)}/wk</td>
-                      <td className="px-4 py-3 text-slate-400">{loan.periodsLeft} of {loan.totalPeriods}</td>
-                      <td className="px-4 py-3"><span className="text-lg">🟢</span></td>
+                  {loading ? (
+                    <tr><td colSpan="7" className="px-4 py-8 text-center text-slate-400">Loading group loans...</td></tr>
+                  ) : groupLoans.length === 0 ? (
+                    <tr><td colSpan="7" className="px-4 py-8 text-center text-slate-400">No group loans found.</td></tr>
+                  ) : groupLoans.map((loan) => (
+                    <tr key={loan.id} className="hover:bg-slate-700/30">
+                      <td className="px-4 py-3 text-white font-medium">{loan.group_name}</td>
+                      <td className="px-4 py-3 text-slate-400">{loan.member_count}</td>
+                      <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.total_amount)}</td>
+                      <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.amount_per_period)}/wk</td>
+                      <td className="px-4 py-3 text-slate-400">{loan.periods_left} of {loan.total_periods}</td>
+                      <td className="px-4 py-3"><span className="text-lg">{loan.status === 'overdue' ? '🔴' : loan.status === 'paid' ? '✅' : '🟢'}</span></td>
                       <td className="px-4 py-3">
-                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">👁️</button>
-                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">💰</button>
+                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="View">👁️</button>
+                        <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white" title="Record Payment">💰</button>
+                        <button onClick={() => handleDeleteGroupLoan(loan.id)} className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400" title="Delete">🗑️</button>
                       </td>
                     </tr>
                   ))}
@@ -1968,17 +2118,102 @@ const App = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
-                {samplePayments.map((payment, i) => (
-                  <tr key={i} className="hover:bg-slate-700/30">
-                    <td className="px-4 py-3 text-slate-400">{payment.date}</td>
+                {loading ? (
+                  <tr><td colSpan="5" className="px-4 py-8 text-center text-slate-400">Loading payments...</td></tr>
+                ) : payments.length === 0 ? (
+                  <tr><td colSpan="5" className="px-4 py-8 text-center text-slate-400">No payments recorded yet.</td></tr>
+                ) : payments.map((payment) => (
+                  <tr key={payment.id} className="hover:bg-slate-700/30">
+                    <td className="px-4 py-3 text-slate-400">{new Date(payment.date).toLocaleDateString()}</td>
                     <td className="px-4 py-3 text-white">{payment.client}</td>
                     <td className="px-4 py-3 text-green-400 font-mono font-semibold">{formatMoney(payment.amount)}</td>
-                    <td className="px-4 py-3 text-white font-mono">{formatMoney(payment.balanceAfter)}</td>
-                    <td className="px-4 py-3 text-slate-400">{payment.receivedBy}</td>
+                    <td className="px-4 py-3 text-white font-mono">{formatMoney(payment.balance_after)}</td>
+                    <td className="px-4 py-3 text-slate-400">{payment.received_by}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* New Loan Modal */}
+        {showModal === 'newLoan' && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-xl shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center p-5 border-b border-slate-700 sticky top-0 bg-slate-800">
+                <h3 className="text-lg font-semibold text-white">Issue New Loan</h3>
+                <button onClick={() => setShowModal(null)} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-slate-300 mb-3">CLIENT INFORMATION</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Full Name *</label>
+                      <input type="text" placeholder="Enter client name" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">NIN *</label>
+                      <input type="text" placeholder="CM1234567890" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Phone *</label>
+                      <input type="text" placeholder="0700 000 000" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Address</label>
+                      <input type="text" placeholder="Enter address" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-700 pt-4">
+                  <h4 className="text-sm font-medium text-slate-300 mb-3">LOAN DETAILS</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Principal Amount (UGX) *</label>
+                      <input type="number" placeholder="500000" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Interest Rate (%) *</label>
+                      <input type="number" defaultValue="10" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Interest Amount</label>
+                      <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-400">UGX 50,000 (auto)</div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Repayment</label>
+                      <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white font-mono">UGX 550,000</div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Duration (weeks) *</label>
+                      <input type="number" defaultValue="4" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Due Date</label>
+                      <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-400">Feb 21, 2026 (auto)</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-700 pt-4">
+                  <h4 className="text-sm font-medium text-slate-300 mb-3">SECURITY DOCUMENTS</h4>
+                  <div className="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center">
+                    <div className="text-3xl mb-2">📎</div>
+                    <p className="text-slate-400 text-sm mb-2">Upload ID/Collateral Photo</p>
+                    <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm">Choose Files</button>
+                  </div>
+                </div>
+              </div>
+              <div className="p-5 border-t border-slate-700 flex gap-3 justify-between sticky bottom-0 bg-slate-800">
+                <button className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm">🖨️ Print Loan Agreement</button>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowModal(null)} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
+                  <button className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold">Issue Loan</button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -2059,12 +2294,11 @@ const App = () => {
                   <td className="px-4 py-3 text-slate-400 text-sm">{log.timestamp}</td>
                   <td className="px-4 py-3 text-white">{log.employee}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${
-                      log.action === 'CREATE' ? 'bg-green-500/15 text-green-400' :
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${log.action === 'CREATE' ? 'bg-green-500/15 text-green-400' :
                       log.action === 'EDIT' ? 'bg-amber-500/15 text-amber-400' :
-                      log.action === 'DELETE' ? 'bg-red-500/15 text-red-400' :
-                      'bg-blue-500/15 text-blue-400'
-                    }`}>
+                        log.action === 'DELETE' ? 'bg-red-500/15 text-red-400' :
+                          'bg-blue-500/15 text-blue-400'
+                      }`}>
                       {log.action}
                     </span>
                   </td>
@@ -2151,14 +2385,14 @@ const App = () => {
   const EmployeeDashboard = () => {
     const isFinance = user?.assigned_business === 'finances';
     const businessName = user?.assigned_business?.charAt(0).toUpperCase() + user?.assigned_business?.slice(1);
-    
+
     // Sample today's sales for Boutique/Hardware employees
     const todaySales = [
       { time: '10:45 AM', items: 'Ladies Dress, Perfume', total: 205000, status: 'paid' },
       { time: '09:20 AM', items: 'Kids Shoes (2)', total: 90000, status: 'credit' },
       { time: '09:00 AM', items: 'Hand Bag', total: 30000, status: 'paid' },
     ];
-    
+
     // Sample today's payments for Finance employees
     const todayPayments = [
       { client: 'John Mukasa', amount: 50000, balanceAfter: 400000 },
@@ -2173,16 +2407,16 @@ const App = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <StatCard 
-              title="Payments Today" 
-              value={formatMoney(350000)} 
+            <StatCard
+              title="Payments Today"
+              value={formatMoney(350000)}
               change="3 payments"
               icon="💰"
               iconBg="bg-green-500/15"
             />
-            <StatCard 
-              title="Active Loans" 
-              value="12 loans" 
+            <StatCard
+              title="Active Loans"
+              value="12 loans"
               change="2 overdue"
               changeType="down"
               icon="📋"
@@ -2191,7 +2425,7 @@ const App = () => {
           </div>
 
           <div className="mb-6">
-            <button 
+            <button
               onClick={() => setShowModal('recordLoanPayment')}
               className="bg-slate-800 border border-slate-700 rounded-xl p-5 hover:border-teal-500 transition-colors text-left group w-full md:w-auto"
             >
@@ -2244,16 +2478,16 @@ const App = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <StatCard 
-            title="My Sales Today" 
-            value={formatMoney(325000)} 
+          <StatCard
+            title="My Sales Today"
+            value={formatMoney(325000)}
             change="5 transactions"
             icon="🛍️"
             iconBg="bg-teal-500/15"
           />
-          <StatCard 
-            title="Pending Credits" 
-            value={formatMoney(90000)} 
+          <StatCard
+            title="Pending Credits"
+            value={formatMoney(90000)}
             change="2 customers"
             icon="💳"
             iconBg="bg-amber-500/15"
@@ -2261,7 +2495,7 @@ const App = () => {
         </div>
 
         <div className="grid grid-cols-2 gap-4 mb-6">
-          <button 
+          <button
             onClick={() => setActiveNav('newsale')}
             className="bg-slate-800 border border-slate-700 rounded-xl p-5 hover:border-teal-500 transition-colors text-left group"
           >
@@ -2269,7 +2503,7 @@ const App = () => {
             <h4 className="font-semibold text-white">New Sale</h4>
             <p className="text-sm text-slate-400">Record a new transaction</p>
           </button>
-          <button 
+          <button
             onClick={() => setActiveNav('credits')}
             className="bg-slate-800 border border-slate-700 rounded-xl p-5 hover:border-teal-500 transition-colors text-left group"
           >
@@ -2300,9 +2534,8 @@ const App = () => {
                   <td className="px-4 py-3 text-white">{sale.items}</td>
                   <td className="px-4 py-3 text-white font-mono">{formatMoney(sale.total)}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${
-                      sale.status === 'paid' ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'
-                    }`}>
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${sale.status === 'paid' ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'
+                      }`}>
                       {sale.status === 'paid' ? '🟢 Paid' : '🟡 Credit'}
                     </span>
                   </td>
@@ -2337,12 +2570,12 @@ const App = () => {
     const [otherItemName, setOtherItemName] = useState('');
     const [saleError, setSaleError] = useState('');
     const [saleSuccess, setSaleSuccess] = useState('');
-    
+
     const stock = user?.assigned_business === 'boutique' ? boutiqueStock : hardwareStock;
     const stockAPI = user?.assigned_business === 'boutique' ? boutiqueAPI : hardwareAPI;
-    
+
     const selectedItem = stock.find(item => item.id === parseInt(selectedItemId));
-    
+
     const addItemToSale = () => {
       if (!selectedItemId) {
         setSaleError('Please select an item');
@@ -2356,7 +2589,7 @@ const App = () => {
         setSaleError('Please enter a valid quantity');
         return;
       }
-      
+
       // Check price range for non-OTHER items
       if (selectedItemId !== 'other' && selectedItem) {
         if (price < selectedItem.min_selling_price || price > selectedItem.max_selling_price) {
@@ -2368,7 +2601,7 @@ const App = () => {
           return;
         }
       }
-      
+
       const newItem = {
         id: Date.now(),
         stock_id: selectedItemId === 'other' ? null : parseInt(selectedItemId),
@@ -2378,7 +2611,7 @@ const App = () => {
         total: parseInt(quantity) * parseFloat(price),
         is_other: selectedItemId === 'other'
       };
-      
+
       setSaleItems([...saleItems, newItem]);
       setSelectedItemId('');
       setQuantity(1);
@@ -2386,23 +2619,23 @@ const App = () => {
       setOtherItemName('');
       setSaleError('');
     };
-    
+
     const removeItem = (itemId) => {
       setSaleItems(saleItems.filter(item => item.id !== itemId));
     };
-    
+
     const totalAmount = saleItems.reduce((sum, item) => sum + item.total, 0);
     const balanceDue = paymentType === 'partial' ? totalAmount - (parseFloat(amountPaid) || 0) : 0;
-    
+
     const handleCompleteSale = async () => {
       setSaleError('');
       setSaleSuccess('');
-      
+
       if (saleItems.length === 0) {
         setSaleError('Please add at least one item to the sale');
         return;
       }
-      
+
       if (paymentType === 'partial') {
         if (!customerName.trim()) {
           setSaleError('Customer name is required for credit sales');
@@ -2421,7 +2654,7 @@ const App = () => {
           return;
         }
       }
-      
+
       const saleData = {
         sale_date: saleDate === 'today' ? new Date().toISOString().split('T')[0] : new Date(Date.now() - 86400000).toISOString().split('T')[0],
         items: saleItems.map(item => ({
@@ -2436,7 +2669,7 @@ const App = () => {
         customer_name: paymentType === 'partial' ? customerName : null,
         customer_phone: paymentType === 'partial' ? customerPhone : null
       };
-      
+
       try {
         await stockAPI.createSale(saleData);
         setSaleSuccess('Sale completed successfully!');
@@ -2460,28 +2693,28 @@ const App = () => {
         setSaleError(err.response?.data?.error || 'Failed to complete sale. Please try again.');
       }
     };
-    
+
     return (
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
         <h3 className="font-semibold text-white mb-6">NEW SALE</h3>
-        
+
         {saleError && (
           <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm flex justify-between items-center">
             {saleError}
             <button onClick={() => setSaleError('')} className="text-red-400 hover:text-red-300">✕</button>
           </div>
         )}
-        
+
         {saleSuccess && (
           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/50 rounded-lg text-green-400 text-sm">
             ✅ {saleSuccess}
           </div>
         )}
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Date</label>
-            <select 
+            <select
               value={saleDate}
               onChange={(e) => setSaleDate(e.target.value)}
               className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
@@ -2491,10 +2724,10 @@ const App = () => {
             </select>
             <p className="text-xs text-slate-500 mt-1">(Cannot select older dates)</p>
           </div>
-          
+
           <div>
             <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Select Item</label>
-            <select 
+            <select
               value={selectedItemId}
               onChange={(e) => {
                 setSelectedItemId(e.target.value);
@@ -2508,64 +2741,64 @@ const App = () => {
               <option value="">-- Select item --</option>
               {stock.map(item => (
                 <option key={item.id} value={item.id}>
-                  {item.item_name} ({item.quantity} avail) • {Math.round(item.min_selling_price/1000)}K-{Math.round(item.max_selling_price/1000)}K
+                  {item.item_name} ({item.quantity} avail) • {Math.round(item.min_selling_price / 1000)}K-{Math.round(item.max_selling_price / 1000)}K
                 </option>
               ))}
               <option value="other">⚠️ OTHER (manual entry)</option>
             </select>
           </div>
-          
+
           {selectedItemId === 'other' && (
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Item Name (Other)</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={otherItemName}
                 onChange={(e) => setOtherItemName(e.target.value)}
                 placeholder="Enter item name"
-                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
               />
               <p className="text-xs text-amber-400 mt-1">⚠️ This item is not in stock. Manager will be notified.</p>
             </div>
           )}
-          
+
           {selectedItem && (
             <div className="bg-slate-900/50 rounded-lg p-3 text-sm">
               <p className="text-slate-400">Price range: <span className="text-white font-mono">{formatMoney(selectedItem.min_selling_price)} - {formatMoney(selectedItem.max_selling_price)}</span></p>
               <p className="text-slate-400">Available: <span className="text-white">{selectedItem.quantity} {selectedItem.unit}</span></p>
             </div>
           )}
-          
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Quantity</label>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={quantity}
                 onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                min="1" 
-                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                min="1"
+                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Price (UGX)</label>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="Enter price" 
-                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                placeholder="Enter price"
+                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
               />
             </div>
           </div>
-          
-          <button 
+
+          <button
             onClick={addItemToSale}
             className="text-teal-400 hover:text-teal-300 text-sm font-medium bg-teal-500/10 px-4 py-2 rounded-lg hover:bg-teal-500/20 transition-colors"
           >
             + Add Item to Sale
           </button>
-          
+
           {saleItems.length > 0 && (
             <div className="bg-slate-900 rounded-lg p-4 border border-slate-700">
               <h4 className="text-sm font-medium text-slate-400 mb-3">ITEMS IN THIS SALE</h4>
@@ -2590,7 +2823,7 @@ const App = () => {
               </div>
             </div>
           )}
-          
+
           <div>
             <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-3">Payment Type</label>
             <div className="flex gap-4">
@@ -2604,40 +2837,40 @@ const App = () => {
               </label>
             </div>
           </div>
-          
+
           {paymentType === 'partial' && (
             <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 space-y-4">
               <h4 className="text-amber-400 font-medium">Customer Details (Required for credit)</h4>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Customer Name *</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="Enter customer name" 
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                    placeholder="Enter customer name"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Phone Number *</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
-                    placeholder="0700 000 000" 
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                    placeholder="0700 000 000"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
                 </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Amount Paying Now (UGX) *</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   value={amountPaid}
                   onChange={(e) => setAmountPaid(e.target.value)}
-                  placeholder="Enter amount" 
-                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" 
+                  placeholder="Enter amount"
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                 />
               </div>
               {amountPaid && totalAmount > 0 && (
@@ -2647,22 +2880,21 @@ const App = () => {
               )}
             </div>
           )}
-          
+
           <div className="flex gap-3 pt-4">
-            <button 
-              onClick={() => setActiveNav('dashboard')} 
+            <button
+              onClick={() => setActiveNav('dashboard')}
               className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium"
             >
               Cancel
             </button>
-            <button 
+            <button
               onClick={handleCompleteSale}
               disabled={saleItems.length === 0}
-              className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${
-                saleItems.length === 0 
-                  ? 'bg-slate-600 text-slate-400 cursor-not-allowed' 
-                  : 'bg-teal-500 hover:bg-teal-600 text-slate-900'
-              }`}
+              className={`px-5 py-2.5 rounded-lg font-semibold transition-colors ${saleItems.length === 0
+                ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
+                : 'bg-teal-500 hover:bg-teal-600 text-slate-900'
+                }`}
             >
               Complete Sale
             </button>
@@ -2671,7 +2903,7 @@ const App = () => {
       </div>
     );
   };
-  
+
   // Employee Pages - My Sales
   const MySalesPage = () => {
     const todaySales = [
@@ -2679,12 +2911,12 @@ const App = () => {
       { time: '09:20 AM', items: 'Kids Shoes (2)', total: 90000, status: 'credit' },
       { time: '09:00 AM', items: 'Hand Bag', total: 30000, status: 'paid' },
     ];
-    
+
     const yesterdaySales = [
       { time: '04:30 PM', items: 'Perfume (2)', total: 240000, status: 'paid' },
       { time: '11:00 AM', items: 'Kids Shoes', total: 40000, status: 'paid' },
     ];
-    
+
     return (
       <div className="space-y-6">
         {/* Today's Sales */}
@@ -2724,7 +2956,7 @@ const App = () => {
             </tbody>
           </table>
         </div>
-        
+
         {/* Yesterday's Sales */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-700 flex justify-between items-center">
@@ -2762,23 +2994,23 @@ const App = () => {
             </tbody>
           </table>
         </div>
-        
+
         <p className="text-center text-slate-500 text-sm">Older sales are not visible to employees</p>
       </div>
     );
   };
-  
+
   // Employee Pages - Credits
   const EmployeeCreditsPage = () => {
     const credits = user?.assigned_business === 'boutique' ? boutiqueCredits : hardwareCredits;
-    
+
     return (
       <div className="space-y-4">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-white">PENDING CREDITS</h3>
           <span className="text-amber-400 font-mono">Outstanding: {formatMoney(90000)}</span>
         </div>
-        
+
         {credits.length > 0 ? credits.map((credit, i) => (
           <div key={i} className="bg-slate-800 border border-slate-700 rounded-xl p-4">
             <div className="flex justify-between items-start mb-3">
@@ -2796,7 +3028,7 @@ const App = () => {
               <div><p className="text-slate-500">Paid</p><p className="text-green-400 font-mono">{formatMoney(credit.amount_paid || 0)}</p></div>
               <div><p className="text-slate-500">Balance</p><p className="text-amber-400 font-mono font-semibold">{formatMoney(credit.balance)}</p></div>
             </div>
-            <button 
+            <button
               onClick={() => { setShowModal('recordPayment'); setEditingItem(credit); }}
               className="w-full py-2 bg-teal-500/15 text-teal-400 rounded-lg font-medium hover:bg-teal-500/25 transition-colors"
             >
@@ -2808,23 +3040,23 @@ const App = () => {
             No pending credits.
           </div>
         )}
-        
+
         <button className="text-teal-400 hover:text-teal-300 text-sm font-medium">View Cleared Credits →</button>
       </div>
     );
   };
-  
+
   // Employee Pages - Stock (View Only)
   const EmployeeStockPage = () => {
     const stock = user?.assigned_business === 'boutique' ? boutiqueStock : hardwareStock;
-    
+
     return (
       <div>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-white">AVAILABLE STOCK</h3>
           <span className="text-slate-400 text-sm">(View Only)</span>
         </div>
-        
+
         <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
@@ -2855,12 +3087,12 @@ const App = () => {
             </tbody>
           </table>
         </div>
-        
+
         <p className="text-center text-slate-500 text-sm mt-4">Contact manager to add or update stock items</p>
       </div>
     );
   };
-  
+
   // Finance Employee Pages - Active Loans (View Only)
   const ActiveLoansPage = () => {
     const sampleLoans = [
@@ -2868,14 +3100,14 @@ const App = () => {
       { client: 'Grace Nambi', totalDue: 330000, balance: 330000, dueDate: '2026-01-20', status: 'overdue' },
       { client: 'Peter Okello', totalDue: 1120000, balance: 920000, dueDate: '2026-03-01', status: 'active' },
     ];
-    
+
     return (
       <div>
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-semibold text-white">ACTIVE LOANS</h3>
           <span className="text-slate-400 text-sm">(View Only)</span>
         </div>
-        
+
         <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
           <table className="w-full">
             <thead>
@@ -2899,7 +3131,7 @@ const App = () => {
                     <span className="text-lg">{loan.status === 'overdue' ? '🔴' : '🟢'}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <button 
+                    <button
                       onClick={() => setShowModal('recordLoanPayment')}
                       className="px-3 py-1 bg-teal-500/15 text-teal-400 rounded text-sm hover:bg-teal-500/25"
                     >
@@ -2914,13 +3146,13 @@ const App = () => {
       </div>
     );
   };
-  
+
   // Finance Employee Pages - Record Payment
   const RecordPaymentPage = () => (
     <div className="max-w-lg">
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
         <h3 className="font-semibold text-white mb-6">Record Loan Payment</h3>
-        
+
         <div className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Select Loan</label>
@@ -2931,11 +3163,11 @@ const App = () => {
               <option>Peter Okello - UGX 920,000 due</option>
             </select>
           </div>
-          
+
           <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
             <p className="text-slate-400 text-sm">Current Balance: <span className="text-amber-400 font-mono font-semibold">UGX 400,000</span></p>
           </div>
-          
+
           <div>
             <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Payment Date</label>
             <select className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white">
@@ -2943,16 +3175,16 @@ const App = () => {
               <option>Yesterday - {new Date(Date.now() - 86400000).toLocaleDateString()}</option>
             </select>
           </div>
-          
+
           <div>
             <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Payment Amount (UGX)</label>
             <input type="number" placeholder="Enter amount" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
           </div>
-          
+
           <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
             <p className="text-slate-400 text-sm">Balance After Payment: <span className="text-white font-mono">UGX ---</span></p>
           </div>
-          
+
           <div className="flex gap-3 pt-4">
             <button onClick={() => setActiveNav('dashboard')} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
             <button className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold">Record Payment</button>
@@ -2961,24 +3193,24 @@ const App = () => {
       </div>
     </div>
   );
-  
+
   // Finance Employee Pages - My Payments
   const MyPaymentsPage = () => {
     const todayPayments = [
       { client: 'John Mukasa', amount: 50000, balanceAfter: 400000 },
       { client: 'Kyebando Women', amount: 275000, balanceAfter: 2200000 },
     ];
-    
+
     const yesterdayPayments = [
       { client: 'Peter Okello', amount: 100000, balanceAfter: 920000 },
     ];
-    
+
     return (
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-white">MY PAYMENTS - Today + Yesterday</h3>
         </div>
-        
+
         {/* Today */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-700 bg-slate-900/50">
@@ -3008,7 +3240,7 @@ const App = () => {
             </tbody>
           </table>
         </div>
-        
+
         {/* Yesterday */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-700 bg-slate-900/50">
@@ -3038,7 +3270,7 @@ const App = () => {
             </tbody>
           </table>
         </div>
-        
+
         <p className="text-center text-slate-500 text-sm">Older payments are not visible to employees</p>
       </div>
     );
@@ -3095,7 +3327,7 @@ const App = () => {
         default: return <ManagerDashboard />;
       }
     };
-    
+
     const getTitle = () => {
       switch (activeNav) {
         case 'dashboard': return 'Dashboard';
@@ -3120,7 +3352,7 @@ const App = () => {
   if (currentView === 'employee') {
     const isFinance = user?.assigned_business === 'finances';
     const businessName = user?.assigned_business?.charAt(0).toUpperCase() + user?.assigned_business?.slice(1);
-    
+
     const getEmployeeContent = () => {
       switch (activeNav) {
         case 'dashboard': return <EmployeeDashboard />;
@@ -3134,7 +3366,7 @@ const App = () => {
         default: return <EmployeeDashboard />;
       }
     };
-    
+
     const getEmployeeTitle = () => {
       switch (activeNav) {
         case 'dashboard': return 'My Dashboard';

@@ -7,7 +7,8 @@ from app.models.user import User
 from app.models.customer import Customer
 from app.models.boutique import BoutiqueCategory, BoutiqueStock
 from app.models.hardware import HardwareCategory, HardwareStock
-from datetime import datetime
+from app.models.finance import LoanClient, Loan, LoanPayment, GroupLoan, GroupLoanPayment
+from datetime import datetime, date, timedelta
 
 
 def seed_data():
@@ -243,7 +244,7 @@ def seed_data():
         db.session.commit()
         print("[OK] Hardware stock created")
         
-        # Sample Customers
+        # Sample Customers (for boutique/hardware)
         customers = [
             Customer(
                 name='John Okello',
@@ -271,13 +272,195 @@ def seed_data():
         db.session.commit()
         print("[OK] Sample customers created")
         
+        # ============= FINANCE DATA (DELETABLE) =============
+        
+        # Loan Clients
+        loan_clients = [
+            LoanClient(
+                name='John Mukasa',
+                nin='CM1234567890',
+                phone='0701234567',
+                address='Kawempe, Kampala',
+                created_by=manager.id
+            ),
+            LoanClient(
+                name='Grace Auma',
+                nin='CF9876543210',
+                phone='0751112222',
+                address='Ntinda, Kampala',
+                created_by=manager.id
+            ),
+            LoanClient(
+                name='Peter Okello',
+                nin='CM5566778899',
+                phone='0781234999',
+                address='Mukono Town',
+                created_by=manager.id
+            )
+        ]
+        db.session.add_all(loan_clients)
+        db.session.commit()
+        print("[OK] Loan clients created")
+        
+        # Individual Loans
+        today = date.today()
+        loans = [
+            Loan(
+                client_id=1,
+                principal=500000,
+                interest_rate=10,
+                interest_amount=50000,
+                total_amount=550000,
+                amount_paid=100000,
+                balance=450000,
+                duration_weeks=4,
+                issue_date=today - timedelta(weeks=2),
+                due_date=today + timedelta(weeks=2),
+                status='active',
+                created_by=manager.id
+            ),
+            Loan(
+                client_id=2,
+                principal=300000,
+                interest_rate=10,
+                interest_amount=30000,
+                total_amount=330000,
+                amount_paid=0,
+                balance=330000,
+                duration_weeks=4,
+                issue_date=today - timedelta(weeks=5),
+                due_date=today - timedelta(weeks=1),
+                status='overdue',
+                created_by=manager.id
+            ),
+            Loan(
+                client_id=3,
+                principal=1000000,
+                interest_rate=12,
+                interest_amount=120000,
+                total_amount=1120000,
+                amount_paid=200000,
+                balance=920000,
+                duration_weeks=8,
+                issue_date=today - timedelta(weeks=2),
+                due_date=today + timedelta(weeks=6),
+                status='active',
+                created_by=manager.id
+            )
+        ]
+        db.session.add_all(loans)
+        db.session.commit()
+        print("[OK] Individual loans created")
+        
+        # Loan Payments
+        loan_payments = [
+            LoanPayment(
+                loan_id=1,
+                payment_date=today - timedelta(days=7),
+                amount=50000,
+                balance_after=500000,
+                notes='First payment',
+                created_by=grace.id
+            ),
+            LoanPayment(
+                loan_id=1,
+                payment_date=today,
+                amount=50000,
+                balance_after=450000,
+                notes='Second payment',
+                created_by=grace.id
+            ),
+            LoanPayment(
+                loan_id=3,
+                payment_date=today - timedelta(days=3),
+                amount=200000,
+                balance_after=920000,
+                notes='Partial payment',
+                created_by=manager.id
+            )
+        ]
+        db.session.add_all(loan_payments)
+        db.session.commit()
+        print("[OK] Loan payments created")
+        
+        # Group Loans
+        group_loans = [
+            GroupLoan(
+                group_name='Kyebando Women Group',
+                member_count=5,
+                total_amount=2750000,
+                amount_per_period=275000,
+                total_periods=10,
+                periods_paid=2,
+                amount_paid=550000,
+                balance=2200000,
+                status='active',
+                created_by=manager.id
+            ),
+            GroupLoan(
+                group_name='Kawempe Traders Association',
+                member_count=8,
+                total_amount=4400000,
+                amount_per_period=550000,
+                total_periods=8,
+                periods_paid=2,
+                amount_paid=1100000,
+                balance=3300000,
+                status='active',
+                created_by=manager.id
+            )
+        ]
+        db.session.add_all(group_loans)
+        db.session.commit()
+        print("[OK] Group loans created")
+        
+        # Group Loan Payments
+        group_payments = [
+            GroupLoanPayment(
+                group_loan_id=1,
+                payment_date=today - timedelta(weeks=2),
+                amount=275000,
+                periods_covered=1,
+                balance_after=2475000,
+                notes='Week 1 payment',
+                created_by=grace.id
+            ),
+            GroupLoanPayment(
+                group_loan_id=1,
+                payment_date=today - timedelta(weeks=1),
+                amount=275000,
+                periods_covered=1,
+                balance_after=2200000,
+                notes='Week 2 payment',
+                created_by=grace.id
+            ),
+            GroupLoanPayment(
+                group_loan_id=2,
+                payment_date=today - timedelta(weeks=1),
+                amount=1100000,
+                periods_covered=2,
+                balance_after=3300000,
+                notes='First 2 weeks combined',
+                created_by=manager.id
+            )
+        ]
+        db.session.add_all(group_payments)
+        db.session.commit()
+        print("[OK] Group loan payments created")
+        
         print("\n[SUCCESS] Database seeding completed successfully!")
         print("\nDemo Users:")
         print("  Manager: username='manager', password='admin123'")
         print("  Sarah (Boutique): username='sarah', password='pass123'")
         print("  David (Hardware): username='david', password='pass123'")
         print("  Grace (Finances): username='grace', password='pass123'")
+        print("\nSample Finance Data:")
+        print("  3 Loan Clients (deletable)")
+        print("  3 Individual Loans (1 overdue, 2 active)")
+        print("  2 Group Loans (active)")
+        print("  Sample payments recorded")
 
 
 if __name__ == '__main__':
     seed_data()
+

@@ -9,11 +9,17 @@ from app.models.hardware import (
     HardwareCategory, HardwareStock, HardwareSale,
     HardwareSaleItem, HardwareCreditPayment
 )
+from app.models.finance import (
+    LoanClient, Loan, LoanPayment,
+    GroupLoan, GroupLoanPayment
+)
 from app.models.audit import AuditLog
 
 __all__ = [
     'User', 'Customer', 
     'BoutiqueCategory', 'BoutiqueStock', 'BoutiqueSale', 'BoutiqueSaleItem', 'BoutiqueCreditPayment',
     'HardwareCategory', 'HardwareStock', 'HardwareSale', 'HardwareSaleItem', 'HardwareCreditPayment',
+    'LoanClient', 'Loan', 'LoanPayment', 'GroupLoan', 'GroupLoanPayment',
     'AuditLog'
 ]
+
