@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import api, { authAPI, boutiqueAPI, hardwareAPI, employeesAPI, customersAPI, dashboardAPI, financeAPI } from './services/api';
 import ToastContainer from './components/Toast';
@@ -468,6 +468,8 @@ const App = () => {
             <>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-3">My Workspace</p>
               <NavItem icon="📊" label="Dashboard" id="dashboard" active={activeNav} onClick={setActiveNav} />
+              <NavItem icon="➕" label="New Loan" id="newloan" active={activeNav} onClick={setActiveNav} />
+              <NavItem icon="👥" label="New Group Loan" id="newgrouploan" active={activeNav} onClick={setActiveNav} />
               <NavItem icon="📋" label="Active Loans" id="activeloans" active={activeNav} onClick={setActiveNav} />
               <NavItem icon="💰" label="Record Payment" id="recordpayment" active={activeNav} onClick={setActiveNav} />
               <NavItem icon="📝" label="My Payments" id="mypayments" active={activeNav} onClick={setActiveNav} />
@@ -578,6 +580,7 @@ const App = () => {
     // Business-specific data from dashboard API
     const boutiqueToday = dashboardData?.by_business?.boutique || { today: 0, transactions: 0, credits: 0, cleared_today: 0 };
     const hardwareToday = dashboardData?.by_business?.hardware || { today: 0, transactions: 0, credits: 0, cleared_today: 0 };
+    const financeToday = dashboardData?.by_business?.finance || { outstanding: 0, new_loans_today: 0, repayments_today: 0, overdue_count: 0, transactions: 0 };
 
     // Helper function
     function isToday(dateStr) {
@@ -607,8 +610,8 @@ const App = () => {
           <StatCard
             title="Today's Revenue"
             value={formatMoney(todayRevenue)}
-            change="↑ 12% from yesterday"
-            changeType="up"
+            change="Inclusive of repayments"
+            changeType="neutral"
             icon="💰"
             iconBg="bg-green-500/15"
           />
@@ -621,7 +624,7 @@ const App = () => {
           />
           <StatCard
             title="Outstanding Loans"
-            value={formatMoney(outstandingLoans)}
+            value={formatMoney(financeToday.outstanding)}
             change={`${loans.filter(l => l.status !== 'paid').length} active loans`}
             icon="🏦"
             iconBg="bg-blue-500/15"
@@ -629,8 +632,8 @@ const App = () => {
           <StatCard
             title="Today's Profit"
             value={formatMoney(todayProfit)}
-            change="↑ 8% from yesterday"
-            changeType="up"
+            change="Est. 30% margin"
+            changeType="neutral"
             icon="📈"
             iconBg="bg-teal-500/15"
           />
@@ -641,17 +644,26 @@ const App = () => {
           <div className="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-xl p-5">
             <h3 className="font-semibold text-white mb-4">Weekly Revenue Trend</h3>
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={getWeeklyRevenueData()}>
+              <LineChart data={dashboardData?.sales_trend || getWeeklyRevenueData()}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
-                <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `${v / 1000000}M`} />
+                <XAxis
+                  dataKey="date"
+                  stroke="#64748b"
+                  fontSize={12}
+                  tickFormatter={(str) => {
+                    const date = new Date(str);
+                    return `${date.getDate()}/${date.getMonth() + 1}`;
+                  }}
+                />
+                <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `${v / 1000}k`} />
                 <Tooltip
                   contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
                   formatter={(value) => formatMoney(value)}
+                  labelFormatter={(label) => new Date(label).toLocaleDateString()}
                 />
                 <Line type="monotone" dataKey="boutique" stroke="#14b8a6" strokeWidth={2} dot={false} name="Boutique" />
                 <Line type="monotone" dataKey="hardware" stroke="#3b82f6" strokeWidth={2} dot={false} name="Hardware" />
-                <Line type="monotone" dataKey="finance" stroke="#f59e0b" strokeWidth={2} dot={false} name="Finance" />
+                <Line type="monotone" dataKey="finance" stroke="#f59e0b" strokeWidth={2} dot={false} name="Finance Repayments" />
               </LineChart>
             </ResponsiveContainer>
             <div className="flex gap-6 mt-3 justify-center">
@@ -738,10 +750,10 @@ const App = () => {
               <span className="text-slate-400 text-sm">{loans.filter(l => l.status !== 'paid').length} active</span>
             </div>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between"><span className="text-slate-400">Outstanding:</span><span className="text-white font-mono">{formatMoney(outstandingLoans)}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Active Loans:</span><span className="text-white">{loans.filter(l => l.status !== 'paid').length}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Overdue:</span><span className="text-red-400 font-mono">{loans.filter(l => l.status === 'overdue').length} loans</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Total Loans:</span><span className="text-white">{loans.length}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Outstanding:</span><span className="text-white font-mono">{formatMoney(financeToday.outstanding)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Repayments Today:</span><span className="text-green-400 font-mono">{formatMoney(financeToday.repayments_today)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">New Loans Today:</span><span className="text-white font-mono">{formatMoney(financeToday.new_loans_today)}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Overdue:</span><span className="text-red-400 font-mono">{financeToday.overdue_count} loans</span></div>
             </div>
           </div>
         </div>
@@ -2399,9 +2411,9 @@ const App = () => {
                   <td className="px-4 py-3 text-white">{log.user_name || 'Unknown'}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 text-xs rounded-full ${log.action === 'create' ? 'bg-green-500/15 text-green-400' :
-                        log.action === 'update' ? 'bg-amber-500/15 text-amber-400' :
-                          log.action === 'delete' ? 'bg-red-500/15 text-red-400' :
-                            'bg-blue-500/15 text-blue-400'
+                      log.action === 'update' ? 'bg-amber-500/15 text-amber-400' :
+                        log.action === 'delete' ? 'bg-red-500/15 text-red-400' :
+                          'bg-blue-500/15 text-blue-400'
                       }`}>
                       {log.action?.toUpperCase()}
                     </span>
@@ -3415,106 +3427,1014 @@ const App = () => {
     );
   };
 
-  // Finance Employee Pages - Active Loans (View Only)
+  // Finance Employee Pages - Active Loans
   const ActiveLoansPage = () => {
-    const sampleLoans = [
-      { client: 'John Mukasa', totalDue: 550000, balance: 400000, dueDate: '2026-02-17', status: 'active' },
-      { client: 'Grace Nambi', totalDue: 330000, balance: 330000, dueDate: '2026-01-20', status: 'overdue' },
-      { client: 'Peter Okello', totalDue: 1120000, balance: 920000, dueDate: '2026-03-01', status: 'active' },
-    ];
+    const [activeTab, setActiveTab] = useState('individual');
+    const [loans, setLoans] = useState([]);
+    const [groupLoans, setGroupLoans] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [editingLoan, setEditingLoan] = useState(null);
+    const [editForm, setEditForm] = useState({});
+    const toast = useToastStore();
+
+    useEffect(() => {
+      loadLoans();
+    }, []);
+
+    const loadLoans = async () => {
+      setLoading(true);
+      try {
+        const [loansRes, groupLoansRes] = await Promise.all([
+          financeAPI.getLoans(),
+          financeAPI.getGroupLoans()
+        ]);
+        setLoans(loansRes.data || []);
+        setGroupLoans(groupLoansRes.data || []);
+      } catch (err) {
+        console.error('Error loading loans:', err);
+        toast.error('Failed to load loans');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const handleDeleteLoan = async (id, type) => {
+      if (!window.confirm(`Are you sure you want to delete this ${type} loan?`)) return;
+      try {
+        if (type === 'individual') {
+          await financeAPI.deleteLoan(id);
+        } else {
+          await financeAPI.deleteGroupLoan(id);
+        }
+        toast.success(`${type === 'individual' ? 'Loan' : 'Group loan'} deleted successfully`);
+        loadLoans();
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to delete loan');
+      }
+    };
+
+    const handleEditLoan = (loan, type) => {
+      setEditingLoan({ ...loan, type });
+      setEditForm(type === 'individual' ? {
+        principal: loan.principal,
+        interest_rate: loan.interest_rate,
+        duration_weeks: loan.duration_weeks
+      } : {
+        group_name: loan.group_name,
+        member_count: loan.member_count,
+        total_amount: loan.total_amount,
+        amount_per_period: loan.amount_per_period,
+        total_periods: loan.total_periods
+      });
+    };
+
+    const handleSaveEdit = async () => {
+      if (!editingLoan) return;
+      try {
+        if (editingLoan.type === 'individual') {
+          await financeAPI.updateLoan(editingLoan.id, editForm);
+        } else {
+          await financeAPI.updateGroupLoan(editingLoan.id, editForm);
+        }
+        toast.success('Loan updated successfully');
+        setEditingLoan(null);
+        loadLoans();
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to update loan');
+      }
+    };
+
+    const handlePrintLoan = (loan) => {
+      // For now, simpler print or download stub
+      const loanDetails = `
+        LOAN AGREEMENT
+        --------------
+        Client: ${loan.client?.name || loan.group_name || 'N/A'}
+        Amount: ${formatMoney(loan.total_amount)}
+        Balance: ${formatMoney(loan.balance)}
+        Due Date: ${loan.due_date ? new Date(loan.due_date).toLocaleDateString() : 'N/A'}
+      `;
+      // Create a temporary window to print
+      const printWindow = window.open('', '_blank');
+      printWindow.document.write(`<pre>${loanDetails}</pre>`);
+      printWindow.document.close();
+      printWindow.print();
+    };
 
     return (
       <div>
-        <div className="flex justify-between items-center mb-4">
+        <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-semibold text-white">ACTIVE LOANS</h3>
-          <span className="text-slate-400 text-sm">(View Only)</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('individual')}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${activeTab === 'individual' ? 'bg-teal-500/20 text-teal-400' : 'text-slate-400 hover:text-white'}`}
+            >
+              Individual Loans
+            </button>
+            <button
+              onClick={() => setActiveTab('group')}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${activeTab === 'group' ? 'bg-teal-500/20 text-teal-400' : 'text-slate-400 hover:text-white'}`}
+            >
+              Group Loans
+            </button>
+          </div>
         </div>
 
-        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-900/50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Client</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Total Due</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Balance</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Due Date</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {sampleLoans.map((loan, i) => (
-                <tr key={i} className="hover:bg-slate-700/30">
-                  <td className="px-4 py-3 text-white">{loan.client}</td>
-                  <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.totalDue)}</td>
-                  <td className="px-4 py-3 text-amber-400 font-mono font-semibold">{formatMoney(loan.balance)}</td>
-                  <td className="px-4 py-3 text-slate-400">{new Date(loan.dueDate).toLocaleDateString()}</td>
-                  <td className="px-4 py-3">
-                    <span className="text-lg">{loan.status === 'overdue' ? '🔴' : '🟢'}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => setShowModal('recordLoanPayment')}
-                      className="px-3 py-1 bg-teal-500/15 text-teal-400 rounded text-sm hover:bg-teal-500/25"
-                    >
-                      Pay
-                    </button>
-                  </td>
+        {activeTab === 'individual' ? (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-900/50">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Client</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Total Due</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Balance</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Due Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {loading ? (
+                  <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">Loading loans...</td></tr>
+                ) : loans.length === 0 ? (
+                  <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">No active loans found.</td></tr>
+                ) : loans.map((loan) => (
+                  <tr key={loan.id} className="hover:bg-slate-700/30">
+                    <td className="px-4 py-3 text-white">{loan.client?.name || 'Unknown'}</td>
+                    <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.total_amount)}</td>
+                    <td className="px-4 py-3 text-amber-400 font-mono font-semibold">{formatMoney(loan.balance)}</td>
+                    <td className="px-4 py-3 text-slate-400">{new Date(loan.due_date).toLocaleDateString()}</td>
+                    <td className="px-4 py-3">
+                      <span className="text-lg" title={loan.status}>
+                        {loan.status === 'overdue' ? '🔴' : loan.status === 'due_soon' ? '🟡' : loan.status === 'paid' ? '✅' : '🟢'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button onClick={() => handleEditLoan(loan, 'individual')} title="Edit" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-amber-400">✏️</button>
+                        <button onClick={() => handleDeleteLoan(loan.id, 'individual')} title="Delete" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400">🗑️</button>
+                        <button onClick={() => handlePrintLoan(loan)} title="Print Document" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-teal-400">🖨️</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-slate-900/50">
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Group Name</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Members</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Total Due</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Balance</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Period Pay</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {loading ? (
+                  <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">Loading group loans...</td></tr>
+                ) : groupLoans.length === 0 ? (
+                  <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">No active group loans found.</td></tr>
+                ) : groupLoans.map((loan) => (
+                  <tr key={loan.id} className="hover:bg-slate-700/30">
+                    <td className="px-4 py-3 text-white">{loan.group_name}</td>
+                    <td className="px-4 py-3 text-slate-400">{loan.member_count}</td>
+                    <td className="px-4 py-3 text-white font-mono">{formatMoney(loan.total_amount)}</td>
+                    <td className="px-4 py-3 text-amber-400 font-mono font-semibold">{formatMoney(loan.balance)}</td>
+                    <td className="px-4 py-3 text-slate-400 font-mono">{formatMoney(loan.amount_per_period)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button onClick={() => handleEditLoan(loan, 'group')} title="Edit" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-amber-400">✏️</button>
+                        <button onClick={() => handleDeleteLoan(loan.id, 'group')} title="Delete" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400">🗑️</button>
+                        <button onClick={() => handlePrintLoan(loan)} title="Print Document" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-teal-400">🖨️</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Edit Loan Modal */}
+        {editingLoan && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-slate-700">
+                <h3 className="text-lg font-semibold text-white">Edit {editingLoan.type === 'individual' ? 'Loan' : 'Group Loan'}</h3>
+                <button onClick={() => setEditingLoan(null)} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
+              </div>
+              <div className="p-5 space-y-4">
+                {editingLoan.type === 'individual' ? (
+                  <>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Principal</label>
+                      <input
+                        type="number"
+                        value={editForm.principal || ''}
+                        onChange={(e) => setEditForm({ ...editForm, principal: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Interest Rate (%)</label>
+                      <input
+                        type="number"
+                        value={editForm.interest_rate || ''}
+                        onChange={(e) => setEditForm({ ...editForm, interest_rate: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Group Name</label>
+                      <input
+                        type="text"
+                        value={editForm.group_name || ''}
+                        onChange={(e) => setEditForm({ ...editForm, group_name: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Amount</label>
+                      <input
+                        type="number"
+                        value={editForm.total_amount || ''}
+                        onChange={(e) => setEditForm({ ...editForm, total_amount: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
+                <button onClick={() => setEditingLoan(null)} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
+                <button onClick={handleSaveEdit} className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Finance Employee Pages - New Loan (Create Loan)
+  const NewLoanPage = () => {
+    const [clients, setClients] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [showNewClientForm, setShowNewClientForm] = useState(false);
+    const [selectedFiles, setSelectedFiles] = useState(null);
+    const fileInputRef = useRef(null);
+
+    // Combined form state for smoother UI flow
+    const [formData, setFormData] = useState({
+      client_id: '',
+      principal: '',
+      interest_rate: '10',
+      duration_weeks: '4',
+      // New client fields if needed
+      name: '',
+      phone: '',
+      nin: '',
+      address: ''
+    });
+
+    const toast = useToastStore();
+
+    useEffect(() => {
+      loadClients();
+    }, []);
+
+    const loadClients = async () => {
+      try {
+        const res = await financeAPI.getClients();
+        setClients(res.data || []);
+      } catch (err) {
+        console.error('Error loading clients:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Derived values
+    const principal = parseFloat(formData.principal) || 0;
+    const interestRate = parseFloat(formData.interest_rate) || 0;
+    const interestAmount = principal * (interestRate / 100);
+    const totalAmount = principal + interestAmount;
+    const durationWeeks = parseInt(formData.duration_weeks) || 4;
+
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + (durationWeeks * 7));
+    const dueDateStr = dueDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
+    const handleClientChange = (e) => {
+      const value = e.target.value;
+      if (value === 'new') {
+        setShowNewClientForm(true);
+        setFormData({ ...formData, client_id: '' });
+      } else {
+        setShowNewClientForm(false);
+        setFormData({ ...formData, client_id: value });
+      }
+    };
+
+    const handleFileChange = (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        setSelectedFiles(e.target.files);
+      }
+    };
+
+    const handlePrintAgreement = () => {
+      const clientName = showNewClientForm ? formData.name : clients.find(c => c.id == formData.client_id)?.name || '_________________';
+      const clientNIN = showNewClientForm ? formData.nin : clients.find(c => c.id == formData.client_id)?.nin || '_________________';
+      const clientPhone = showNewClientForm ? formData.phone : clients.find(c => c.id == formData.client_id)?.phone || '_________________';
+      const address = showNewClientForm ? formData.address : clients.find(c => c.id == formData.client_id)?.address || '_________________';
+
+      const agreementContent = `
+        <html>
+        <head>
+          <title>Loan Agreement - Devs Apps</title>
+          <style>
+            body { font-family: 'Times New Roman', serif; padding: 40px; max-width: 800px; margin: 0 auto; line-height: 1.6; }
+            h1 { text-align: center; text-decoration: underline; margin-bottom: 20px; }
+            h2 { font-size: 16px; margin-top: 20px; text-decoration: underline; }
+            p { margin-bottom: 15px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .section { margin-bottom: 20px; }
+            .details-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .details-table td { padding: 8px; border: 1px solid #ccc; }
+            .details-table td:first-child { font-weight: bold; width: 40%; background: #f9f9f9; }
+            .signatures { margin-top: 50px; display: flex; justify-content: space-between; }
+            .sig-block { width: 45%; border-top: 1px solid #000; padding-top: 10px; text-align: center; }
+            .footer { margin-top: 50px; font-size: 10px; text-align: center; border-top: 1px solid #eee; padding-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>LOAN AGREEMENT</h1>
+            <p><strong>Devs Apps Financial Services</strong></p>
+          </div>
+
+          <p>This Loan Agreement is made on <strong>${new Date().toLocaleDateString()}</strong> between:</p>
+
+          <div class="section">
+            <p><strong>LENDER:</strong> Devs Apps Financial Services</p>
+            <p><strong>BORROWER:</strong> ${clientName} (NIN: ${clientNIN})</p>
+            <p><strong>ADDRESS:</strong> ${address}</p>
+            <p><strong>PHONE:</strong> ${clientPhone}</p>
+          </div>
+
+          <div class="section">
+            <h2>LOAN DETAILS</h2>
+            <table class="details-table">
+              <tr><td>Principal Amount</td><td>UGX ${formatMoney(principal)}</td></tr>
+              <tr><td>Interest Rate</td><td>${interestRate}%</td></tr>
+              <tr><td>Interest Amount</td><td>UGX ${formatMoney(interestAmount)}</td></tr>
+              <tr><td>Total Repayment Amount</td><td>UGX ${formatMoney(totalAmount)}</td></tr>
+              <tr><td>Loan Duration</td><td>${durationWeeks} Weeks</td></tr>
+              <tr><td>Due Date</td><td>${dueDateStr}</td></tr>
+            </table>
+          </div>
+
+          <div class="section">
+            <h2>TERMS AND CONDITIONS</h2>
+            <ol>
+              <li>The Borrower agrees to repay the Principal Amount plus Interest by the Due Date specified above.</li>
+              <li>In case of default, Devs Apps reserves the right to take legal action or seize provided collateral.</li>
+              <li>Late payments may attract an additional penalty fee.</li>
+              <li>All payments shall be made directly to Devs Apps authorized agents.</li>
+            </ol>
+          </div>
+
+          <div class="signatures">
+            <div class="sig-block">
+              <p>Borrower's Signature</p>
+            </div>
+            <div class="sig-block">
+              <p>Lender's Representative</p>
+            </div>
+          </div>
+
+          <div class="footer">
+            <p>Devs Apps Financial Services • Kampala, Uganda • Generated on ${new Date().toLocaleString()}</p>
+          </div>
+          
+          <script>window.print();</script>
+        </body>
+        </html>
+      `;
+
+      const win = window.open('', '_blank');
+      win.document.write(agreementContent);
+      win.document.close();
+    };
+
+    const handleSubmitLoan = async () => {
+      if (showNewClientForm) {
+        if (!formData.name || !formData.phone) {
+          toast.error('Client name and phone are required');
+          return;
+        }
+      } else if (!formData.client_id) {
+        toast.error('Please select a client');
+        return;
+      }
+
+      if (principal <= 0) {
+        toast.error('Please enter a valid principal amount');
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        let clientId = formData.client_id;
+
+        // Create client first if new
+        if (showNewClientForm) {
+          const clientRes = await financeAPI.createClient({
+            name: formData.name,
+            phone: formData.phone,
+            nin: formData.nin,
+            address: formData.address
+          });
+          clientId = clientRes.data.id;
+        }
+
+        // Create loan
+        const loanRes = await financeAPI.createLoan({
+          client_id: parseInt(clientId),
+          principal: principal,
+          interest_rate: interestRate,
+          duration_weeks: durationWeeks
+        });
+
+        if (selectedFiles && selectedFiles.length > 0) {
+          const uploadData = new FormData();
+          Array.from(selectedFiles).forEach(file => {
+            uploadData.append('files', file);
+          });
+          await financeAPI.uploadLoanDocuments(loanRes.data.id, uploadData);
+        }
+
+        toast.success('Loan issued successfully!');
+        setActiveNav('activeloans');
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to issue loan');
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    return (
+      <div className="max-w-xl mx-auto">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full shadow-2xl overflow-hidden">
+          <div className="flex justify-between items-center p-5 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
+            <h3 className="text-lg font-semibold text-white">Issue New Loan</h3>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div>
+              <h4 className="text-sm font-medium text-slate-300 mb-3">CLIENT INFORMATION</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Select / New Client *</label>
+                  <select
+                    value={showNewClientForm ? 'new' : formData.client_id}
+                    onChange={handleClientChange}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white mb-2"
+                  >
+                    <option value="">-- Select Existing Client --</option>
+                    {clients.map(c => (
+                      <option key={c.id} value={c.id}>{c.name} - {c.phone}</option>
+                    ))}
+                    <option value="new">+ Create New Client</option>
+                  </select>
+                </div>
+
+                {showNewClientForm && (
+                  <>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Full Name *</label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        placeholder="Enter client name"
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">NIN</label>
+                      <input
+                        type="text"
+                        value={formData.nin}
+                        onChange={(e) => setFormData({ ...formData, nin: e.target.value })}
+                        placeholder="CM1234567890"
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Phone *</label>
+                      <input
+                        type="text"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="0700 000 000"
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Address</label>
+                      <input
+                        type="text"
+                        value={formData.address}
+                        onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                        placeholder="Enter address"
+                        className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-slate-700 pt-4">
+              <h4 className="text-sm font-medium text-slate-300 mb-3">LOAN DETAILS</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Principal Amount (UGX) *</label>
+                  <input
+                    type="number"
+                    value={formData.principal}
+                    onChange={(e) => setFormData({ ...formData, principal: e.target.value })}
+                    placeholder="500000"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Interest Rate (%) *</label>
+                  <input
+                    type="number"
+                    value={formData.interest_rate}
+                    onChange={(e) => setFormData({ ...formData, interest_rate: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Interest Amount</label>
+                  <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-400">
+                    {formatMoney(interestAmount)} (auto)
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Repayment</label>
+                  <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white font-mono">
+                    {formatMoney(totalAmount)}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Duration (weeks) *</label>
+                  <input
+                    type="number"
+                    value={formData.duration_weeks}
+                    onChange={(e) => setFormData({ ...formData, duration_weeks: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Due Date</label>
+                  <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-400">
+                    {dueDateStr} (auto)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-700 pt-4">
+              <h4 className="text-sm font-medium text-slate-300 mb-3">SECURITY DOCUMENTS</h4>
+              <div
+                className={`border-2 border-dashed ${selectedFiles ? 'border-teal-500 bg-teal-500/10' : 'border-slate-600'} rounded-lg p-4 text-center group cursor-pointer hover:border-teal-500/50 hover:bg-slate-700/30 transition-all`}
+                onClick={() => fileInputRef.current.click()}
+              >
+                <div className="text-3xl mb-2">📎</div>
+                <p className="text-slate-400 text-sm mb-2 group-hover:text-teal-400">
+                  {selectedFiles ? `${selectedFiles.length} file(s) selected` : 'Upload ID/Collateral Photo'}
+                </p>
+                <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors">
+                  {selectedFiles ? 'Change Files' : 'Choose Files'}
+                </button>
+                <input
+                  type="file"
+                  multiple
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5 border-t border-slate-700 flex gap-3 justify-between sticky bottom-0 bg-slate-800">
+            <button
+              onClick={handlePrintAgreement}
+              className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm flex items-center gap-2"
+            >
+              <span>🖨️</span> Print Loan Agreement
+            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setActiveNav('dashboard')}
+                className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitLoan}
+                disabled={submitting}
+                className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold disabled:opacity-50"
+              >
+                {submitting ? 'Issuing...' : 'Issue Loan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Finance Employee Pages - New Group Loan (Create Group Loan)
+  const NewGroupLoanPage = () => {
+    const [submitting, setSubmitting] = useState(false);
+    const [groupForm, setGroupForm] = useState({
+      group_name: '',
+      member_count: '',
+      total_amount: '',
+      amount_per_period: '',
+      total_periods: '4'
+    });
+    const toast = useToastStore();
+
+    const handleSubmitGroupLoan = async () => {
+      if (!groupForm.group_name) {
+        toast.error('Please enter the group name');
+        return;
+      }
+      if (!groupForm.member_count || parseInt(groupForm.member_count) <= 0) {
+        toast.error('Please enter the number of members');
+        return;
+      }
+      if (!groupForm.total_amount || parseFloat(groupForm.total_amount) <= 0) {
+        toast.error('Please enter the total amount');
+        return;
+      }
+      if (!groupForm.amount_per_period || parseFloat(groupForm.amount_per_period) <= 0) {
+        toast.error('Please enter the amount per period');
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        await financeAPI.createGroupLoan({
+          group_name: groupForm.group_name,
+          member_count: parseInt(groupForm.member_count),
+          total_amount: parseFloat(groupForm.total_amount),
+          amount_per_period: parseFloat(groupForm.amount_per_period),
+          total_periods: parseInt(groupForm.total_periods)
+        });
+        toast.success('Group loan created successfully!');
+        setActiveNav('activeloans');
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to create group loan');
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    return (
+      <div className="max-w-xl mx-auto">
+        <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full shadow-2xl overflow-hidden">
+          <div className="flex justify-between items-center p-5 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
+            <h3 className="text-lg font-semibold text-white">Issue New Group Loan</h3>
+          </div>
+
+          <div className="p-5 space-y-4">
+            <div>
+              <h4 className="text-sm font-medium text-slate-300 mb-3">GROUP INFORMATION</h4>
+              <div className="space-y-4">
+                {/* Group Name */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Group Name *</label>
+                  <input
+                    type="text"
+                    value={groupForm.group_name}
+                    onChange={(e) => setGroupForm({ ...groupForm, group_name: e.target.value })}
+                    placeholder="e.g., Kyebando Women's Group"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+
+                {/* Member Count */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Number of Members *</label>
+                  <input
+                    type="number"
+                    value={groupForm.member_count}
+                    onChange={(e) => setGroupForm({ ...groupForm, member_count: e.target.value })}
+                    placeholder="Enter member count"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-700 pt-4">
+              <h4 className="text-sm font-medium text-slate-300 mb-3">LOAN DETAILS</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Amount (UGX) *</label>
+                  <input
+                    type="number"
+                    value={groupForm.total_amount}
+                    onChange={(e) => setGroupForm({ ...groupForm, total_amount: e.target.value })}
+                    placeholder="Total loan amount"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Amount Per Period (UGX) *</label>
+                  <input
+                    type="number"
+                    value={groupForm.amount_per_period}
+                    onChange={(e) => setGroupForm({ ...groupForm, amount_per_period: e.target.value })}
+                    placeholder="Weekly/Monthly payment"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Periods *</label>
+                  <select
+                    value={groupForm.total_periods}
+                    onChange={(e) => setGroupForm({ ...groupForm, total_periods: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  >
+                    <option value="4">4 Periods</option>
+                    <option value="8">8 Periods</option>
+                    <option value="12">12 Periods</option>
+                    <option value="16">16 Periods</option>
+                    <option value="24">24 Periods</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Summary */}
+              {parseFloat(groupForm.total_amount) > 0 && (
+                <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-2 mt-4">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Total Amount:</span>
+                    <span className="text-teal-400 font-mono">{formatMoney(parseFloat(groupForm.total_amount) || 0)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Per Period Payment:</span>
+                    <span className="text-amber-400 font-mono">{formatMoney(parseFloat(groupForm.amount_per_period) || 0)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-700 pt-4">
+              <h4 className="text-sm font-medium text-slate-300 mb-3">SECURITY DOCUMENTS</h4>
+              <div className="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center group cursor-pointer hover:border-teal-500/50 hover:bg-slate-700/30 transition-all">
+                <div className="text-3xl mb-2">📎</div>
+                <p className="text-slate-400 text-sm mb-2 group-hover:text-teal-400">Upload Agreement/Collateral Photo</p>
+                <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors">Choose Files</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-5 border-t border-slate-700 flex gap-3 justify-between sticky bottom-0 bg-slate-800">
+            <button className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm flex items-center gap-2">
+              <span>🖨️</span> Print Group Agreement
+            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setActiveNav('dashboard')}
+                className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitGroupLoan}
+                disabled={submitting || !groupForm.group_name || !groupForm.total_amount}
+                className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold disabled:opacity-50"
+              >
+                {submitting ? 'Creating...' : 'Issue Group Loan'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   };
 
   // Finance Employee Pages - Record Payment
-  const RecordPaymentPage = () => (
-    <div className="max-w-lg">
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-        <h3 className="font-semibold text-white mb-6">Record Loan Payment</h3>
+  const RecordPaymentPage = () => {
+    const [loanType, setLoanType] = useState('individual'); // individual, group
+    const [loans, setLoans] = useState([]);
+    const [groupLoans, setGroupLoans] = useState([]);
+    const [selectedLoanId, setSelectedLoanId] = useState('');
+    const [amount, setAmount] = useState('');
+    const [paymentDate, setPaymentDate] = useState('today');
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const toast = useToastStore();
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Select Loan</label>
-            <select className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white">
-              <option value="">-- Select client --</option>
-              <option>John Mukasa - UGX 400,000 due</option>
-              <option>Grace Nambi - UGX 330,000 due</option>
-              <option>Peter Okello - UGX 920,000 due</option>
-            </select>
-          </div>
+    useEffect(() => {
+      loadData();
+    }, []);
 
-          <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
-            <p className="text-slate-400 text-sm">Current Balance: <span className="text-amber-400 font-mono font-semibold">UGX 400,000</span></p>
-          </div>
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        const [loansRes, groupsRes] = await Promise.all([
+          financeAPI.getLoans(),
+          financeAPI.getGroupLoans()
+        ]);
+        setLoans(loansRes.data || []);
+        setGroupLoans(groupsRes.data || []);
+      } catch (err) {
+        console.error(err);
+        toast.error('Failed to load loans');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-          <div>
-            <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Payment Date</label>
-            <select className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white">
-              <option>Today - {new Date().toLocaleDateString()}</option>
-              <option>Yesterday - {new Date(Date.now() - 86400000).toLocaleDateString()}</option>
-            </select>
-          </div>
+    const selectedLoan = loanType === 'individual'
+      ? loans.find(l => l.id === parseInt(selectedLoanId))
+      : groupLoans.find(l => l.id === parseInt(selectedLoanId));
 
-          <div>
-            <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Payment Amount (UGX)</label>
-            <input type="number" placeholder="Enter amount" className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white" />
-          </div>
+    const balanceAfter = selectedLoan ? selectedLoan.balance - (parseFloat(amount) || 0) : 0;
 
-          <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
-            <p className="text-slate-400 text-sm">Balance After Payment: <span className="text-white font-mono">UGX ---</span></p>
-          </div>
+    const handleSubmit = async () => {
+      if (!selectedLoanId || !amount) {
+        toast.error('Please select a loan and enter amount');
+        return;
+      }
 
-          <div className="flex gap-3 pt-4">
-            <button onClick={() => setActiveNav('dashboard')} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
-            <button className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold">Record Payment</button>
+      setSubmitting(true);
+      try {
+        if (loanType === 'individual') {
+          await financeAPI.recordLoanPayment(selectedLoanId, {
+            amount: parseFloat(amount),
+            payment_date: paymentDate
+          });
+        } else {
+          await financeAPI.recordGroupPayment(selectedLoanId, {
+            amount: parseFloat(amount),
+            payment_date: paymentDate
+          });
+        }
+        toast.success('Payment recorded successfully');
+        loadData();
+        setAmount('');
+        setSelectedLoanId('');
+        // Optional: Stay on page to record more or navigate away? 
+        // User might have multiple payments to record, so staying is better.
+      } catch (err) {
+        toast.error(err.response?.data?.error || 'Failed to record payment');
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    return (
+      <div className="max-w-lg">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <h3 className="font-semibold text-white mb-6">Record Loan Payment</h3>
+
+          <div className="space-y-4">
+            {/* Loan Type Toggle */}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Loan Type</label>
+              <div className="flex bg-slate-900 rounded-lg p-1">
+                <button
+                  onClick={() => { setLoanType('individual'); setSelectedLoanId(''); }}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${loanType === 'individual' ? 'bg-teal-500 text-slate-900 shadow' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Individual Loan
+                </button>
+                <button
+                  onClick={() => { setLoanType('group'); setSelectedLoanId(''); }}
+                  className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${loanType === 'group' ? 'bg-teal-500 text-slate-900 shadow' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Group Loan
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Select {loanType === 'individual' ? 'Client' : 'Group'}</label>
+              <select
+                value={selectedLoanId}
+                onChange={(e) => setSelectedLoanId(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                disabled={loading}
+              >
+                <option value="">-- Select {loanType === 'individual' ? 'client' : 'group'} --</option>
+                {loading ? (
+                  <option disabled>Loading...</option>
+                ) : loanType === 'individual' ? (
+                  loans.filter(l => l.status !== 'paid').map(loan => (
+                    <option key={loan.id} value={loan.id}>
+                      {loan.client?.name || 'Unknown'} - {formatMoney(loan.balance)} due
+                    </option>
+                  ))
+                ) : (
+                  groupLoans.filter(l => l.status !== 'paid').map(loan => (
+                    <option key={loan.id} value={loan.id}>
+                      {loan.group_name} - {formatMoney(loan.balance)} due
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            {selectedLoan && (
+              <div className="bg-slate-900 rounded-lg p-3 border border-slate-700 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Total Outstanding:</span>
+                  <span className="text-amber-400 font-mono font-semibold">{formatMoney(selectedLoan.balance)}</span>
+                </div>
+                {loanType === 'group' && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">Target Per Period:</span>
+                    <span className="text-white font-mono">{formatMoney(selectedLoan.amount_per_period)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Payment Date</label>
+              <select
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+              >
+                <option value="today">Today - {new Date().toLocaleDateString()}</option>
+                <option value="yesterday">Yesterday - {new Date(Date.now() - 86400000).toLocaleDateString()}</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Payment Amount (UGX)</label>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Enter amount"
+                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono"
+              />
+            </div>
+
+            {amount && selectedLoan && (
+              <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
+                <p className="text-slate-400 text-sm flex justify-between">
+                  <span>Balance After Payment:</span>
+                  <span className={`font-mono font-bold ${balanceAfter <= 0 ? 'text-green-500' : 'text-white'}`}>
+                    {formatMoney(balanceAfter)}
+                  </span>
+                </p>
+                {balanceAfter <= 0 && (
+                  <p className="text-green-400 text-xs mt-1 text-center">🎉 Loan will be fully paid!</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-4">
+              <button onClick={() => setActiveNav('dashboard')} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || !selectedLoanId || !amount}
+                className="flex-1 px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Recording...' : 'Record Payment'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // Finance Employee Pages - My Payments
   const MyPaymentsPage = () => {
@@ -3683,6 +4603,8 @@ const App = () => {
         case 'credits': return <EmployeeCreditsPage />;
         case 'stock': return <EmployeeStockPage />;
         case 'activeloans': return <ActiveLoansPage />;
+        case 'newloan': return <NewLoanPage />;
+        case 'newgrouploan': return <NewGroupLoanPage />;
         case 'recordpayment': return <RecordPaymentPage />;
         case 'mypayments': return <MyPaymentsPage />;
         default: return <EmployeeDashboard />;
@@ -3697,6 +4619,8 @@ const App = () => {
         case 'credits': return 'Credits';
         case 'stock': return 'Stock';
         case 'activeloans': return 'Active Loans';
+        case 'newloan': return 'New Loan';
+        case 'newgrouploan': return 'New Group Loan';
         case 'recordpayment': return 'Record Payment';
         case 'mypayments': return 'My Payments';
         default: return 'My Dashboard';

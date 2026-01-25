@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.user import User
 from app.models.boutique import BoutiqueSale, BoutiqueStock
 from app.models.hardware import HardwareSale, HardwareStock
+from app.models.finance import Loan, GroupLoan, LoanPayment, GroupLoanPayment
 from app.models.audit import AuditLog
 from app.extensions import db
 from datetime import datetime, date, timedelta
@@ -45,7 +46,9 @@ def get_manager_dashboard():
     hardware_today = hardware_today_query[0] or 0
     hardware_today_count = hardware_today_query[1] or 0
     
-    total_today = float(boutique_today) + float(hardware_today)
+    today_repayments = db.session.query(func.sum(LoanPayment.amount)).filter(LoanPayment.payment_date == today, LoanPayment.is_deleted == False).scalar() or 0
+    today_group_repayments = db.session.query(func.sum(GroupLoanPayment.amount)).filter(GroupLoanPayment.payment_date == today, GroupLoanPayment.is_deleted == False).scalar() or 0
+    total_today = float(boutique_today) + float(hardware_today) + float(today_repayments) + float(today_group_repayments)
     
     # Yesterday's revenue
     boutique_yesterday = db.session.query(
@@ -62,7 +65,9 @@ def get_manager_dashboard():
         HardwareSale.is_deleted == False
     ).scalar() or 0
     
-    total_yesterday = float(boutique_yesterday) + float(hardware_yesterday)
+    yesterday_repayments = db.session.query(func.sum(LoanPayment.amount)).filter(LoanPayment.payment_date == yesterday, LoanPayment.is_deleted == False).scalar() or 0
+    yesterday_group_repayments = db.session.query(func.sum(GroupLoanPayment.amount)).filter(GroupLoanPayment.payment_date == yesterday, GroupLoanPayment.is_deleted == False).scalar() or 0
+    total_yesterday = float(boutique_yesterday) + float(hardware_yesterday) + float(yesterday_repayments) + float(yesterday_group_repayments)
     
     # Credits outstanding (pending)
     boutique_credits = db.session.query(
@@ -100,6 +105,54 @@ def get_manager_dashboard():
         HardwareSale.is_deleted == False
     ).scalar() or 0
     
+    # ============ FINANCE STATS ============
+    
+    # 1. Total Outstanding (Active + Due Soon + Overdue)
+    active_loans_balance = db.session.query(func.sum(Loan.balance)).filter(
+        Loan.is_deleted == False,
+        Loan.balance > 0
+    ).scalar() or 0
+    
+    active_group_balance = db.session.query(func.sum(GroupLoan.balance)).filter(
+        GroupLoan.is_deleted == False,
+        GroupLoan.balance > 0
+    ).scalar() or 0
+    
+    total_outstanding_loans = float(active_loans_balance) + float(active_group_balance)
+    
+    # 2. Overdue Loans Count
+    overdue_loans_count = Loan.query.filter(
+        Loan.is_deleted == False,
+        Loan.status == 'overdue'
+    ).count()
+    
+    # 3. Today's New Loans (Principal amount issued)
+    new_loans_today = db.session.query(func.sum(Loan.principal)).filter(
+        Loan.is_deleted == False,
+        Loan.issue_date == today
+    ).scalar() or 0
+    
+    new_group_loans_today = db.session.query(func.sum(GroupLoan.total_amount)).filter(
+        GroupLoan.is_deleted == False,
+        GroupLoan.created_at >= today
+    ).scalar() or 0
+    
+    total_new_loans_today = float(new_loans_today) + float(new_group_loans_today)
+    new_loans_count = Loan.query.filter(Loan.issue_date == today).count() + GroupLoan.query.filter(GroupLoan.created_at >= today).count()
+    
+    # 4. Today's Repayments (Cash In)
+    loan_repayments_today = db.session.query(func.sum(LoanPayment.amount)).filter(
+        LoanPayment.is_deleted == False,
+        LoanPayment.payment_date == today
+    ).scalar() or 0
+    
+    group_repayments_today = db.session.query(func.sum(GroupLoanPayment.amount)).filter(
+        GroupLoanPayment.is_deleted == False,
+        GroupLoanPayment.payment_date == today
+    ).scalar() or 0
+    
+    total_repayments_today = float(loan_repayments_today) + float(group_repayments_today)
+    
     # Low stock alerts
     boutique_low_stock = BoutiqueStock.query.filter(
         BoutiqueStock.is_active == True,
@@ -130,11 +183,28 @@ def get_manager_dashboard():
             HardwareSale.is_deleted == False
         ).scalar() or 0
         
+        daily_finance = db.session.query(
+            func.sum(LoanPayment.amount)
+        ).filter(
+            LoanPayment.payment_date == target_date,
+            LoanPayment.is_deleted == False
+        ).scalar() or 0
+        
+        daily_group_finance = db.session.query(
+            func.sum(GroupLoanPayment.amount)
+        ).filter(
+            GroupLoanPayment.payment_date == target_date,
+            GroupLoanPayment.is_deleted == False
+        ).scalar() or 0
+        
+        total_finance = float(daily_finance) + float(daily_group_finance)
+        
         sales_trend.append({
             'date': target_date.isoformat(),
             'boutique': float(daily_boutique),
             'hardware': float(daily_hardware),
-            'total': float(daily_boutique) + float(daily_hardware)
+            'finance': total_finance,
+            'total': float(daily_boutique) + float(daily_hardware) + total_finance
         })
     
     return jsonify({
@@ -161,6 +231,13 @@ def get_manager_dashboard():
                 'cleared_today': float(hardware_cleared_today),
                 'transactions': hardware_today_count,
                 'low_stock': hardware_low_stock
+            },
+            'finance': {
+                'outstanding': total_outstanding_loans,
+                'new_loans_today': total_new_loans_today,
+                'repayments_today': total_repayments_today,
+                'overdue_count': overdue_loans_count,
+                'transactions': new_loans_count
             }
         },
         'sales_trend': sales_trend

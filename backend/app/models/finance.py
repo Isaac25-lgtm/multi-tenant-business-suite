@@ -183,3 +183,29 @@ class GroupLoanPayment(db.Model):
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'created_by_name': self.creator.name if self.creator else None
         }
+
+
+class LoanDocument(db.Model):
+    """Loan security documents/agreements"""
+    __tablename__ = 'loan_documents'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True)
+    group_loan_id = db.Column(db.Integer, db.ForeignKey('group_loans.id'), nullable=True)
+    filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(512), nullable=False)
+    file_type = db.Column(db.String(50), nullable=True)
+    is_deleted = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    
+    creator = db.relationship('User', foreign_keys=[created_by])
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'filename': self.filename,
+            'file_type': self.file_type,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_by_name': self.creator.name if self.creator else None
+        }

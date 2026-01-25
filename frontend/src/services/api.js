@@ -161,14 +161,23 @@ export const financeAPI = {
   getLoans: () => api.get('/finance/loans'),
   getLoan: (id) => api.get(`/finance/loans/${id}`),
   createLoan: (data) => api.post('/finance/loans', data),
+  updateLoan: (id, data) => api.put(`/finance/loans/${id}`, data),
   deleteLoan: (id) => api.delete(`/finance/loans/${id}`),
   recordLoanPayment: (id, data) => api.post(`/finance/loans/${id}/payment`, data),
+  uploadLoanDocuments: (id, formData) => api.post(`/finance/loans/${id}/documents`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
 
   // Group Loans
   getGroupLoans: () => api.get('/finance/group-loans'),
   createGroupLoan: (data) => api.post('/finance/group-loans', data),
+  updateGroupLoan: (id, data) => api.put(`/finance/group-loans/${id}`, data),
   deleteGroupLoan: (id) => api.delete(`/finance/group-loans/${id}`),
   recordGroupPayment: (id, data) => api.post(`/finance/group-loans/${id}/payment`, data),
+  uploadGroupLoanDocuments: (id, formData) => api.post(`/finance/group-loans/${id}/documents`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
+
 
   // All Payments
   getAllPayments: () => api.get('/finance/payments'),

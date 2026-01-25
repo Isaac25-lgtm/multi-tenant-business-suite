@@ -1,13 +1,15 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.user import User
 from app.models.finance import (
     LoanClient, Loan, LoanPayment,
-    GroupLoan, GroupLoanPayment
+    GroupLoan, GroupLoanPayment, LoanDocument
 )
 from app.extensions import db
 from datetime import datetime, date, timedelta
 from sqlalchemy import and_, or_
+from werkzeug.utils import secure_filename
+import os
 
 finance_bp = Blueprint('finance', __name__)
 
@@ -29,9 +31,9 @@ def create_client():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    # Only manager can create clients
-    if user.role != 'manager':
-        return jsonify({'error': 'Only managers can create loan clients'}), 403
+    # Manager or finance employee can create clients
+    if user.role != 'manager' and user.assigned_business != 'finances':
+        return jsonify({'error': 'Only managers or finance employees can create loan clients'}), 403
     
     data = request.get_json()
     
@@ -98,9 +100,9 @@ def create_loan():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    # Only manager can create loans
-    if user.role != 'manager':
-        return jsonify({'error': 'Only managers can issue loans'}), 403
+    # Manager or finance employee can create loans
+    if user.role != 'manager' and user.assigned_business != 'finances':
+        return jsonify({'error': 'Only managers or finance employees can issue loans'}), 403
     
     data = request.get_json()
     
@@ -143,6 +145,39 @@ def create_loan():
     db.session.commit()
     
     return jsonify(loan.to_dict()), 201
+
+
+@finance_bp.route('/loans/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_loan(id):
+    """Update loan details"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if user.role != 'manager' and user.assigned_business != 'finances':
+        return jsonify({'error': 'Only managers or finance employees can update loans'}), 403
+    
+    loan = Loan.query.get(id)
+    if not loan or loan.is_deleted:
+        return jsonify({'error': 'Loan not found'}), 404
+        
+    data = request.get_json()
+    
+    if 'principal' in data:
+        loan.principal = float(data['principal'])
+    if 'interest_rate' in data:
+        loan.interest_rate = float(data['interest_rate'])
+    if 'duration_weeks' in data:
+        loan.duration_weeks = int(data['duration_weeks'])
+        
+    # Recalculate totals if needed
+    if 'principal' in data or 'interest_rate' in data:
+        loan.interest_amount = float(loan.principal) * (float(loan.interest_rate) / 100)
+        loan.total_amount = float(loan.principal) + loan.interest_amount
+        loan.balance = loan.total_amount - float(loan.amount_paid)
+        
+    db.session.commit()
+    return jsonify(loan.to_dict())
 
 
 @finance_bp.route('/loans/<int:id>', methods=['GET'])
@@ -259,9 +294,9 @@ def create_group_loan():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     
-    # Only manager can create group loans
-    if user.role != 'manager':
-        return jsonify({'error': 'Only managers can create group loans'}), 403
+    # Manager or finance employee can create group loans
+    if user.role != 'manager' and user.assigned_business != 'finances':
+        return jsonify({'error': 'Only managers or finance employees can create group loans'}), 403
     
     data = request.get_json()
     
@@ -287,6 +322,39 @@ def create_group_loan():
     db.session.commit()
     
     return jsonify(loan.to_dict()), 201
+
+
+@finance_bp.route('/group-loans/<int:id>', methods=['PUT'])
+@jwt_required()
+def update_group_loan(id):
+    """Update group loan details"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if user.role != 'manager' and user.assigned_business != 'finances':
+        return jsonify({'error': 'Only managers or finance employees can update group loans'}), 403
+    
+    loan = GroupLoan.query.get(id)
+    if not loan or loan.is_deleted:
+        return jsonify({'error': 'Group loan not found'}), 404
+        
+    data = request.get_json()
+    
+    if 'group_name' in data:
+        loan.group_name = data['group_name']
+    if 'member_count' in data:
+        loan.member_count = int(data['member_count'])
+    if 'total_amount' in data:
+        loan.total_amount = float(data['total_amount'])
+        loan.balance = loan.total_amount - float(loan.amount_paid)
+    if 'amount_per_period' in data:
+        loan.amount_per_period = float(data['amount_per_period'])
+    if 'total_periods' in data:
+        loan.total_periods = int(data['total_periods'])
+        loan.periods_left = loan.total_periods - loan.periods_paid
+
+    db.session.commit()
+    return jsonify(loan.to_dict())
 
 
 @finance_bp.route('/group-loans/<int:id>', methods=['DELETE'])
@@ -461,3 +529,97 @@ def get_finance_stats():
         'today_payments': float(today_payments) + float(today_group_payments),
         'active_loans': active_loans
     })
+
+
+# ============= DOCUMENTS =============
+
+def allowed_file(filename):
+    return '.' in filename and \
+           filename.rsplit('.', 1)[1].lower() in {'png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx'}
+
+@finance_bp.route('/loans/<int:id>/documents', methods=['POST'])
+@jwt_required()
+def upload_loan_documents(id):
+    """Upload documents for a loan"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if user.role != 'manager' and user.assigned_business != 'finances':
+        return jsonify({'error': 'Not authorized'}), 403
+        
+    loan = Loan.query.get(id)
+    if not loan:
+        return jsonify({'error': 'Loan not found'}), 404
+        
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files provided'}), 400
+        
+    files = request.files.getlist('files')
+    uploaded_docs = []
+    
+    upload_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'documents')
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    for file in files:
+        if file and allowed_file(file.filename):
+            filename = secure_filename(f"loan_{id}_{int(datetime.now().timestamp())}_{file.filename}")
+            file_path = os.path.join(upload_dir, filename)
+            file.save(file_path)
+            
+            doc = LoanDocument(
+                loan_id=id,
+                filename=filename,
+                file_path=f"/static/uploads/documents/{filename}",
+                file_type=filename.rsplit('.', 1)[1].lower(),
+                created_by=current_user_id
+            )
+            db.session.add(doc)
+            uploaded_docs.append(doc)
+            
+    db.session.commit()
+    
+    return jsonify([doc.to_dict() for doc in uploaded_docs]), 201
+
+
+@finance_bp.route('/group-loans/<int:id>/documents', methods=['POST'])
+@jwt_required()
+def upload_group_loan_documents(id):
+    """Upload documents for a group loan"""
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if user.role != 'manager' and user.assigned_business != 'finances':
+        return jsonify({'error': 'Not authorized'}), 403
+        
+    loan = GroupLoan.query.get(id)
+    if not loan:
+        return jsonify({'error': 'Group loan not found'}), 404
+        
+    if 'files' not in request.files:
+        return jsonify({'error': 'No files provided'}), 400
+        
+    files = request.files.getlist('files')
+    uploaded_docs = []
+    
+    upload_dir = os.path.join(current_app.root_path, 'static', 'uploads', 'documents')
+    os.makedirs(upload_dir, exist_ok=True)
+    
+    for file in files:
+        if file and allowed_file(file.filename):
+            filename = secure_filename(f"grouploan_{id}_{int(datetime.now().timestamp())}_{file.filename}")
+            file_path = os.path.join(upload_dir, filename)
+            file.save(file_path)
+            
+            doc = LoanDocument(
+                group_loan_id=id,
+                filename=filename,
+                file_path=f"/static/uploads/documents/{filename}",
+                file_type=filename.rsplit('.', 1)[1].lower(),
+                created_by=current_user_id
+            )
+            db.session.add(doc)
+            uploaded_docs.append(doc)
+            
+    db.session.commit()
+    
+    return jsonify([doc.to_dict() for doc in uploaded_docs]), 201
