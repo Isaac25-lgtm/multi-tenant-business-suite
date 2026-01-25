@@ -9,18 +9,60 @@ with app.app_context():
     db.create_all()
     print("Tables created.")
 
-    # Check if admin user exists
-    if not User.query.filter_by(username='admin').first():
-        print("Creating admin user...")
-        admin = User(
-            username='admin',
-            email='admin@example.com',
+    # Create Manager User
+    if not User.query.filter_by(username='manager').first():
+        print("Creating manager user...")
+        manager = User(
+            username='manager',
+            email='manager@example.com',
             role='Manager',
             password_hash=generate_password_hash('admin123'),
-            name='System Admin'
+            name='General Manager'
         )
-        db.session.add(admin)
-        db.session.commit()
-        print("Admin user created: username='admin', password='admin123'")
-    else:
-        print("Admin user already exists.")
+        db.session.add(manager)
+        print("Manager user created.")
+
+    # Create Boutique Staff (Sarah)
+    if not User.query.filter_by(username='sarah').first():
+        print("Creating boutique staff (Sarah)...")
+        sarah = User(
+            username='sarah',
+            email='sarah@example.com',
+            role='Employee',
+            assigned_business='boutique',
+            password_hash=generate_password_hash('pass123'),
+            name='Sarah Jenkins'
+        )
+        db.session.add(sarah)
+        print("Boutique staff created.")
+
+    # Create Hardware Staff (David)
+    if not User.query.filter_by(username='david').first():
+        print("Creating hardware staff (David)...")
+        david = User(
+            username='david',
+            email='david@example.com',
+            role='Employee',
+            assigned_business='hardware',
+            password_hash=generate_password_hash('pass123'),
+            name='David Miller'
+        )
+        db.session.add(david)
+        print("Hardware staff created.")
+
+    # Create Finance Staff (Grace)
+    if not User.query.filter_by(username='grace').first():
+        print("Creating finance staff (Grace)...")
+        grace = User(
+            username='grace',
+            email='grace@example.com',
+            role='Employee',
+            assigned_business='finances',
+            password_hash=generate_password_hash('pass123'),
+            name='Grace A.'
+        )
+        db.session.add(grace)
+        print("Finance staff created.")
+
+    db.session.commit()
+    print("All seed users created successfully!")

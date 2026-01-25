@@ -105,23 +105,26 @@ const App = () => {
   };
 
   // API Functions
-  const handleLogin = async () => {
+  const handleLogin = async (manualCredentials = null) => {
     setLoading(true);
     setError('');
+
+    // Use manual credentials if provided (for quick login buttons), otherwise use form state
+    const form = manualCredentials || loginForm;
 
     // For development: Allow any login
     // Manager login: if username is "manager" or contains "manager"
     // Employee login: requires business unit selection
 
-    const isManager = loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin';
+    const isManager = form.username.toLowerCase().includes('manager') || form.username.toLowerCase() === 'admin';
 
-    if (!loginForm.username || !loginForm.password) {
+    if (!form.username || !form.password) {
       setError('Please enter username and password');
       setLoading(false);
       return;
     }
 
-    if (!isManager && !loginForm.assigned_business) {
+    if (!isManager && !form.assigned_business) {
       setError('Employees must select a business unit');
       setLoading(false);
       return;
@@ -129,7 +132,7 @@ const App = () => {
 
     // Login with backend
     try {
-      const response = await authAPI.login(loginForm);
+      const response = await authAPI.login(form);
       const { access_token, user } = response.data;
       localStorage.setItem('token', access_token);
       localStorage.setItem('user', JSON.stringify(user));
@@ -380,28 +383,26 @@ const App = () => {
             <p className="text-xs text-slate-500 text-center mb-3">Quick Login:</p>
             <div className="grid grid-cols-1 gap-2 text-xs">
               <button
-                onClick={() => {
-                  setLoginForm({ username: 'manager', password: 'admin123', assigned_business: '' });
-                }}
+                onClick={() => handleLogin({ username: 'manager', password: 'admin123', assigned_business: '' })}
                 className="p-3 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 rounded-lg text-teal-400 hover:text-teal-300 transition-colors"
               >
                 👔 Login as Manager (full access to all businesses)
               </button>
               <div className="grid grid-cols-3 gap-2 mt-2">
                 <button
-                  onClick={() => setLoginForm({ username: 'sarah', password: 'pass123', assigned_business: 'boutique' })}
+                  onClick={() => handleLogin({ username: 'sarah', password: 'pass123', assigned_business: 'boutique' })}
                   className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
                 >
                   👗 Boutique Staff
                 </button>
                 <button
-                  onClick={() => setLoginForm({ username: 'david', password: 'pass123', assigned_business: 'hardware' })}
+                  onClick={() => handleLogin({ username: 'david', password: 'pass123', assigned_business: 'hardware' })}
                   className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
                 >
                   🔧 Hardware Staff
                 </button>
                 <button
-                  onClick={() => setLoginForm({ username: 'grace', password: 'pass123', assigned_business: 'finances' })}
+                  onClick={() => handleLogin({ username: 'grace', password: 'pass123', assigned_business: 'finances' })}
                   className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
                 >
                   💰 Finance Staff
@@ -409,7 +410,7 @@ const App = () => {
               </div>
             </div>
             <p className="text-xs text-slate-600 text-center mt-3">
-              For now, any username/password works. Manager will set up real credentials later.
+              Click any role above to quick-start the demo.
             </p>
           </div>
         </div>
