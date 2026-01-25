@@ -104,6 +104,7 @@ export const boutiqueAPI = {
   getSales: (params) => api.get('/boutique/sales', { params }),
   getSale: (id) => api.get(`/boutique/sales/${id}`),
   createSale: (data) => api.post('/boutique/sales', data),
+  updateSale: (id, data) => api.put(`/boutique/sales/${id}`, data),
   deleteSale: (id) => api.delete(`/boutique/sales/${id}`),
   getReceipt: (id) => api.get(`/boutique/sales/${id}/receipt`, { responseType: 'blob' }),
 
@@ -131,6 +132,7 @@ export const hardwareAPI = {
   getSales: (params) => api.get('/hardware/sales', { params }),
   getSale: (id) => api.get(`/hardware/sales/${id}`),
   createSale: (data) => api.post('/hardware/sales', data),
+  updateSale: (id, data) => api.put(`/hardware/sales/${id}`, data),
   deleteSale: (id) => api.delete(`/hardware/sales/${id}`),
   getReceipt: (id) => api.get(`/hardware/sales/${id}/receipt`, { responseType: 'blob' }),
 
@@ -146,6 +148,7 @@ export const dashboardAPI = {
   getManager: () => api.get('/dashboard/manager'),
   getEmployee: () => api.get('/dashboard/employee'),
   getNotifications: () => api.get('/dashboard/notifications'),
+  getAuditLogs: (params) => api.get('/dashboard/audit', { params }),
 };
 
 // Finance API

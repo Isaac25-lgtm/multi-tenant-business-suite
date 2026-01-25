@@ -439,7 +439,7 @@ def get_sales():
     sales = query.order_by(HardwareSale.sale_date.desc()).all()
 
     return jsonify({
-        'sales': [sale.to_dict() for sale in sales]
+        'sales': [sale.to_dict(include_items=True) for sale in sales]
     }), 200
 
 

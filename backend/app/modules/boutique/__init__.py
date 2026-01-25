@@ -284,7 +284,7 @@ def get_sales():
     sales = query.order_by(BoutiqueSale.sale_date.desc()).all()
     
     return jsonify({
-        'sales': [sale.to_dict() for sale in sales]
+        'sales': [sale.to_dict(include_items=True) for sale in sales]
     }), 200
 
 
@@ -458,6 +458,13 @@ def create_sale():
     
     db.session.commit()
     
+    # Build detailed description for audit
+    item_names = ', '.join([item['item_name'] for item in items_data[:3]])
+    if len(items_data) > 3:
+        item_names += f" (+{len(items_data) - 3} more)"
+    payment_info = "Full payment" if payment_type == 'full' else f"Part payment UGX {amount_paid:,.0f}/{total_amount:,.0f}"
+    customer_info = f" for {data.get('customer_name', 'customer')}" if customer else ""
+    
     # Log audit
     log_audit(
         user_id=user_id,
@@ -465,7 +472,7 @@ def create_sale():
         module='boutique',
         entity_type='sale',
         entity_id=sale.id,
-        description=f"Created sale {reference_number} for UGX {total_amount:,.0f}",
+        description=f"Sold {item_names}{customer_info} - {payment_info} (Ref: {reference_number})",
         is_flagged=has_other_items,
         flag_reason="Sale contains 'Other' items" if has_other_items else None
     )
@@ -475,6 +482,84 @@ def create_sale():
         'sale': sale.to_dict(include_items=True)
     }), 201
 
+
+@boutique_bp.route('/sales/<int:id>', methods=['PUT'])
+@jwt_required()
+@business_access_required('boutique')
+def update_sale(id):
+    """Update sale (limited to amount_paid for employees, full edit for managers)"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    
+    if not user.can_edit:
+        return jsonify({'error': 'You do not have permission to edit sales'}), 403
+    
+    sale = BoutiqueSale.query.get(id)
+    
+    if not sale or sale.is_deleted:
+        return jsonify({'error': 'Sale not found'}), 404
+    
+    # Check access for employees
+    if user.role == 'employee' and sale.created_by != user_id:
+        return jsonify({'error': 'You can only edit your own sales'}), 403
+    
+    # Validate date for employees
+    if user.role == 'employee':
+        can_edit, error_msg = validate_date_for_user(user, sale.sale_date)
+        if not can_edit:
+            return jsonify({'error': 'You can only edit recent sales'}), 403
+    
+    data = request.get_json()
+    old_values = sale.to_dict()
+    
+    # Allow updating amount_paid (for adding more payment to part-payment sales)
+    if 'amount_paid' in data:
+        new_amount_paid = float(data['amount_paid'])
+        if new_amount_paid < 0:
+            return jsonify({'error': 'Amount paid cannot be negative'}), 400
+        if new_amount_paid > float(sale.total_amount):
+            return jsonify({'error': 'Amount paid cannot exceed total amount'}), 400
+        
+        sale.amount_paid = new_amount_paid
+        sale.balance = float(sale.total_amount) - new_amount_paid
+        
+        if sale.balance <= 0:
+            sale.is_credit_cleared = True
+            sale.balance = 0
+    
+    # Manager can update sale date
+    if user.role == 'manager' and 'sale_date' in data:
+        sale_date = datetime.strptime(data['sale_date'], '%Y-%m-%d').date()
+        sale.sale_date = sale_date
+    
+    db.session.commit()
+    
+    # Build change description
+    changes = []
+    if 'amount_paid' in data:
+        changes.append(f"Payment updated to UGX {float(sale.amount_paid):,.0f}/{float(sale.total_amount):,.0f}")
+        if sale.is_credit_cleared:
+            changes.append("Credit cleared!")
+    if 'sale_date' in data:
+        changes.append(f"Date changed to {sale.sale_date}")
+    
+    log_audit(
+        user_id=user_id,
+        action='update',
+        module='boutique',
+        entity_type='sale',
+        entity_id=sale.id,
+        description=f"Edited {sale.reference_number}: {', '.join(changes) if changes else 'No changes'}",
+        old_values=old_values,
+        new_values=sale.to_dict(),
+        is_flagged=True,
+        flag_reason="Sale edited"
+    )
+    
+    return jsonify({
+        'message': 'Sale updated successfully',
+        'sale': sale.to_dict(include_items=True)
+    }), 200
 
 @boutique_bp.route('/sales/<int:id>', methods=['DELETE'])
 @jwt_required()
@@ -516,15 +601,21 @@ def delete_sale(id):
     
     db.session.commit()
     
+    # Build description with sale details
+    item_count = len(sale.items)
+    item_names = ', '.join([item.item_name for item in sale.items[:2]])
+    if item_count > 2:
+        item_names += f" (+{item_count - 2} more)"
+    
     log_audit(
         user_id=user_id,
         action='delete',
         module='boutique',
         entity_type='sale',
         entity_id=sale.id,
-        description=f"Deleted sale {sale.reference_number}",
+        description=f"Deleted sale of {item_names} worth UGX {float(sale.total_amount):,.0f} (Ref: {sale.reference_number})",
         is_flagged=True,
-        flag_reason="Sale deleted"
+        flag_reason="Sale deleted - stock restored"
     )
     
     return jsonify({'message': 'Sale deleted successfully'}), 200

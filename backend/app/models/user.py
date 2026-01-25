@@ -1,5 +1,6 @@
 from app.extensions import db
 from datetime import datetime
+from app.utils.timezone import get_local_now
 import bcrypt
 
 
@@ -18,8 +19,8 @@ class User(db.Model):
     can_edit = db.Column(db.Boolean, default=True)
     can_delete = db.Column(db.Boolean, default=True)
     can_clear_credits = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, onupdate=get_local_now)
     
     def set_password(self, password):
         self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')

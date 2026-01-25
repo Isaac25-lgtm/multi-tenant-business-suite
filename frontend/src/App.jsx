@@ -56,22 +56,48 @@ const App = () => {
     }
   }, []);
 
-  // Sample chart data
-  const revenueData = [
-    { day: 'Mon', boutique: 450000, hardware: 680000, finance: 150000 },
-    { day: 'Tue', boutique: 520000, hardware: 720000, finance: 200000 },
-    { day: 'Wed', boutique: 480000, hardware: 650000, finance: 180000 },
-    { day: 'Thu', boutique: 590000, hardware: 800000, finance: 220000 },
-    { day: 'Fri', boutique: 620000, hardware: 750000, finance: 190000 },
-    { day: 'Sat', boutique: 700000, hardware: 900000, finance: 250000 },
-    { day: 'Sun', boutique: 380000, hardware: 450000, finance: 100000 },
-  ];
+  // Calculate weekly revenue data from actual sales
+  const getWeeklyRevenueData = () => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const today = new Date();
+    const weekData = [];
 
-  const pieData = [
-    { name: 'Boutique', value: 3740000, color: '#14b8a6' },
-    { name: 'Hardware', value: 4950000, color: '#3b82f6' },
-    { name: 'Finance', value: 1290000, color: '#f59e0b' },
-  ];
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      const boutiqueRevenue = boutiqueSales
+        .filter(s => s.sale_date === dateStr)
+        .reduce((sum, s) => sum + (s.total_amount || 0), 0);
+      const hardwareRevenue = hardwareSales
+        .filter(s => s.sale_date === dateStr)
+        .reduce((sum, s) => sum + (s.total_amount || 0), 0);
+      // Finance revenue from loan payments would go here
+      const financeRevenue = 0;
+
+      weekData.push({
+        day: days[date.getDay()],
+        boutique: boutiqueRevenue,
+        hardware: hardwareRevenue,
+        finance: financeRevenue
+      });
+    }
+    return weekData;
+  };
+
+  // Calculate pie chart data from actual sales
+  const getPieData = () => {
+    const boutiqueTotal = boutiqueSales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const hardwareTotal = hardwareSales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const financeTotal = 0; // Would calculate from loan payments
+
+    return [
+      { name: 'Boutique', value: boutiqueTotal, color: '#14b8a6' },
+      { name: 'Hardware', value: hardwareTotal, color: '#3b82f6' },
+      { name: 'Finance', value: financeTotal, color: '#f59e0b' },
+    ];
+  };
 
   const formatMoney = (amount) => {
     if (!amount) return 'UGX 0';
@@ -572,7 +598,7 @@ const App = () => {
                 {loans.filter(l => l.status === 'overdue').length > 0 && ` • ${loans.filter(l => l.status === 'overdue').length} overdue loans`}
               </p>
             </div>
-            <button className="text-amber-400 hover:text-amber-300 text-sm font-medium">View All →</button>
+            <button onClick={() => setActiveNav(lowStockBoutique > 0 ? 'boutique' : 'hardware')} className="text-amber-400 hover:text-amber-300 text-sm font-medium">View All →</button>
           </div>
         )}
 
@@ -615,7 +641,7 @@ const App = () => {
           <div className="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-xl p-5">
             <h3 className="font-semibold text-white mb-4">Weekly Revenue Trend</h3>
             <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={revenueData}>
+              <LineChart data={getWeeklyRevenueData()}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis dataKey="day" stroke="#64748b" fontSize={12} />
                 <YAxis stroke="#64748b" fontSize={12} tickFormatter={(v) => `${v / 1000000}M`} />
@@ -639,8 +665,8 @@ const App = () => {
             <h3 className="font-semibold text-white mb-4">Revenue by Business</h3>
             <ResponsiveContainer width="100%" height={200}>
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
-                  {pieData.map((entry, index) => (
+                <Pie data={getPieData()} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value">
+                  {getPieData().map((entry, index) => (
                     <Cell key={index} fill={entry.color} />
                   ))}
                 </Pie>
@@ -648,7 +674,7 @@ const App = () => {
               </PieChart>
             </ResponsiveContainer>
             <div className="space-y-2 mt-2">
-              {pieData.map((item, i) => (
+              {getPieData().map((item, i) => (
                 <div key={i} className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
                     <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: item.color }}></div>
@@ -1878,7 +1904,7 @@ const App = () => {
         </div>
         <div className="p-5">
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={revenueData}>
+            <BarChart data={getWeeklyRevenueData()}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis dataKey="day" stroke="#64748b" />
               <YAxis stroke="#64748b" tickFormatter={(v) => `${v / 1000000}M`} />
@@ -2222,55 +2248,129 @@ const App = () => {
 
   // Audit Trail Page (Manager Only)
   const AuditTrailPage = () => {
-    const sampleAuditLogs = [
-      { timestamp: '2026-01-20 10:45 AM', employee: 'Sarah', action: 'CREATE', business: 'Boutique', details: 'Sale #127', flagged: false },
-      { timestamp: '2026-01-20 10:30 AM', employee: 'Sarah', action: 'EDIT', business: 'Boutique', details: 'Sale #125 - Price: 80,000 → 85,000', flagged: true },
-      { timestamp: '2026-01-20 09:15 AM', employee: 'David', action: 'CREATE', business: 'Hardware', details: 'Sale #089', flagged: false },
-      { timestamp: '2026-01-20 09:00 AM', employee: 'Grace', action: 'PAYMENT', business: 'Finance', details: 'Loan #045 - UGX 50,000', flagged: false },
-      { timestamp: '2026-01-19 04:30 PM', employee: 'Sarah', action: 'DELETE', business: 'Boutique', details: 'Sale #122', flagged: true },
-      { timestamp: '2026-01-19 02:00 PM', employee: 'Sarah', action: 'CREATE', business: 'Boutique', details: 'Sale "OTHER" - Gold Necklace', flagged: true },
-    ];
+    const [auditLogs, setAuditLogs] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [filters, setFilters] = useState({
+      employee_id: '',
+      action: '',
+      module: '',
+      start_date: '',
+      end_date: ''
+    });
+
+    useEffect(() => {
+      loadAuditLogs();
+    }, []);
+
+    const loadAuditLogs = async () => {
+      setLoading(true);
+      try {
+        const params = {};
+        if (filters.employee_id) params.employee_id = filters.employee_id;
+        if (filters.action) params.action = filters.action;
+        if (filters.module) params.module = filters.module;
+        if (filters.start_date) params.start_date = filters.start_date;
+        if (filters.end_date) params.end_date = filters.end_date;
+
+        const res = await dashboardAPI.getAuditLogs(params);
+        setAuditLogs(res.data.audit_logs || []);
+      } catch (err) {
+        console.error('Error loading audit logs:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const formatTimestamp = (isoString) => {
+      if (!isoString) return 'N/A';
+      const date = new Date(isoString);
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    };
+
+    const handleFilterChange = (field, value) => {
+      setFilters(prev => ({ ...prev, [field]: value }));
+    };
+
+    const applyFilters = () => {
+      loadAuditLogs();
+    };
 
     return (
       <div>
         {/* Filters */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Employee</label>
-              <select className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm">
-                <option>All</option>
-                <option>Sarah</option>
-                <option>David</option>
-                <option>Grace</option>
+              <select
+                value={filters.employee_id}
+                onChange={(e) => handleFilterChange('employee_id', e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
+              >
+                <option value="">All</option>
+                {employees.map(emp => (
+                  <option key={emp.id} value={emp.id}>{emp.name}</option>
+                ))}
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Action</label>
-              <select className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm">
-                <option>All</option>
-                <option>CREATE</option>
-                <option>EDIT</option>
-                <option>DELETE</option>
-                <option>PAYMENT</option>
+              <select
+                value={filters.action}
+                onChange={(e) => handleFilterChange('action', e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
+              >
+                <option value="">All</option>
+                <option value="create">CREATE</option>
+                <option value="update">EDIT</option>
+                <option value="delete">DELETE</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Business</label>
-              <select className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm">
-                <option>All</option>
-                <option>Boutique</option>
-                <option>Hardware</option>
-                <option>Finance</option>
+              <select
+                value={filters.module}
+                onChange={(e) => handleFilterChange('module', e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
+              >
+                <option value="">All</option>
+                <option value="boutique">Boutique</option>
+                <option value="hardware">Hardware</option>
+                <option value="finances">Finance</option>
               </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Date From</label>
-              <input type="date" className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm" />
+              <input
+                type="date"
+                value={filters.start_date}
+                onChange={(e) => handleFilterChange('start_date', e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Date To</label>
-              <input type="date" className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm" />
+              <input
+                type="date"
+                value={filters.end_date}
+                onChange={(e) => handleFilterChange('end_date', e.target.value)}
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-sm"
+              />
+            </div>
+            <div className="flex items-end">
+              <button
+                onClick={applyFilters}
+                className="w-full px-4 py-2 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold"
+              >
+                Apply Filters
+              </button>
             </div>
           </div>
         </div>
@@ -2281,7 +2381,7 @@ const App = () => {
             <thead>
               <tr className="bg-slate-900/50">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Timestamp</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Employee</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">User</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Action</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Business</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Details</th>
@@ -2289,22 +2389,30 @@ const App = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {sampleAuditLogs.map((log, i) => (
-                <tr key={i} className={`hover:bg-slate-700/30 ${log.flagged ? 'bg-amber-500/5' : ''}`}>
-                  <td className="px-4 py-3 text-slate-400 text-sm">{log.timestamp}</td>
-                  <td className="px-4 py-3 text-white">{log.employee}</td>
+              {loading ? (
+                <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">Loading audit logs...</td></tr>
+              ) : auditLogs.length === 0 ? (
+                <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-400">No audit logs found</td></tr>
+              ) : auditLogs.map((log) => (
+                <tr key={log.id} className={`hover:bg-slate-700/30 ${log.is_flagged ? 'bg-amber-500/5' : ''}`}>
+                  <td className="px-4 py-3 text-slate-400 text-sm">{formatTimestamp(log.created_at)}</td>
+                  <td className="px-4 py-3 text-white">{log.user_name || 'Unknown'}</td>
                   <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${log.action === 'CREATE' ? 'bg-green-500/15 text-green-400' :
-                      log.action === 'EDIT' ? 'bg-amber-500/15 text-amber-400' :
-                        log.action === 'DELETE' ? 'bg-red-500/15 text-red-400' :
-                          'bg-blue-500/15 text-blue-400'
+                    <span className={`px-2 py-0.5 text-xs rounded-full ${log.action === 'create' ? 'bg-green-500/15 text-green-400' :
+                        log.action === 'update' ? 'bg-amber-500/15 text-amber-400' :
+                          log.action === 'delete' ? 'bg-red-500/15 text-red-400' :
+                            'bg-blue-500/15 text-blue-400'
                       }`}>
-                      {log.action}
+                      {log.action?.toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-slate-400">{log.business}</td>
-                  <td className="px-4 py-3 text-white text-sm">{log.details}</td>
-                  <td className="px-4 py-3">{log.flagged && <span className="text-amber-400">⚠️</span>}</td>
+                  <td className="px-4 py-3 text-slate-400 capitalize">{log.module}</td>
+                  <td className="px-4 py-3 text-white text-sm">{log.description}</td>
+                  <td className="px-4 py-3">
+                    {log.is_flagged && (
+                      <span className="text-amber-400" title={log.flag_reason}>⚠️</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -2384,14 +2492,104 @@ const App = () => {
   // Employee Dashboard - Different for Finance vs Boutique/Hardware
   const EmployeeDashboard = () => {
     const isFinance = user?.assigned_business === 'finances';
+    const isBoutique = user?.assigned_business === 'boutique';
     const businessName = user?.assigned_business?.charAt(0).toUpperCase() + user?.assigned_business?.slice(1);
 
-    // Sample today's sales for Boutique/Hardware employees
-    const todaySales = [
-      { time: '10:45 AM', items: 'Ladies Dress, Perfume', total: 205000, status: 'paid' },
-      { time: '09:20 AM', items: 'Kids Shoes (2)', total: 90000, status: 'credit' },
-      { time: '09:00 AM', items: 'Hand Bag', total: 30000, status: 'paid' },
-    ];
+    // Helper to check if date is today
+    const isToday = (dateStr) => {
+      if (!dateStr) return false;
+      const salesDate = new Date(dateStr).toDateString();
+      const today = new Date().toDateString();
+      return salesDate === today;
+    };
+
+    // Get today's sales from real data (boutique or hardware based on employee assignment)
+    const salesData = isBoutique ? boutiqueSales : hardwareSales;
+    const todaySales = salesData
+      .filter(sale => isToday(sale.sale_date))
+      .map(sale => ({
+        id: sale.id,
+        reference: sale.reference_number,
+        time: sale.created_at ? new Date(sale.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A',
+        items: sale.items?.map(item => item.item_name).join(', ') || 'Items',
+        total: sale.total_amount,
+        status: sale.payment_type === 'full' ? 'paid' : (sale.is_credit_cleared ? 'paid' : 'credit')
+      }));
+
+    // Calculate totals from real data
+    const totalSalesToday = todaySales.reduce((sum, s) => sum + (s.total || 0), 0);
+    const creditsData = isBoutique ? boutiqueCredits : hardwareCredits;
+    const totalPendingCredits = creditsData.reduce((sum, c) => sum + (c.balance || 0), 0);
+    const stockAPI = isBoutique ? boutiqueAPI : hardwareAPI;
+
+    // Action handlers for sale actions
+    const handleDeleteSale = async (saleId) => {
+      if (!window.confirm('Are you sure you want to delete this sale? Stock will be restored.')) {
+        return;
+      }
+      try {
+        await stockAPI.deleteSale(saleId);
+        // Reload data after deletion
+        if (isBoutique) {
+          loadBoutiqueData();
+        } else {
+          loadHardwareData();
+        }
+      } catch (err) {
+        alert(err.response?.data?.error || 'Failed to delete sale');
+      }
+    };
+
+    const handlePrintReceipt = async (saleId, reference) => {
+      try {
+        const response = await stockAPI.getReceipt(saleId);
+        // Create a download link and trigger it
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `receipt_${reference || saleId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(err.response?.data?.error || 'Failed to generate receipt');
+      }
+    };
+
+    // State for editing sale
+    const [editingSale, setEditingSale] = useState(null);
+    const [editAmountPaid, setEditAmountPaid] = useState('');
+
+    const handleEditSale = (saleId) => {
+      // Find the original sale data from salesData
+      const originalSale = salesData.find(s => s.id === saleId);
+      if (originalSale) {
+        setEditingSale(originalSale);
+        setEditAmountPaid(originalSale.amount_paid);
+      }
+    };
+
+    const handleSaveEdit = async () => {
+      if (!editingSale) return;
+
+      try {
+        await stockAPI.updateSale(editingSale.id, {
+          amount_paid: parseFloat(editAmountPaid)
+        });
+        // Reload data after edit
+        if (isBoutique) {
+          loadBoutiqueData();
+        } else {
+          loadHardwareData();
+        }
+        setEditingSale(null);
+        setEditAmountPaid('');
+      } catch (err) {
+        alert(err.response?.data?.error || 'Failed to update sale');
+      }
+    };
 
     // Sample today's payments for Finance employees
     const todayPayments = [
@@ -2480,15 +2678,15 @@ const App = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <StatCard
             title="My Sales Today"
-            value={formatMoney(325000)}
-            change="5 transactions"
+            value={formatMoney(totalSalesToday)}
+            change={`${todaySales.length} transaction${todaySales.length !== 1 ? 's' : ''}`}
             icon="🛍️"
             iconBg="bg-teal-500/15"
           />
           <StatCard
             title="Pending Credits"
-            value={formatMoney(90000)}
-            change="2 customers"
+            value={formatMoney(totalPendingCredits)}
+            change={`${creditsData.length} customer${creditsData.length !== 1 ? 's' : ''}`}
             icon="💳"
             iconBg="bg-amber-500/15"
           />
@@ -2528,30 +2726,82 @@ const App = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-700">
-              {todaySales.map((sale, i) => (
-                <tr key={i} className="hover:bg-slate-700/30">
-                  <td className="px-4 py-3 text-slate-400">{sale.time}</td>
-                  <td className="px-4 py-3 text-white">{sale.items}</td>
-                  <td className="px-4 py-3 text-white font-mono">{formatMoney(sale.total)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${sale.status === 'paid' ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'
-                      }`}>
-                      {sale.status === 'paid' ? '🟢 Paid' : '🟡 Credit'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">✏️</button>
-                    <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">🗑️</button>
-                    <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">🖨️</button>
+              {todaySales.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="px-4 py-8 text-center text-slate-400">
+                    No sales recorded today. Click "New Sale" to add one.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                todaySales.map((sale) => (
+                  <tr key={sale.id || sale.reference} className="hover:bg-slate-700/30">
+                    <td className="px-4 py-3 text-slate-400">{sale.time}</td>
+                    <td className="px-4 py-3 text-white">{sale.items}</td>
+                    <td className="px-4 py-3 text-white font-mono">{formatMoney(sale.total)}</td>
+                    <td className="px-4 py-3">
+                      <span className={`px-2 py-0.5 text-xs rounded-full ${sale.status === 'paid' ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'
+                        }`}>
+                        {sale.status === 'paid' ? '🟢 Paid' : '🟡 Credit'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => handleEditSale(sale.id)} title="Edit sale" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-amber-400">✏️</button>
+                      <button onClick={() => handleDeleteSale(sale.id)} title="Delete sale" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-red-400">🗑️</button>
+                      <button onClick={() => handlePrintReceipt(sale.id, sale.reference)} title="Download receipt" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-teal-400">🖨️</button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
           <div className="px-5 py-3 border-t border-slate-700">
             <button className="text-teal-400 hover:text-teal-300 text-sm font-medium">View Yesterday's Sales →</button>
           </div>
         </div>
+
+        {/* Edit Sale Modal */}
+        {editingSale && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-slate-700">
+                <h3 className="text-lg font-semibold text-white">Edit Sale - {editingSale.reference_number}</h3>
+                <button onClick={() => setEditingSale(null)} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Sale Date</label>
+                  <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-slate-300">{editingSale.sale_date}</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Amount</label>
+                  <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white font-mono">{formatMoney(editingSale.total_amount)}</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Amount Paid (UGX)</label>
+                  <input
+                    type="number"
+                    value={editAmountPaid}
+                    onChange={(e) => setEditAmountPaid(e.target.value)}
+                    max={editingSale.total_amount}
+                    min={0}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono"
+                  />
+                </div>
+                {editAmountPaid && (
+                  <div className="bg-slate-900/50 rounded-lg p-3">
+                    <p className="text-slate-400 text-sm">Balance: <span className={`font-mono font-semibold ${(editingSale.total_amount - parseFloat(editAmountPaid)) > 0 ? 'text-amber-400' : 'text-green-400'}`}>
+                      {formatMoney(editingSale.total_amount - parseFloat(editAmountPaid || 0))}
+                    </span></p>
+                  </div>
+                )}
+              </div>
+              <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
+                <button onClick={() => setEditingSale(null)} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
+                <button onClick={handleSaveEdit} className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -2645,11 +2895,13 @@ const App = () => {
           setSaleError('Customer phone is required for credit sales');
           return;
         }
-        if (!amountPaid || parseFloat(amountPaid) <= 0) {
-          setSaleError('Please enter the amount being paid now');
+        // Allow amount paid to be 0 (full credit) or any positive value less than total
+        const paidAmount = parseFloat(amountPaid) || 0;
+        if (paidAmount < 0) {
+          setSaleError('Amount paid cannot be negative');
           return;
         }
-        if (parseFloat(amountPaid) >= totalAmount) {
+        if (paidAmount >= totalAmount) {
           setSaleError('For full payment, please select "Full Payment" option');
           return;
         }
@@ -2665,7 +2917,7 @@ const App = () => {
           is_other: item.is_other
         })),
         payment_type: paymentType === 'full' ? 'full' : 'part',
-        amount_paid: paymentType === 'full' ? totalAmount : parseFloat(amountPaid),
+        amount_paid: paymentType === 'full' ? totalAmount : (parseFloat(amountPaid) || 0),
         customer_name: paymentType === 'partial' ? customerName : null,
         customer_phone: paymentType === 'partial' ? customerPhone : null
       };
@@ -2906,96 +3158,166 @@ const App = () => {
 
   // Employee Pages - My Sales
   const MySalesPage = () => {
-    const todaySales = [
-      { time: '10:45 AM', items: 'Ladies Dress, Perfume', total: 205000, status: 'paid' },
-      { time: '09:20 AM', items: 'Kids Shoes (2)', total: 90000, status: 'credit' },
-      { time: '09:00 AM', items: 'Hand Bag', total: 30000, status: 'paid' },
-    ];
+    const isBoutique = user?.assigned_business === 'boutique';
+    const salesData = isBoutique ? boutiqueSales : hardwareSales;
+    const stockAPI = isBoutique ? boutiqueAPI : hardwareAPI;
 
-    const yesterdaySales = [
-      { time: '04:30 PM', items: 'Perfume (2)', total: 240000, status: 'paid' },
-      { time: '11:00 AM', items: 'Kids Shoes', total: 40000, status: 'paid' },
-    ];
+    // Helper to check if date is today or yesterday
+    const isToday = (dateStr) => {
+      if (!dateStr) return false;
+      return new Date(dateStr).toDateString() === new Date().toDateString();
+    };
+    const isYesterday = (dateStr) => {
+      if (!dateStr) return false;
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      return new Date(dateStr).toDateString() === yesterday;
+    };
+
+    // Filter sales by date
+    const todaySales = salesData.filter(sale => isToday(sale.sale_date));
+    const yesterdaySales = salesData.filter(sale => isYesterday(sale.sale_date));
+
+    // Calculate totals
+    const todayTotal = todaySales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+    const yesterdayTotal = yesterdaySales.reduce((sum, s) => sum + (s.total_amount || 0), 0);
+
+    // State for editing
+    const [editingSale, setEditingSale] = useState(null);
+    const [editAmountPaid, setEditAmountPaid] = useState('');
+
+    // Action handlers
+    const handleEditSale = (sale) => {
+      setEditingSale(sale);
+      setEditAmountPaid(sale.amount_paid);
+    };
+
+    const handleSaveEdit = async () => {
+      if (!editingSale) return;
+      try {
+        await stockAPI.updateSale(editingSale.id, {
+          amount_paid: parseFloat(editAmountPaid) || 0
+        });
+        if (isBoutique) loadBoutiqueData();
+        else loadHardwareData();
+        setEditingSale(null);
+      } catch (err) {
+        alert(err.response?.data?.error || 'Failed to update sale');
+      }
+    };
+
+    const handleDeleteSale = async (saleId) => {
+      if (!window.confirm('Are you sure you want to delete this sale?')) return;
+      try {
+        await stockAPI.deleteSale(saleId);
+        if (isBoutique) loadBoutiqueData();
+        else loadHardwareData();
+      } catch (err) {
+        alert(err.response?.data?.error || 'Failed to delete sale');
+      }
+    };
+
+    const handlePrintReceipt = async (saleId, reference) => {
+      try {
+        const response = await stockAPI.getReceipt(saleId);
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `receipt_${reference || saleId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(err.response?.data?.error || 'Failed to generate receipt');
+      }
+    };
+
+    // Render sales table
+    const renderSalesTable = (sales, title, total) => (
+      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-700 flex justify-between items-center">
+          <h3 className="font-semibold text-white">{title}</h3>
+          <span className="text-teal-400 font-mono">Total: {formatMoney(total)}</span>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="bg-slate-900/50">
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Time</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Items</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Total</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Status</th>
+              <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-700">
+            {sales.length === 0 ? (
+              <tr><td colSpan="5" className="px-4 py-6 text-center text-slate-400">No sales recorded</td></tr>
+            ) : sales.map((sale) => (
+              <tr key={sale.id} className="hover:bg-slate-700/30">
+                <td className="px-4 py-3 text-slate-400">
+                  {sale.created_at ? new Date(sale.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) : 'N/A'}
+                </td>
+                <td className="px-4 py-3 text-white">{sale.items?.map(i => i.item_name).join(', ') || 'Items'}</td>
+                <td className="px-4 py-3 text-white font-mono">{formatMoney(sale.total_amount)}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-0.5 text-xs rounded-full ${sale.payment_type === 'full' || sale.is_credit_cleared ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                    {sale.payment_type === 'full' || sale.is_credit_cleared ? '🟢 Paid' : '🟡 Credit'}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <button onClick={() => handleEditSale(sale)} title="Edit" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-amber-400">✏️</button>
+                  <button onClick={() => handleDeleteSale(sale.id)} title="Delete" className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400">🗑️</button>
+                  <button onClick={() => handlePrintReceipt(sale.id, sale.reference_number)} title="Print" className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-teal-400">🖨️</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
 
     return (
       <div className="space-y-6">
-        {/* Today's Sales */}
-        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-700 flex justify-between items-center">
-            <h3 className="font-semibold text-white">TODAY - {new Date().toLocaleDateString()}</h3>
-            <span className="text-teal-400 font-mono">Total: {formatMoney(325000)}</span>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-900/50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Time</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Items</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Total</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {todaySales.map((sale, i) => (
-                <tr key={i} className="hover:bg-slate-700/30">
-                  <td className="px-4 py-3 text-slate-400">{sale.time}</td>
-                  <td className="px-4 py-3 text-white">{sale.items}</td>
-                  <td className="px-4 py-3 text-white font-mono">{formatMoney(sale.total)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${sale.status === 'paid' ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'}`}>
-                      {sale.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">✏️</button>
-                    <button className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400">🗑️</button>
-                    <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">🖨️</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Yesterday's Sales */}
-        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-700 flex justify-between items-center">
-            <h3 className="font-semibold text-white">YESTERDAY - {new Date(Date.now() - 86400000).toLocaleDateString()}</h3>
-            <span className="text-teal-400 font-mono">Total: {formatMoney(280000)}</span>
-          </div>
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-900/50">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Time</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Items</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Total</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-700">
-              {yesterdaySales.map((sale, i) => (
-                <tr key={i} className="hover:bg-slate-700/30">
-                  <td className="px-4 py-3 text-slate-400">{sale.time}</td>
-                  <td className="px-4 py-3 text-white">{sale.items}</td>
-                  <td className="px-4 py-3 text-white font-mono">{formatMoney(sale.total)}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 text-xs rounded-full ${sale.status === 'paid' ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'}`}>
-                      {sale.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">✏️</button>
-                    <button className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400">🗑️</button>
-                    <button className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white">🖨️</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
+        {renderSalesTable(todaySales, `TODAY - ${new Date().toLocaleDateString()}`, todayTotal)}
+        {renderSalesTable(yesterdaySales, `YESTERDAY - ${new Date(Date.now() - 86400000).toLocaleDateString()}`, yesterdayTotal)}
         <p className="text-center text-slate-500 text-sm">Older sales are not visible to employees</p>
+
+        {/* Edit Sale Modal */}
+        {editingSale && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-slate-700">
+                <h3 className="text-lg font-semibold text-white">Edit Sale - {editingSale.reference_number}</h3>
+                <button onClick={() => setEditingSale(null)} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Amount</label>
+                  <div className="px-4 py-2.5 bg-slate-900/50 border border-slate-700 rounded-lg text-white font-mono">{formatMoney(editingSale.total_amount)}</div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Amount Paid (UGX)</label>
+                  <input
+                    type="number"
+                    value={editAmountPaid}
+                    onChange={(e) => setEditAmountPaid(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono"
+                  />
+                </div>
+                <div className="bg-slate-900/50 rounded-lg p-3">
+                  <p className="text-slate-400 text-sm">Balance: <span className="font-mono font-semibold text-amber-400">
+                    {formatMoney(editingSale.total_amount - (parseFloat(editAmountPaid) || 0))}
+                  </span></p>
+                </div>
+              </div>
+              <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
+                <button onClick={() => setEditingSale(null)} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
+                <button onClick={handleSaveEdit} className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold">Save Changes</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };

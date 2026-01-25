@@ -1,5 +1,6 @@
 from app.extensions import db
 from datetime import datetime
+from app.utils.timezone import get_local_now
 
 
 class LoanClient(db.Model):
@@ -12,7 +13,7 @@ class LoanClient(db.Model):
     phone = db.Column(db.String(20), nullable=False)
     address = db.Column(db.String(200), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     creator = db.relationship('User', foreign_keys=[created_by])
@@ -47,8 +48,8 @@ class Loan(db.Model):
     due_date = db.Column(db.Date, nullable=False)
     status = db.Column(db.Enum('active', 'overdue', 'due_soon', 'paid', 'renewed', name='loan_status'), default='active')
     is_deleted = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, onupdate=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     deleted_at = db.Column(db.DateTime, nullable=True)
     deleted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -90,7 +91,7 @@ class LoanPayment(db.Model):
     balance_after = db.Column(db.Numeric(12, 2), nullable=False)
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     creator = db.relationship('User', foreign_keys=[created_by])
@@ -124,8 +125,8 @@ class GroupLoan(db.Model):
     balance = db.Column(db.Numeric(12, 2), nullable=False)
     status = db.Column(db.Enum('active', 'overdue', 'paid', name='group_loan_status'), default='active')
     is_deleted = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, onupdate=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     creator = db.relationship('User', foreign_keys=[created_by])
@@ -164,7 +165,7 @@ class GroupLoanPayment(db.Model):
     balance_after = db.Column(db.Numeric(12, 2), nullable=False)
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     creator = db.relationship('User', foreign_keys=[created_by])

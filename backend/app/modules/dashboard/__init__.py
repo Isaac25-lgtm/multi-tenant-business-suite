@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.models.user import User
 from app.models.boutique import BoutiqueSale, BoutiqueStock
 from app.models.hardware import HardwareSale, HardwareStock
+from app.models.audit import AuditLog
 from app.extensions import db
 from datetime import datetime, date, timedelta
 from sqlalchemy import func, and_
@@ -271,4 +272,47 @@ def get_notifications():
     
     return jsonify({
         'notifications': notifications
+    }), 200
+
+
+@dashboard_bp.route('/audit', methods=['GET'])
+@jwt_required()
+def get_audit_logs():
+    """Get audit logs (Manager only)"""
+    user_id = int(get_jwt_identity())
+    user = User.query.get(user_id)
+    
+    if user.role != 'manager':
+        return jsonify({'error': 'Manager access required'}), 403
+    
+    # Get query parameters for filtering
+    employee_id = request.args.get('employee_id')
+    action = request.args.get('action')
+    module = request.args.get('module')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    flagged_only = request.args.get('flagged_only', 'false').lower() == 'true'
+    
+    query = AuditLog.query
+    
+    if employee_id:
+        query = query.filter(AuditLog.user_id == employee_id)
+    if action:
+        query = query.filter(AuditLog.action == action)
+    if module:
+        query = query.filter(AuditLog.module == module)
+    if start_date:
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        query = query.filter(AuditLog.created_at >= start_dt)
+    if end_date:
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+        query = query.filter(AuditLog.created_at < end_dt)
+    if flagged_only:
+        query = query.filter(AuditLog.is_flagged == True)
+    
+    # Order by most recent first, limit to 500
+    logs = query.order_by(AuditLog.created_at.desc()).limit(500).all()
+    
+    return jsonify({
+        'audit_logs': [log.to_dict() for log in logs]
     }), 200

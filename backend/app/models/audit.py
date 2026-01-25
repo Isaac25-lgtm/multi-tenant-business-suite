@@ -1,5 +1,6 @@
 from app.extensions import db
 from datetime import datetime
+from app.utils.timezone import get_local_now
 
 
 class AuditLog(db.Model):
@@ -17,7 +18,7 @@ class AuditLog(db.Model):
     ip_address = db.Column(db.String(50), nullable=True)
     is_flagged = db.Column(db.Boolean, default=False)
     flag_reason = db.Column(db.String(100), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     
     user = db.relationship('User', foreign_keys=[user_id])
     

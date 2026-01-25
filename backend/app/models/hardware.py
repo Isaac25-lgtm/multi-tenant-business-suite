@@ -1,5 +1,6 @@
 from app.extensions import db
 from datetime import datetime
+from app.utils.timezone import get_local_now
 
 
 class HardwareCategory(db.Model):
@@ -7,7 +8,7 @@ class HardwareCategory(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     
     def to_dict(self):
         return {
@@ -30,8 +31,8 @@ class HardwareStock(db.Model):
     max_selling_price = db.Column(db.Numeric(12, 2), nullable=False)
     low_stock_threshold = db.Column(db.Integer)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, onupdate=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     category = db.relationship('HardwareCategory', backref='stock_items')
@@ -67,8 +68,8 @@ class HardwareSale(db.Model):
     balance = db.Column(db.Numeric(12, 2), default=0)
     is_credit_cleared = db.Column(db.Boolean, default=False)
     is_deleted = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, onupdate=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     deleted_at = db.Column(db.DateTime, nullable=True)
     deleted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -107,7 +108,7 @@ class HardwareSaleItem(db.Model):
     unit_price = db.Column(db.Numeric(12, 2), nullable=False)
     subtotal = db.Column(db.Numeric(12, 2), nullable=False)
     is_other_item = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     
     def to_dict(self):
         return {
@@ -128,7 +129,7 @@ class HardwareCreditPayment(db.Model):
     payment_date = db.Column(db.Date, nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     remaining_balance = db.Column(db.Numeric(12, 2), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     
     creator = db.relationship('User', foreign_keys=[created_by])
