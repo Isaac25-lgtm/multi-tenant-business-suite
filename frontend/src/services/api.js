@@ -1,7 +1,22 @@
 import axios from 'axios';
 import { useToastStore } from '../context/ToastContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+// Ensure the API URL ends with /api
+const getBaseUrl = () => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (!envUrl) return '/api';
+
+  // If the URL already ends with /api, return it
+  if (envUrl.endsWith('/api')) return envUrl;
+
+  // If the URL ends with a slash, append api
+  if (envUrl.endsWith('/')) return `${envUrl}api`;
+
+  // Otherwise append /api
+  return `${envUrl}/api`;
+};
+
+const API_BASE_URL = getBaseUrl();
 
 // Create axios instance
 const api = axios.create({

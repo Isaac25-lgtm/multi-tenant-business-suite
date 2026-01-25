@@ -14,9 +14,9 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     migrate.init_app(app, db)
 
-    # Configure CORS to allow Authorization header
+    # Configure CORS to allow all origins and headers for now to fix the issue
     CORS(app, resources={
-        r"/api/*": {
+        r"/*": {
             "origins": "*",
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization"]
