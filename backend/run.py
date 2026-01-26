@@ -15,25 +15,25 @@ def seed_db():
             
             # Manager
             if not User.query.filter_by(username='manager').first():
-                manager = User(username='manager', email='manager@example.com', role='Manager', password_hash=generate_password_hash('admin123'), name='General Manager')
+                manager = User(username='manager', email='manager@example.com', role='manager', password_hash=generate_password_hash('admin123'), name='General Manager', assigned_business='all')
                 db.session.add(manager)
                 created.append('manager')
                 
             # Sarah (Boutique)
             if not User.query.filter_by(username='sarah').first():
-                sarah = User(username='sarah', email='sarah@example.com', role='Employee', assigned_business='boutique', password_hash=generate_password_hash('pass123'), name='Sarah Jenkins')
+                sarah = User(username='sarah', email='sarah@example.com', role='employee', assigned_business='boutique', password_hash=generate_password_hash('pass123'), name='Sarah Jenkins')
                 db.session.add(sarah)
                 created.append('sarah')
 
             # David (Hardware)
             if not User.query.filter_by(username='david').first():
-                david = User(username='david', email='david@example.com', role='Employee', assigned_business='hardware', password_hash=generate_password_hash('pass123'), name='David Miller')
+                david = User(username='david', email='david@example.com', role='employee', assigned_business='hardware', password_hash=generate_password_hash('pass123'), name='David Miller')
                 db.session.add(david)
                 created.append('david')
                 
             # Grace (Finances)
             if not User.query.filter_by(username='grace').first():
-                grace = User(username='grace', email='grace@example.com', role='Employee', assigned_business='finances', password_hash=generate_password_hash('pass123'), name='Grace A.')
+                grace = User(username='grace', email='grace@example.com', role='employee', assigned_business='finances', password_hash=generate_password_hash('pass123'), name='Grace A.')
                 db.session.add(grace)
                 created.append('grace')
 

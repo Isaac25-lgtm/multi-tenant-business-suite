@@ -10,6 +10,7 @@ const App = () => {
   const [activeNav, setActiveNav] = useState('dashboard');
   const [showModal, setShowModal] = useState(null);
   const [activeTab, setActiveTab] = useState('inventory');
+  const [managerTab, setManagerTab] = useState('dashboard');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -286,17 +287,22 @@ const App = () => {
     }
   }, [activeNav, currentView, user]);
 
+  // Load employees when accessing Settings tab
+  useEffect(() => {
+    if (currentView === 'manager' && managerTab === 'settings' && user) {
+      loadEmployees();
+    }
+  }, [currentView, managerTab, user]);
+
   // Render login page
   if (currentView === 'login') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-0 left-0 w-72 h-72 bg-teal-500/5 rounded-full blur-3xl"></div>
-
-        <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 w-full max-w-md relative z-10 shadow-2xl">
-          <div className="text-center mb-8">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="w-full max-w-4xl p-8">
+          {/* Header */}
+          <div className="text-center mb-12">
             <div className="flex justify-center mb-4">
-              <div className="flex items-center gap-2 scale-125">
+              <div className="flex items-center gap-2 scale-150">
                 <div className="flex gap-0.5">
                   <div className="w-2 h-8 bg-teal-500 rounded-sm"></div>
                   <div className="w-2 h-6 bg-teal-400 rounded-sm mt-2"></div>
@@ -308,110 +314,148 @@ const App = () => {
                 </div>
               </div>
             </div>
-            <p className="text-slate-400 text-sm">Business Management System</p>
+            <p className="text-slate-400 text-lg mt-6">Business Management System</p>
+            <p className="text-slate-500 text-sm mt-2">Select your role to continue</p>
           </div>
 
+          {/* Error Message */}
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-red-400 text-sm">
+            <div className="mb-8 p-4 bg-red-500/10 border border-red-500 rounded-lg text-red-400 text-center">
               {error}
             </div>
           )}
 
-          <div className="space-y-5">
-            <div>
-              <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Username</label>
-              <input
-                type="text"
-                placeholder="Enter your username"
-                value={loginForm.username}
-                onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-teal-500 focus:ring-1 focus:ring-teal-500/50"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Password</label>
-              <input
-                type="password"
-                placeholder="Enter your password"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-teal-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
-                Business Unit {loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin' ? '(not required for managers)' : '(required for employees)'}
-              </label>
-              <select
-                value={loginForm.assigned_business}
-                onChange={(e) => setLoginForm({ ...loginForm, assigned_business: e.target.value })}
-                disabled={loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin'}
-                className={`w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-teal-500 ${loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin' ? 'opacity-50 cursor-not-allowed' : ''
-                  }`}
-              >
-                <option value="">-- Select Business --</option>
-                <option value="boutique">👗 Boutique</option>
-                <option value="hardware">🔧 Hardware</option>
-                <option value="finances">💰 Finances</option>
-              </select>
-              {loginForm.username && (
-                <p className={`text-xs mt-2 ${loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin' ? 'text-teal-400' : 'text-amber-400'}`}>
-                  {loginForm.username.toLowerCase().includes('manager') || loginForm.username.toLowerCase() === 'admin'
-                    ? '✓ You will login as Manager with access to all businesses'
-                    : loginForm.assigned_business
-                      ? `✓ You will login as Employee in ${loginForm.assigned_business.charAt(0).toUpperCase() + loginForm.assigned_business.slice(1)}`
-                      : '⚠ Please select which business you work in'
-                  }
-                </p>
-              )}
-            </div>
-
+          {/* One-Click Login Buttons Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Manager Button */}
             <button
-              onClick={handleLogin}
-              disabled={loading || !loginForm.username || !loginForm.password}
-              className="w-full py-3.5 bg-teal-500 hover:bg-teal-600 text-slate-900 font-semibold rounded-lg transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={async () => {
+                setLoading(true);
+                setError('');
+                try {
+                  const response = await authAPI.demoLogin('manager');
+                  const { access_token, user } = response.data;
+                  localStorage.setItem('token', access_token);
+                  localStorage.setItem('user', JSON.stringify(user));
+                  setUser(user);
+                  setCurrentView('manager');
+                } catch (err) {
+                  setError(err.response?.data?.error || 'Login failed');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className="group relative overflow-hidden bg-gradient-to-br from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 p-8 rounded-2xl shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              <div className="text-6xl mb-4">👨‍💼</div>
+              <h3 className="text-2xl font-bold text-white mb-2">Manager Console</h3>
+              <p className="text-purple-200 text-sm">Access all business units and settings</p>
+              <div className="absolute top-2 right-2 text-purple-300 opacity-0 group-hover:opacity-100 transition-opacity text-2xl">
+                →
+              </div>
+            </button>
+
+            {/* Boutique Button */}
+            <button
+              onClick={async () => {
+                setLoading(true);
+                setError('');
+                try {
+                  const response = await authAPI.demoLogin('boutique');
+                  const { access_token, user } = response.data;
+                  localStorage.setItem('token', access_token);
+                  localStorage.setItem('user', JSON.stringify(user));
+                  setUser(user);
+                  setCurrentView('employee');
+                } catch (err) {
+                  setError(err.response?.data?.error || 'Login failed');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className="group relative overflow-hidden bg-gradient-to-br from-pink-600 to-pink-800 hover:from-pink-500 hover:to-pink-700 p-8 rounded-2xl shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="text-6xl mb-4">👗</div>
+              <h3 className="text-2xl font-bold text-white mb-2">Boutique</h3>
+              <p className="text-pink-200 text-sm">Fashion & clothing sales</p>
+              <div className="absolute top-2 right-2 text-pink-300 opacity-0 group-hover:opacity-100 transition-opacity text-2xl">
+                →
+              </div>
+            </button>
+
+            {/* Hardware Button */}
+            <button
+              onClick={async () => {
+                setLoading(true);
+                setError('');
+                try {
+                  const response = await authAPI.demoLogin('hardware');
+                  const { access_token, user } = response.data;
+                  localStorage.setItem('token', access_token);
+                  localStorage.setItem('user', JSON.stringify(user));
+                  setUser(user);
+                  setCurrentView('employee');
+                } catch (err) {
+                  setError(err.response?.data?.error || 'Login failed');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className="group relative overflow-hidden bg-gradient-to-br from-orange-600 to-orange-800 hover:from-orange-500 hover:to-orange-700 p-8 rounded-2xl shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="text-6xl mb-4">🔨</div>
+              <h3 className="text-2xl font-bold text-white mb-2">Hardware</h3>
+              <p className="text-orange-200 text-sm">Tools & construction materials</p>
+              <div className="absolute top-2 right-2 text-orange-300 opacity-0 group-hover:opacity-100 transition-opacity text-2xl">
+                →
+              </div>
+            </button>
+
+            {/* Finance Button */}
+            <button
+              onClick={async () => {
+                setLoading(true);
+                setError('');
+                try {
+                  const response = await authAPI.demoLogin('finance');
+                  const { access_token, user } = response.data;
+                  localStorage.setItem('token', access_token);
+                  localStorage.setItem('user', JSON.stringify(user));
+                  setUser(user);
+                  setCurrentView('employee');
+                } catch (err) {
+                  setError(err.response?.data?.error || 'Login failed');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              disabled={loading}
+              className="group relative overflow-hidden bg-gradient-to-br from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 p-8 rounded-2xl shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="text-6xl mb-4">💰</div>
+              <h3 className="text-2xl font-bold text-white mb-2">Finance</h3>
+              <p className="text-emerald-200 text-sm">Loans & credit management</p>
+              <div className="absolute top-2 right-2 text-emerald-300 opacity-0 group-hover:opacity-100 transition-opacity text-2xl">
+                →
+              </div>
             </button>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-slate-700">
-            <p className="text-xs text-slate-500 text-center mb-3">Quick Login:</p>
-            <div className="grid grid-cols-1 gap-2 text-xs">
-              <button
-                onClick={() => handleLogin({ username: 'manager', password: 'admin123', assigned_business: '' })}
-                className="p-3 bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 rounded-lg text-teal-400 hover:text-teal-300 transition-colors"
-              >
-                👔 Login as Manager (full access to all businesses)
-              </button>
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                <button
-                  onClick={() => handleLogin({ username: 'sarah', password: 'pass123', assigned_business: 'boutique' })}
-                  className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
-                >
-                  👗 Boutique Staff
-                </button>
-                <button
-                  onClick={() => handleLogin({ username: 'david', password: 'pass123', assigned_business: 'hardware' })}
-                  className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
-                >
-                  🔧 Hardware Staff
-                </button>
-                <button
-                  onClick={() => handleLogin({ username: 'grace', password: 'pass123', assigned_business: 'finances' })}
-                  className="p-2 bg-slate-700/50 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
-                >
-                  💰 Finance Staff
-                </button>
-              </div>
+          {/* Loading State */}
+          {loading && (
+            <div className="text-center mt-8">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-teal-400"></div>
+              <p className="text-slate-400 mt-2">Logging in...</p>
             </div>
-            <p className="text-xs text-slate-600 text-center mt-3">
-              Click any role above to quick-start the demo.
-            </p>
+          )}
+
+          {/* Info Footer */}
+          <div className="mt-12 text-center text-slate-500 text-sm">
+            <p>Demo Environment - No password required</p>
+            <p className="mt-1">Click any button to instantly access that role</p>
           </div>
         </div>
       </div>
@@ -591,6 +635,48 @@ const App = () => {
 
     return (
       <div>
+        {/* Tab Navigation */}
+        <div className="mb-6 border-b border-slate-700">
+          <div className="flex space-x-1">
+            <button
+              onClick={() => setManagerTab('dashboard')}
+              className={`px-6 py-3 font-medium transition-colors relative ${
+                managerTab === 'dashboard'
+                  ? 'text-teal-400'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              <span className="flex items-center space-x-2">
+                <span>📊</span>
+                <span>Dashboard</span>
+              </span>
+              {managerTab === 'dashboard' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-400"></div>
+              )}
+            </button>
+
+            <button
+              onClick={() => setManagerTab('settings')}
+              className={`px-6 py-3 font-medium transition-colors relative ${
+                managerTab === 'settings'
+                  ? 'text-teal-400'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              <span className="flex items-center space-x-2">
+                <span>⚙️</span>
+                <span>Settings</span>
+              </span>
+              {managerTab === 'settings' && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-400"></div>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Dashboard Tab Content */}
+        {managerTab === 'dashboard' && (
+        <div>
         {/* Alert Banner */}
         {totalAlerts > 0 && (
           <div className="bg-amber-500/10 border border-amber-500/50 rounded-xl p-4 mb-6 flex items-center gap-3">
@@ -803,6 +889,152 @@ const App = () => {
             </div>
           </div>
         </div>
+        </div>
+        )}
+
+        {/* Settings Tab Content */}
+        {managerTab === 'settings' && (
+        <div>
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-white mb-1">Employee Management</h2>
+              <p className="text-slate-400 text-sm">Create and manage employee accounts for your business units</p>
+            </div>
+            <button
+              onClick={() => {
+                setShowModal('addEmployee');
+                setFormData({
+                  username: '',
+                  password: '',
+                  name: '',
+                  assigned_business: 'boutique',
+                  can_backdate: false,
+                  backdate_limit: 1,
+                  can_edit: true,
+                  can_delete: true,
+                  can_clear_credits: true,
+                  is_active: true
+                });
+              }}
+              className="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-medium rounded-lg transition-colors flex items-center gap-2"
+            >
+              <span className="text-lg">+</span>
+              <span>Add Employee</span>
+            </button>
+          </div>
+
+          {/* Employee Table */}
+          <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-slate-900 border-b border-slate-700">
+                  <tr>
+                    <th className="text-left py-4 px-6 text-sm font-semibold text-slate-300">Name</th>
+                    <th className="text-left py-4 px-6 text-sm font-semibold text-slate-300">Username</th>
+                    <th className="text-left py-4 px-6 text-sm font-semibold text-slate-300">Business</th>
+                    <th className="text-left py-4 px-6 text-sm font-semibold text-slate-300">Permissions</th>
+                    <th className="text-left py-4 px-6 text-sm font-semibold text-slate-300">Status</th>
+                    <th className="text-left py-4 px-6 text-sm font-semibold text-slate-300">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map((employee) => (
+                    <tr key={employee.id} className="border-b border-slate-700 hover:bg-slate-750 transition-colors">
+                      <td className="py-4 px-6 font-medium text-white">{employee.name}</td>
+                      <td className="py-4 px-6 text-slate-400">{employee.username}</td>
+                      <td className="py-4 px-6">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${
+                          employee.assigned_business === 'boutique' ? 'bg-pink-500/20 text-pink-400' :
+                          employee.assigned_business === 'hardware' ? 'bg-orange-500/20 text-orange-400' :
+                          employee.assigned_business === 'finances' ? 'bg-emerald-500/20 text-emerald-400' :
+                          'bg-purple-500/20 text-purple-400'
+                        }`}>
+                          {employee.assigned_business === 'finances' ? 'finance' : employee.assigned_business}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex flex-wrap gap-2">
+                          {employee.can_edit && (
+                            <span className="text-xs text-teal-400 bg-teal-500/10 px-2 py-1 rounded">✓ Edit</span>
+                          )}
+                          {employee.can_delete && (
+                            <span className="text-xs text-teal-400 bg-teal-500/10 px-2 py-1 rounded">✓ Delete</span>
+                          )}
+                          {employee.can_backdate && (
+                            <span className="text-xs text-amber-400 bg-amber-500/10 px-2 py-1 rounded">⚠ Backdate ({employee.backdate_limit}d)</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6">
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          employee.is_active
+                            ? 'bg-green-500/20 text-green-400'
+                            : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {employee.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => {
+                              setEditingItem(employee);
+                              setFormData({ ...employee, password: '' });
+                              setShowModal('editEmployee');
+                            }}
+                            className="text-teal-400 hover:text-teal-300 text-sm font-medium transition-colors"
+                          >
+                            Edit
+                          </button>
+                          {employee.is_active ? (
+                            <button
+                              onClick={async () => {
+                                if (confirm(`Deactivate ${employee.name}?`)) {
+                                  try {
+                                    await employeesAPI.delete(employee.id);
+                                    loadEmployees();
+                                  } catch (err) {
+                                    alert('Error deactivating employee');
+                                  }
+                                }
+                              }}
+                              className="text-red-400 hover:text-red-300 text-sm font-medium transition-colors"
+                            >
+                              Deactivate
+                            </button>
+                          ) : (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await employeesAPI.update(employee.id, { is_active: true });
+                                  loadEmployees();
+                                } catch (err) {
+                                  alert('Error reactivating employee');
+                                }
+                              }}
+                              className="text-green-400 hover:text-green-300 text-sm font-medium transition-colors"
+                            >
+                              Reactivate
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {employees.length === 0 && (
+              <div className="text-center py-16 text-slate-500">
+                <div className="text-6xl mb-4">👥</div>
+                <p className="text-lg">No employees found</p>
+                <p className="text-sm mt-2">Click "Add Employee" to create your first employee account</p>
+              </div>
+            )}
+          </div>
+        </div>
+        )}
       </div>
     );
   };
@@ -817,6 +1049,9 @@ const App = () => {
     const credits = isBoutique ? boutiqueCredits : hardwareCredits;
     const clearedCredits = isBoutique ? boutiqueClearedCredits : hardwareClearedCredits;
     const stockAPI = isBoutique ? boutiqueAPI : hardwareAPI;
+
+    // Local state for quantity adjustment modal
+    const [adjustmentData, setAdjustmentData] = useState({ adjustment: '', reason: '' });
 
     const handleAddStock = async () => {
       try {
@@ -852,6 +1087,42 @@ const App = () => {
       } catch (err) {
         setError(err.response?.data?.error || 'Failed to delete item');
       }
+    };
+
+    const handleAdjustQuantity = async () => {
+      try {
+        const adjustment = parseInt(adjustmentData.adjustment || 0);
+        if (adjustment === 0 || isNaN(adjustment)) {
+          toast.error('Please enter a valid quantity');
+          return;
+        }
+
+        // Calculate new total quantity (current + adjustment)
+        const newQuantity = editingItem.quantity + adjustment;
+
+        if (newQuantity < 0) {
+          toast.error('Cannot reduce quantity below 0');
+          return;
+        }
+
+        await stockAPI.adjustQuantity(editingItem.id, {
+          quantity: newQuantity
+        });
+        setShowModal(null);
+        setAdjustmentData({ adjustment: '', reason: '' });
+        setEditingItem(null);
+        isBoutique ? loadBoutiqueData() : loadHardwareData();
+        toast.success(`Quantity ${adjustment > 0 ? 'increased' : 'decreased'} successfully`);
+      } catch (err) {
+        console.error('Adjustment error:', err);
+        toast.error(err.response?.data?.error || 'Failed to adjust quantity');
+      }
+    };
+
+    const openAdjustQuantityModal = (item) => {
+      setEditingItem(item);
+      setAdjustmentData({ adjustment: '', reason: '' });
+      setShowModal('adjustQuantity');
     };
 
     const handleAddCategory = async () => {
@@ -971,14 +1242,25 @@ const App = () => {
                         {Math.round(item.min_selling_price / 1000)}K - {Math.round(item.max_selling_price / 1000)}K
                       </td>
                       <td className="px-4 py-3">
-                        <button
-                          onClick={() => openEditModal(item)}
-                          className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
-                        >✏️</button>
-                        <button
-                          onClick={() => handleDeleteStock(item.id)}
-                          className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400"
-                        >🗑️</button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => openAdjustQuantityModal(item)}
+                            className="px-2 py-1 text-xs bg-teal-500/10 hover:bg-teal-500/20 border border-teal-500/30 rounded text-teal-400 hover:text-teal-300 font-medium transition-colors"
+                            title="Quick adjust quantity"
+                          >
+                            📦 Adjust Qty
+                          </button>
+                          <button
+                            onClick={() => openEditModal(item)}
+                            className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
+                            title="Edit item"
+                          >✏️</button>
+                          <button
+                            onClick={() => handleDeleteStock(item.id)}
+                            className="p-1.5 hover:bg-red-500/20 rounded text-slate-400 hover:text-red-400"
+                            title="Delete item"
+                          >🗑️</button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1236,6 +1518,106 @@ const App = () => {
                   className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold"
                 >
                   {showModal === 'addStock' ? 'Add Item' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Adjust Quantity Modal */}
+        {showModal === 'adjustQuantity' && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
+              <div className="flex justify-between items-center p-5 border-b border-slate-700">
+                <h3 className="text-lg font-semibold text-white">📦 Adjust Stock Quantity</h3>
+                <button onClick={() => { setShowModal(null); setAdjustmentData({ adjustment: '', reason: '' }); setEditingItem(null); }} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
+              </div>
+              <div className="p-5 space-y-4">
+                {editingItem && (
+                  <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-slate-400 text-sm">Item:</span>
+                      <span className="text-white font-medium">{editingItem.item_name}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 text-sm">Current Stock:</span>
+                      <span className={`font-mono font-semibold ${editingItem.quantity <= editingItem.low_stock_threshold ? 'text-red-400' : 'text-teal-400'}`}>
+                        {editingItem.quantity} {editingItem.unit}
+                        {editingItem.quantity <= editingItem.low_stock_threshold && <span className="ml-2">⚠️ Critically Low</span>}
+                      </span>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between items-center">
+                      <span className="text-slate-400 text-sm">Alert Threshold:</span>
+                      <span className="text-amber-400 font-mono text-sm">{editingItem.low_stock_threshold} {editingItem.unit}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
+                    Adjustment Amount *
+                    <span className="text-slate-500 normal-case ml-2">(Use + to add, - to subtract)</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={adjustmentData.adjustment || ''}
+                    onChange={(e) => setAdjustmentData({ ...adjustmentData, adjustment: e.target.value })}
+                    placeholder="e.g., +50 or -10"
+                    className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-lg font-mono"
+                    autoFocus
+                  />
+                  {adjustmentData.adjustment && editingItem && (
+                    <p className="mt-2 text-sm">
+                      <span className="text-slate-400">New quantity will be: </span>
+                      <span className={`font-mono font-semibold ${
+                        (editingItem.quantity + parseInt(adjustmentData.adjustment || 0)) <= editingItem.low_stock_threshold
+                          ? 'text-red-400'
+                          : 'text-teal-400'
+                      }`}>
+                        {editingItem.quantity + parseInt(adjustmentData.adjustment || 0)} {editingItem.unit}
+                      </span>
+                      {(editingItem.quantity + parseInt(adjustmentData.adjustment || 0)) <= editingItem.low_stock_threshold &&
+                        <span className="text-red-400 ml-2">⚠️ Will remain critically low</span>
+                      }
+                      {editingItem.quantity <= editingItem.low_stock_threshold &&
+                       (editingItem.quantity + parseInt(adjustmentData.adjustment || 0)) > editingItem.low_stock_threshold &&
+                        <span className="text-green-400 ml-2">✓ Will be above threshold</span>
+                      }
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Reason (Optional)</label>
+                  <input
+                    type="text"
+                    value={adjustmentData.reason || ''}
+                    onChange={(e) => setAdjustmentData({ ...adjustmentData, reason: e.target.value })}
+                    placeholder="e.g., New stock arrival, Damaged items removed"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                  />
+                </div>
+
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <p className="text-amber-400 text-xs">
+                    <strong>💡 Tip:</strong> Use positive numbers to add stock (+50), negative to subtract (-10).
+                    Stock levels update everywhere instantly.
+                  </p>
+                </div>
+              </div>
+              <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
+                <button
+                  onClick={() => { setShowModal(null); setAdjustmentData({ adjustment: '', reason: '' }); setEditingItem(null); }}
+                  className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAdjustQuantity}
+                  disabled={!adjustmentData.adjustment || adjustmentData.adjustment === '0'}
+                  className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Apply Adjustment
                 </button>
               </div>
             </div>

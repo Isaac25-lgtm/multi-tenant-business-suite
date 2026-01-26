@@ -57,6 +57,59 @@ def login():
     }), 200
 
 
+@auth_bp.route('/demo-login', methods=['POST'])
+def demo_login():
+    """One-click demo login - bypasses password for demo users"""
+    data = request.get_json()
+
+    if not data or not data.get('role'):
+        return jsonify({'error': 'Role parameter required'}), 400
+
+    role = data.get('role').lower()
+
+    # Map role to demo username
+    demo_users = {
+        'manager': 'manager',
+        'boutique': 'sarah',
+        'hardware': 'david',
+        'finance': 'grace'  # Note: grace has 'finances' business
+    }
+
+    if role not in demo_users:
+        return jsonify({'error': 'Invalid role'}), 400
+
+    username = demo_users[role]
+
+    # Find user directly by username (skip password check for demo)
+    user = User.query.filter_by(username=username).first()
+
+    if not user:
+        return jsonify({'error': 'Demo user not found'}), 404
+
+    if not user.is_active:
+        return jsonify({'error': 'Account is deactivated'}), 403
+
+    # Generate tokens (same as regular login)
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
+
+    # Log the demo login
+    log_audit(
+        user_id=user.id,
+        action='login',
+        module='auth',
+        entity_type='user',
+        entity_id=user.id,
+        description=f"{user.name} logged in (demo mode)"
+    )
+
+    return jsonify({
+        'access_token': access_token,
+        'refresh_token': refresh_token,
+        'user': user.to_dict()
+    }), 200
+
+
 @auth_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():

@@ -57,9 +57,10 @@ const ManagerDashboard = () => {
   const revenueByBusiness = [
     { name: 'Boutique', value: by_business.boutique.today },
     { name: 'Hardware', value: by_business.hardware.today },
+    { name: 'Finance', value: by_business.finance.repayments_today },
   ];
 
-  const COLORS = ['#14b8a6', '#f59e0b'];
+  const COLORS = ['#14b8a6', '#f59e0b', '#8b5cf6'];
 
   return (
     <div className="space-y-6">
@@ -154,6 +155,7 @@ const ManagerDashboard = () => {
               <Legend />
               <Line type="monotone" dataKey="boutique" stroke="#14b8a6" name="Boutique" strokeWidth={2} />
               <Line type="monotone" dataKey="hardware" stroke="#f59e0b" name="Hardware" strokeWidth={2} />
+              <Line type="monotone" dataKey="finance" stroke="#8b5cf6" name="Finance" strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -184,7 +186,7 @@ const ManagerDashboard = () => {
       </div>
 
       {/* Business Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Boutique */}
         <div className="card p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
@@ -225,6 +227,28 @@ const ManagerDashboard = () => {
             <div className="flex justify-between items-center">
               <span className="text-text-muted">Low Stock Items</span>
               <span className="font-semibold">{by_business.hardware.low_stock}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Finance */}
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <span className="text-2xl mr-2">💰</span>
+            Finance Summary
+          </h3>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-text-muted">Today's Repayments</span>
+              <span className="font-mono font-semibold">{formatCurrency(by_business.finance.repayments_today)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-text-muted">Loans Outstanding</span>
+              <span className="font-mono font-semibold">{formatCurrency(by_business.finance.outstanding)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-text-muted">Overdue Loans</span>
+              <span className="font-semibold text-danger">{by_business.finance.overdue_count}</span>
             </div>
           </div>
         </div>
