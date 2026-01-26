@@ -5,12 +5,24 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def get_database_url():
+    """Get database URL with proper format for SQLAlchemy.
+
+    Render provides DATABASE_URL starting with 'postgres://' but SQLAlchemy 1.4+
+    requires 'postgresql://' - this function handles the conversion.
+    """
+    url = os.getenv('DATABASE_URL', 'sqlite:///denove_aps.db')
+    if url.startswith('postgres://'):
+        url = url.replace('postgres://', 'postgresql://', 1)
+    return url
+
+
 class Config:
     # Flask
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
-    
-    # Database
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'sqlite:///denove_aps.db')
+
+    # Database - handle Render's postgres:// vs postgresql:// issue
+    SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # JWT

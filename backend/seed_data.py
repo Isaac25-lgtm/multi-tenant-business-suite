@@ -1,6 +1,5 @@
 from app import create_app, db
 from app.models import User
-from werkzeug.security import generate_password_hash
 
 app = create_app()
 
@@ -9,17 +8,20 @@ with app.app_context():
     db.create_all()
     print("Tables created.")
 
+    created = []
+
     # Create Manager User
     if not User.query.filter_by(username='manager').first():
         print("Creating manager user...")
         manager = User(
             username='manager',
-            email='manager@example.com',
-            role='Manager',
-            password_hash=generate_password_hash('admin123'),
-            name='General Manager'
+            name='General Manager',
+            role='manager',
+            assigned_business='all'
         )
+        manager.set_password('admin123')
         db.session.add(manager)
+        created.append('manager')
         print("Manager user created.")
 
     # Create Boutique Staff (Sarah)
@@ -27,13 +29,13 @@ with app.app_context():
         print("Creating boutique staff (Sarah)...")
         sarah = User(
             username='sarah',
-            email='sarah@example.com',
-            role='Employee',
-            assigned_business='boutique',
-            password_hash=generate_password_hash('pass123'),
-            name='Sarah Jenkins'
+            name='Sarah Jenkins',
+            role='employee',
+            assigned_business='boutique'
         )
+        sarah.set_password('pass123')
         db.session.add(sarah)
+        created.append('sarah')
         print("Boutique staff created.")
 
     # Create Hardware Staff (David)
@@ -41,13 +43,13 @@ with app.app_context():
         print("Creating hardware staff (David)...")
         david = User(
             username='david',
-            email='david@example.com',
-            role='Employee',
-            assigned_business='hardware',
-            password_hash=generate_password_hash('pass123'),
-            name='David Miller'
+            name='David Miller',
+            role='employee',
+            assigned_business='hardware'
         )
+        david.set_password('pass123')
         db.session.add(david)
+        created.append('david')
         print("Hardware staff created.")
 
     # Create Finance Staff (Grace)
@@ -55,14 +57,14 @@ with app.app_context():
         print("Creating finance staff (Grace)...")
         grace = User(
             username='grace',
-            email='grace@example.com',
-            role='Employee',
-            assigned_business='finances',
-            password_hash=generate_password_hash('pass123'),
-            name='Grace A.'
+            name='Grace A.',
+            role='employee',
+            assigned_business='finances'
         )
+        grace.set_password('pass123')
         db.session.add(grace)
+        created.append('grace')
         print("Finance staff created.")
 
     db.session.commit()
-    print("All seed users created successfully!")
+    print(f"All seed users created successfully! Created: {', '.join(created)}")

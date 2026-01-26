@@ -1,10 +1,16 @@
 import axios from 'axios';
 import { useToastStore } from '../context/ToastContext';
 
-// Ensure the API URL ends with /api
+// Ensure the API URL ends with /api and has proper protocol
 const getBaseUrl = () => {
-  const envUrl = import.meta.env.VITE_API_URL;
+  let envUrl = import.meta.env.VITE_API_URL;
   if (!envUrl) return '/api';
+
+  // Render's fromService provides just the hostname without protocol
+  // Prepend https:// if no protocol is present
+  if (!envUrl.startsWith('http://') && !envUrl.startsWith('https://')) {
+    envUrl = `https://${envUrl}`;
+  }
 
   // If the URL already ends with /api, return it
   if (envUrl.endsWith('/api')) return envUrl;
