@@ -1050,14 +1050,19 @@ const App = () => {
     const clearedCredits = isBoutique ? boutiqueClearedCredits : hardwareClearedCredits;
     const stockAPI = isBoutique ? boutiqueAPI : hardwareAPI;
 
+    // Local state for modals - prevents parent re-render from resetting inputs
+    const [localFormData, setLocalFormData] = useState({});
+    const [localShowModal, setLocalShowModal] = useState(null);
+    const [localEditingItem, setLocalEditingItem] = useState(null);
+
     // Local state for quantity adjustment modal
     const [adjustmentData, setAdjustmentData] = useState({ adjustment: '', reason: '' });
 
     const handleAddStock = async () => {
       try {
-        await stockAPI.addStock(formData);
-        setShowModal(null);
-        setFormData({});
+        await stockAPI.addStock(localFormData);
+        setLocalShowModal(null);
+        setLocalFormData({});
         isBoutique ? loadBoutiqueData() : loadHardwareData();
         toast.success('Stock item added successfully');
       } catch (err) {
@@ -1067,10 +1072,10 @@ const App = () => {
 
     const handleEditStock = async () => {
       try {
-        await stockAPI.updateStock(editingItem.id, formData);
-        setShowModal(null);
-        setFormData({});
-        setEditingItem(null);
+        await stockAPI.updateStock(localEditingItem.id, localFormData);
+        setLocalShowModal(null);
+        setLocalFormData({});
+        setLocalEditingItem(null);
         isBoutique ? loadBoutiqueData() : loadHardwareData();
         toast.success('Stock item updated successfully');
       } catch (err) {
@@ -1098,19 +1103,19 @@ const App = () => {
         }
 
         // Calculate new total quantity (current + adjustment)
-        const newQuantity = editingItem.quantity + adjustment;
+        const newQuantity = localEditingItem.quantity + adjustment;
 
         if (newQuantity < 0) {
           toast.error('Cannot reduce quantity below 0');
           return;
         }
 
-        await stockAPI.adjustQuantity(editingItem.id, {
+        await stockAPI.adjustQuantity(localEditingItem.id, {
           quantity: newQuantity
         });
-        setShowModal(null);
+        setLocalShowModal(null);
         setAdjustmentData({ adjustment: '', reason: '' });
-        setEditingItem(null);
+        setLocalEditingItem(null);
         isBoutique ? loadBoutiqueData() : loadHardwareData();
         toast.success(`Quantity ${adjustment > 0 ? 'increased' : 'decreased'} successfully`);
       } catch (err) {
@@ -1120,16 +1125,16 @@ const App = () => {
     };
 
     const openAdjustQuantityModal = (item) => {
-      setEditingItem(item);
+      setLocalEditingItem(item);
       setAdjustmentData({ adjustment: '', reason: '' });
-      setShowModal('adjustQuantity');
+      setLocalShowModal('adjustQuantity');
     };
 
     const handleAddCategory = async () => {
       try {
-        await stockAPI.createCategory({ name: formData.categoryName });
-        setShowModal(null);
-        setFormData({});
+        await stockAPI.createCategory({ name: localFormData.categoryName });
+        setLocalShowModal(null);
+        setLocalFormData({});
         isBoutique ? loadBoutiqueData() : loadHardwareData();
         toast.success('Category added successfully');
       } catch (err) {
@@ -1154,8 +1159,8 @@ const App = () => {
     };
 
     const openEditModal = (item) => {
-      setEditingItem(item);
-      setFormData({
+      setLocalEditingItem(item);
+      setLocalFormData({
         item_name: item.item_name,
         category_id: item.category_id,
         quantity: item.quantity,
@@ -1165,14 +1170,14 @@ const App = () => {
         max_selling_price: item.max_selling_price,
         low_stock_threshold: item.low_stock_threshold,
       });
-      setShowModal('editStock');
+      setLocalShowModal('editStock');
     };
 
     const [selectedSale, setSelectedSale] = useState(null);
 
     const viewSaleDetails = (sale) => {
       setSelectedSale(sale);
-      setShowModal('viewSale');
+      setLocalShowModal('viewSale');
     };
 
     return (
@@ -1207,7 +1212,13 @@ const App = () => {
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
               </div>
               <button
-                onClick={() => { setShowModal('addStock'); setFormData({ unit: 'pieces', low_stock_threshold: 5 }); }}
+                onClick={() => { setLocalShowModal('addCategory'); setLocalFormData({}); }}
+                className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-medium rounded-lg flex items-center gap-2 transition-colors"
+              >
+                <span>📁</span> Add Category
+              </button>
+              <button
+                onClick={() => { setLocalShowModal('addStock'); setLocalFormData({ unit: 'pieces', low_stock_threshold: 5 }); }}
                 className="px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 font-medium rounded-lg flex items-center gap-2 transition-colors"
               >
                 <span>+</span> Add Item
@@ -1281,7 +1292,7 @@ const App = () => {
           <div>
             <div className="flex gap-3 mb-4">
               <button
-                onClick={() => setShowModal('newSale')}
+                onClick={() => setLocalShowModal('newSale')}
                 className="px-4 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 font-medium rounded-lg flex items-center gap-2 transition-colors"
               >
                 <span>+</span> New Sale
@@ -1357,7 +1368,7 @@ const App = () => {
                   <div><p className="text-slate-500">Balance Due</p><p className="text-amber-400 font-mono font-semibold">{formatMoney(credit.balance)}</p></div>
                 </div>
                 <button
-                  onClick={() => { setShowModal('recordPayment'); setEditingItem(credit); setFormData({ amount: credit.balance }); }}
+                  onClick={() => { setLocalShowModal('recordPayment'); setLocalEditingItem(credit); setLocalFormData({ amount: credit.balance }); }}
                   className="mt-2 w-full py-2 bg-teal-500/15 text-teal-400 rounded-lg font-medium hover:bg-teal-500/25 transition-colors"
                 >
                   Record Payment
@@ -1409,20 +1420,20 @@ const App = () => {
         )}
 
         {/* Add Stock Modal */}
-        {(showModal === 'addStock' || showModal === 'editStock') && (
+        {(localShowModal === 'addStock' || localShowModal === 'editStock') && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl">
               <div className="flex justify-between items-center p-5 border-b border-slate-700">
-                <h3 className="text-lg font-semibold text-white">{showModal === 'addStock' ? 'Add New Item' : 'Edit Item'}</h3>
-                <button onClick={() => { setShowModal(null); setFormData({}); setEditingItem(null); }} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
+                <h3 className="text-lg font-semibold text-white">{localShowModal === 'addStock' ? 'Add New Item' : 'Edit Item'}</h3>
+                <button onClick={() => { setLocalShowModal(null); setLocalFormData({}); setLocalEditingItem(null); }} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
               </div>
               <div className="p-5 space-y-4 max-h-96 overflow-y-auto">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Item Name *</label>
                   <input
                     type="text"
-                    value={formData.item_name || ''}
-                    onChange={(e) => setFormData({ ...formData, item_name: e.target.value })}
+                    value={localFormData.item_name || ''}
+                    onChange={(e) => setLocalFormData({ ...localFormData, item_name: e.target.value })}
                     placeholder="e.g., Ladies Dress - Floral"
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
@@ -1430,8 +1441,8 @@ const App = () => {
                 <div>
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Category</label>
                   <select
-                    value={formData.category_id || ''}
-                    onChange={(e) => setFormData({ ...formData, category_id: e.target.value })}
+                    value={localFormData.category_id || ''}
+                    onChange={(e) => setLocalFormData({ ...localFormData, category_id: e.target.value })}
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   >
                     <option value="">-- Select Category --</option>
@@ -1445,8 +1456,8 @@ const App = () => {
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Quantity *</label>
                     <input
                       type="number"
-                      value={formData.quantity || ''}
-                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                      value={localFormData.quantity || ''}
+                      onChange={(e) => setLocalFormData({ ...localFormData, quantity: e.target.value })}
                       placeholder="0"
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
@@ -1454,8 +1465,8 @@ const App = () => {
                   <div>
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Unit</label>
                     <select
-                      value={formData.unit || 'pieces'}
-                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                      value={localFormData.unit || 'pieces'}
+                      onChange={(e) => setLocalFormData({ ...localFormData, unit: e.target.value })}
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     >
                       <option value="pieces">pieces</option>
@@ -1472,8 +1483,8 @@ const App = () => {
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Cost Price (UGX) *</label>
                   <input
                     type="number"
-                    value={formData.cost_price || ''}
-                    onChange={(e) => setFormData({ ...formData, cost_price: e.target.value })}
+                    value={localFormData.cost_price || ''}
+                    onChange={(e) => setLocalFormData({ ...localFormData, cost_price: e.target.value })}
                     placeholder="e.g., 45000"
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
@@ -1483,8 +1494,8 @@ const App = () => {
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Min Selling Price *</label>
                     <input
                       type="number"
-                      value={formData.min_selling_price || ''}
-                      onChange={(e) => setFormData({ ...formData, min_selling_price: e.target.value })}
+                      value={localFormData.min_selling_price || ''}
+                      onChange={(e) => setLocalFormData({ ...localFormData, min_selling_price: e.target.value })}
                       placeholder="e.g., 80000"
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
@@ -1493,8 +1504,8 @@ const App = () => {
                     <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Max Selling Price *</label>
                     <input
                       type="number"
-                      value={formData.max_selling_price || ''}
-                      onChange={(e) => setFormData({ ...formData, max_selling_price: e.target.value })}
+                      value={localFormData.max_selling_price || ''}
+                      onChange={(e) => setLocalFormData({ ...localFormData, max_selling_price: e.target.value })}
                       placeholder="e.g., 95000"
                       className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                     />
@@ -1504,20 +1515,20 @@ const App = () => {
                   <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Low Stock Alert Threshold</label>
                   <input
                     type="number"
-                    value={formData.low_stock_threshold || 5}
-                    onChange={(e) => setFormData({ ...formData, low_stock_threshold: e.target.value })}
+                    value={localFormData.low_stock_threshold || 5}
+                    onChange={(e) => setLocalFormData({ ...localFormData, low_stock_threshold: e.target.value })}
                     placeholder="5"
                     className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                   />
                 </div>
               </div>
               <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
-                <button onClick={() => { setShowModal(null); setFormData({}); setEditingItem(null); }} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
+                <button onClick={() => { setLocalShowModal(null); setLocalFormData({}); setLocalEditingItem(null); }} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
                 <button
-                  onClick={showModal === 'addStock' ? handleAddStock : handleEditStock}
+                  onClick={localShowModal === 'addStock' ? handleAddStock : handleEditStock}
                   className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold"
                 >
-                  {showModal === 'addStock' ? 'Add Item' : 'Save Changes'}
+                  {localShowModal === 'addStock' ? 'Add Item' : 'Save Changes'}
                 </button>
               </div>
             </div>
@@ -1525,30 +1536,30 @@ const App = () => {
         )}
 
         {/* Adjust Quantity Modal */}
-        {showModal === 'adjustQuantity' && (
+        {localShowModal === 'adjustQuantity' && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
               <div className="flex justify-between items-center p-5 border-b border-slate-700">
                 <h3 className="text-lg font-semibold text-white">📦 Adjust Stock Quantity</h3>
-                <button onClick={() => { setShowModal(null); setAdjustmentData({ adjustment: '', reason: '' }); setEditingItem(null); }} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
+                <button onClick={() => { setLocalShowModal(null); setAdjustmentData({ adjustment: '', reason: '' }); setLocalEditingItem(null); }} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
               </div>
               <div className="p-5 space-y-4">
-                {editingItem && (
+                {localEditingItem && (
                   <div className="bg-slate-900 border border-slate-700 rounded-lg p-4">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-slate-400 text-sm">Item:</span>
-                      <span className="text-white font-medium">{editingItem.item_name}</span>
+                      <span className="text-white font-medium">{localEditingItem.item_name}</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-slate-400 text-sm">Current Stock:</span>
-                      <span className={`font-mono font-semibold ${editingItem.quantity <= editingItem.low_stock_threshold ? 'text-red-400' : 'text-teal-400'}`}>
-                        {editingItem.quantity} {editingItem.unit}
-                        {editingItem.quantity <= editingItem.low_stock_threshold && <span className="ml-2">⚠️ Critically Low</span>}
+                      <span className={`font-mono font-semibold ${localEditingItem.quantity <= localEditingItem.low_stock_threshold ? 'text-red-400' : 'text-teal-400'}`}>
+                        {localEditingItem.quantity} {localEditingItem.unit}
+                        {localEditingItem.quantity <= localEditingItem.low_stock_threshold && <span className="ml-2">⚠️ Critically Low</span>}
                       </span>
                     </div>
                     <div className="mt-2 pt-2 border-t border-slate-700 flex justify-between items-center">
                       <span className="text-slate-400 text-sm">Alert Threshold:</span>
-                      <span className="text-amber-400 font-mono text-sm">{editingItem.low_stock_threshold} {editingItem.unit}</span>
+                      <span className="text-amber-400 font-mono text-sm">{localEditingItem.low_stock_threshold} {localEditingItem.unit}</span>
                     </div>
                   </div>
                 )}
@@ -1566,21 +1577,21 @@ const App = () => {
                     className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-white text-lg font-mono"
                     autoFocus
                   />
-                  {adjustmentData.adjustment && editingItem && (
+                  {adjustmentData.adjustment && localEditingItem && (
                     <p className="mt-2 text-sm">
                       <span className="text-slate-400">New quantity will be: </span>
                       <span className={`font-mono font-semibold ${
-                        (editingItem.quantity + parseInt(adjustmentData.adjustment || 0)) <= editingItem.low_stock_threshold
+                        (localEditingItem.quantity + parseInt(adjustmentData.adjustment || 0)) <= localEditingItem.low_stock_threshold
                           ? 'text-red-400'
                           : 'text-teal-400'
                       }`}>
-                        {editingItem.quantity + parseInt(adjustmentData.adjustment || 0)} {editingItem.unit}
+                        {localEditingItem.quantity + parseInt(adjustmentData.adjustment || 0)} {localEditingItem.unit}
                       </span>
-                      {(editingItem.quantity + parseInt(adjustmentData.adjustment || 0)) <= editingItem.low_stock_threshold &&
+                      {(localEditingItem.quantity + parseInt(adjustmentData.adjustment || 0)) <= localEditingItem.low_stock_threshold &&
                         <span className="text-red-400 ml-2">⚠️ Will remain critically low</span>
                       }
-                      {editingItem.quantity <= editingItem.low_stock_threshold &&
-                       (editingItem.quantity + parseInt(adjustmentData.adjustment || 0)) > editingItem.low_stock_threshold &&
+                      {localEditingItem.quantity <= localEditingItem.low_stock_threshold &&
+                       (localEditingItem.quantity + parseInt(adjustmentData.adjustment || 0)) > localEditingItem.low_stock_threshold &&
                         <span className="text-green-400 ml-2">✓ Will be above threshold</span>
                       }
                     </p>
@@ -1607,7 +1618,7 @@ const App = () => {
               </div>
               <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
                 <button
-                  onClick={() => { setShowModal(null); setAdjustmentData({ adjustment: '', reason: '' }); setEditingItem(null); }}
+                  onClick={() => { setLocalShowModal(null); setAdjustmentData({ adjustment: '', reason: '' }); setLocalEditingItem(null); }}
                   className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium"
                 >
                   Cancel
@@ -1625,25 +1636,25 @@ const App = () => {
         )}
 
         {/* Add Category Modal */}
-        {showModal === 'addCategory' && (
+        {localShowModal === 'addCategory' && (
           <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl">
               <div className="flex justify-between items-center p-5 border-b border-slate-700">
                 <h3 className="text-lg font-semibold text-white">Add New Category</h3>
-                <button onClick={() => { setShowModal(null); setFormData({}); }} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
+                <button onClick={() => { setLocalShowModal(null); setLocalFormData({}); }} className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-lg flex items-center justify-center text-slate-400 hover:text-white">✕</button>
               </div>
               <div className="p-5">
                 <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Category Name</label>
                 <input
                   type="text"
-                  value={formData.categoryName || ''}
-                  onChange={(e) => setFormData({ ...formData, categoryName: e.target.value })}
+                  value={localFormData.categoryName || ''}
+                  onChange={(e) => setLocalFormData({ ...localFormData, categoryName: e.target.value })}
                   placeholder="e.g., Dresses, Shoes, Building Materials"
                   className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
                 />
               </div>
               <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
-                <button onClick={() => { setShowModal(null); setFormData({}); }} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
+                <button onClick={() => { setLocalShowModal(null); setLocalFormData({}); }} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium">Cancel</button>
                 <button onClick={handleAddCategory} className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold">Add Category</button>
               </div>
             </div>
@@ -1651,12 +1662,12 @@ const App = () => {
         )}
 
         {/* View Sale Details Modal */}
-        {showModal === 'viewSale' && selectedSale && (
+        {localShowModal === 'viewSale' && selectedSale && (
           <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
             <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl">
               <div className="px-6 py-4 border-b border-slate-700 flex justify-between items-center">
                 <h3 className="font-semibold text-white">Sale Details</h3>
-                <button onClick={() => { setShowModal(null); setSelectedSale(null); }} className="text-slate-400 hover:text-white text-xl">✕</button>
+                <button onClick={() => { setLocalShowModal(null); setSelectedSale(null); }} className="text-slate-400 hover:text-white text-xl">✕</button>
               </div>
               <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
                 <div className="grid grid-cols-2 gap-4 text-sm">
@@ -1693,19 +1704,19 @@ const App = () => {
               </div>
               <div className="p-5 border-t border-slate-700 flex gap-3 justify-end">
                 <button onClick={() => handleDownloadReceipt(selectedSale.id)} className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm">🖨️ Print Receipt</button>
-                <button onClick={() => { setShowModal(null); setSelectedSale(null); }} className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-medium">Close</button>
+                <button onClick={() => { setLocalShowModal(null); setSelectedSale(null); }} className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-medium">Close</button>
               </div>
             </div>
           </div>
         )}
 
         {/* New Sale Modal */}
-        {showModal === 'newSale' && (
+        {localShowModal === 'newSale' && (
           <NewSaleModal
             stock={stock}
             stockAPI={stockAPI}
-            onClose={() => setShowModal(null)}
-            onSuccess={() => { setShowModal(null); isBoutique ? loadBoutiqueData() : loadHardwareData(); }}
+            onClose={() => setLocalShowModal(null)}
+            onSuccess={() => { setLocalShowModal(null); isBoutique ? loadBoutiqueData() : loadHardwareData(); }}
             formatMoney={formatMoney}
           />
         )}
