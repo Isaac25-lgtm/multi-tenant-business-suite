@@ -31,7 +31,6 @@ services:
     name: denove-aps-frontend
     runtime: static
     plan: starter
-    region: oregon
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
