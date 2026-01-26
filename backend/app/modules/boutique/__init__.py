@@ -88,10 +88,13 @@ def add_stock():
         if field not in data:
             return jsonify({'error': f'{field} is required'}), 400
     
-    # Calculate low stock threshold (25% of initial quantity)
     quantity = int(data['quantity'])
-    low_stock_threshold = int(quantity * 0.25)
-    
+    # Use user-provided threshold, or calculate default (min 1, or 25% of quantity)
+    if 'low_stock_threshold' in data and data['low_stock_threshold']:
+        low_stock_threshold = int(data['low_stock_threshold'])
+    else:
+        low_stock_threshold = max(1, int(quantity * 0.25))
+
     stock = BoutiqueStock(
         item_name=data['item_name'],
         category_id=data['category_id'],
