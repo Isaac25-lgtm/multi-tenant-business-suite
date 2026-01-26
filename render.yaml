@@ -18,9 +18,7 @@ services:
       - key: MAX_CONTENT_LENGTH
         value: "5242880"
       - key: DATABASE_URL
-        fromDatabase:
-          name: denove-aps-db
-          property: connectionString
+        sync: false  # Set this manually in Render dashboard with your Neon connection string
       - key: SECRET_KEY
         generateValue: true
       - key: JWT_SECRET_KEY
@@ -44,9 +42,3 @@ services:
           type: web
           property: host
 
-databases:
-  - name: denove-aps-db
-    plan: free
-    databaseName: denove_aps
-    user: denove_user
-    region: oregon
