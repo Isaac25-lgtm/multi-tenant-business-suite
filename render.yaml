@@ -30,7 +30,6 @@ services:
   - type: web
     name: denove-aps-frontend
     runtime: static
-    plan: starter
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: dist
@@ -47,7 +46,7 @@ services:
 
 databases:
   - name: denove-aps-db
-    plan: starter
+    plan: free
     databaseName: denove_aps
     user: denove_user
     region: oregon
