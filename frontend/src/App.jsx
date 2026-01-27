@@ -4468,14 +4468,75 @@ const App = () => {
   // Finance Employee Pages - New Group Loan (Create Group Loan)
   const NewGroupLoanPage = () => {
     const [submitting, setSubmitting] = useState(false);
+    const [createdLoanId, setCreatedLoanId] = useState(null);
+    const [uploadedFiles, setUploadedFiles] = useState([]);
+    const [uploading, setUploading] = useState(false);
+    const fileInputRef = useRef(null);
     const [groupForm, setGroupForm] = useState({
       group_name: '',
       member_count: '',
-      total_amount: '',
-      amount_per_period: '',
-      total_periods: '4'
+      principal: '',
+      interest_rate: '10',
+      period_type: 'monthly',
+      total_periods: '4',
+      amount_per_period: ''
     });
     const toast = useToastStore();
+
+    // Period type options
+    const periodTypes = [
+      { value: 'weekly', label: 'Weekly', days: 7 },
+      { value: 'bi-weekly', label: 'Every 2 Weeks', days: 14 },
+      { value: 'monthly', label: 'Monthly', days: 30 },
+      { value: 'bi-monthly', label: 'Every 2 Months', days: 60 }
+    ];
+
+    // Calculate interest and totals based on form inputs
+    const calculateLoanDetails = () => {
+      const principal = parseFloat(groupForm.principal) || 0;
+      const interestRate = parseFloat(groupForm.interest_rate) || 0;
+      const totalPeriods = parseInt(groupForm.total_periods) || 1;
+
+      const interestAmount = principal * (interestRate / 100);
+      const totalAmount = principal + interestAmount;
+      const suggestedPerPeriod = totalPeriods > 0 ? totalAmount / totalPeriods : 0;
+
+      return {
+        principal,
+        interestRate,
+        interestAmount,
+        totalAmount,
+        suggestedPerPeriod,
+        totalPeriods
+      };
+    };
+
+    const loanDetails = calculateLoanDetails();
+
+    // Auto-calculate amount per period when principal, interest, or periods change
+    useEffect(() => {
+      if (loanDetails.totalAmount > 0 && !groupForm.amount_per_period) {
+        // Only auto-fill if user hasn't manually entered a value
+      }
+    }, [groupForm.principal, groupForm.interest_rate, groupForm.total_periods]);
+
+    const handleFileSelect = (e) => {
+      const files = Array.from(e.target.files);
+      const validFiles = files.filter(file => {
+        const ext = file.name.split('.').pop().toLowerCase();
+        return ['png', 'jpg', 'jpeg', 'pdf', 'doc', 'docx'].includes(ext);
+      });
+
+      if (validFiles.length !== files.length) {
+        toast.error('Some files were skipped. Only PNG, JPG, PDF, DOC files are allowed.');
+      }
+
+      setUploadedFiles(prev => [...prev, ...validFiles]);
+    };
+
+    const removeFile = (index) => {
+      setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    };
 
     const handleSubmitGroupLoan = async () => {
       if (!groupForm.group_name) {
@@ -4486,25 +4547,46 @@ const App = () => {
         toast.error('Please enter the number of members');
         return;
       }
-      if (!groupForm.total_amount || parseFloat(groupForm.total_amount) <= 0) {
-        toast.error('Please enter the total amount');
-        return;
-      }
-      if (!groupForm.amount_per_period || parseFloat(groupForm.amount_per_period) <= 0) {
-        toast.error('Please enter the amount per period');
+      if (!groupForm.principal || parseFloat(groupForm.principal) <= 0) {
+        toast.error('Please enter the principal amount');
         return;
       }
 
       setSubmitting(true);
       try {
-        await financeAPI.createGroupLoan({
+        // Create the group loan
+        const response = await financeAPI.createGroupLoan({
           group_name: groupForm.group_name,
           member_count: parseInt(groupForm.member_count),
-          total_amount: parseFloat(groupForm.total_amount),
-          amount_per_period: parseFloat(groupForm.amount_per_period),
-          total_periods: parseInt(groupForm.total_periods)
+          principal: parseFloat(groupForm.principal),
+          interest_rate: parseFloat(groupForm.interest_rate) || 0,
+          period_type: groupForm.period_type,
+          total_periods: parseInt(groupForm.total_periods),
+          amount_per_period: parseFloat(groupForm.amount_per_period) || loanDetails.suggestedPerPeriod
         });
-        toast.success('Group loan created successfully!');
+
+        const newLoanId = response.data.id;
+        setCreatedLoanId(newLoanId);
+
+        // Upload documents if any
+        if (uploadedFiles.length > 0) {
+          setUploading(true);
+          const formData = new FormData();
+          uploadedFiles.forEach(file => {
+            formData.append('files', file);
+          });
+
+          try {
+            await financeAPI.uploadGroupLoanDocuments(newLoanId, formData);
+            toast.success('Group loan created and documents uploaded!');
+          } catch (uploadErr) {
+            toast.warning('Loan created but document upload failed. You can upload later.');
+          }
+          setUploading(false);
+        } else {
+          toast.success('Group loan created successfully!');
+        }
+
         setActiveNav('activeloans');
       } catch (err) {
         toast.error(err.response?.data?.error || 'Failed to create group loan');
@@ -4513,14 +4595,31 @@ const App = () => {
       }
     };
 
+    const handlePrintAgreement = async () => {
+      if (!createdLoanId) {
+        // Create a preview - for now just show a message
+        toast.info('Please create the loan first to print the agreement.');
+        return;
+      }
+
+      try {
+        const response = await financeAPI.getGroupLoanAgreement(createdLoanId);
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, '_blank');
+      } catch (err) {
+        toast.error('Failed to generate agreement PDF');
+      }
+    };
+
     return (
-      <div className="max-w-xl mx-auto">
+      <div className="max-w-2xl mx-auto">
         <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full shadow-2xl overflow-hidden">
           <div className="flex justify-between items-center p-5 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
             <h3 className="text-lg font-semibold text-white">Issue New Group Loan</h3>
           </div>
 
-          <div className="p-5 space-y-4">
+          <div className="p-5 space-y-4 max-h-[calc(100vh-280px)] overflow-y-auto">
             <div>
               <h4 className="text-sm font-medium text-slate-300 mb-3">GROUP INFORMATION</h4>
               <div className="space-y-4">
@@ -4532,7 +4631,7 @@ const App = () => {
                     value={groupForm.group_name}
                     onChange={(e) => setGroupForm({ ...groupForm, group_name: e.target.value })}
                     placeholder="e.g., Kyebando Women's Group"
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
 
@@ -4544,7 +4643,8 @@ const App = () => {
                     value={groupForm.member_count}
                     onChange={(e) => setGroupForm({ ...groupForm, member_count: e.target.value })}
                     placeholder="Enter member count"
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                    min="1"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
               </div>
@@ -4553,69 +4653,173 @@ const App = () => {
             <div className="border-t border-slate-700 pt-4">
               <h4 className="text-sm font-medium text-slate-300 mb-3">LOAN DETAILS</h4>
               <div className="grid grid-cols-2 gap-4">
+                {/* Principal Amount */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Amount (UGX) *</label>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Principal Amount (UGX) *</label>
                   <input
                     type="number"
-                    value={groupForm.total_amount}
-                    onChange={(e) => setGroupForm({ ...groupForm, total_amount: e.target.value })}
-                    placeholder="Total loan amount"
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                    value={groupForm.principal}
+                    onChange={(e) => setGroupForm({ ...groupForm, principal: e.target.value })}
+                    placeholder="Loan amount before interest"
+                    min="0"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
                 </div>
+
+                {/* Interest Rate */}
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Amount Per Period (UGX) *</label>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Interest Rate (%)</label>
+                  <input
+                    type="number"
+                    value={groupForm.interest_rate}
+                    onChange={(e) => setGroupForm({ ...groupForm, interest_rate: e.target.value })}
+                    placeholder="e.g., 10"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                  />
+                </div>
+
+                {/* Period Type */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Payment Frequency *</label>
+                  <select
+                    value={groupForm.period_type}
+                    onChange={(e) => setGroupForm({ ...groupForm, period_type: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                  >
+                    {periodTypes.map(pt => (
+                      <option key={pt.value} value={pt.value}>{pt.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Total Periods */}
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Number of Periods *</label>
+                  <select
+                    value={groupForm.total_periods}
+                    onChange={(e) => setGroupForm({ ...groupForm, total_periods: e.target.value })}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                  >
+                    {[2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 36, 48].map(n => (
+                      <option key={n} value={n}>{n} Periods</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Amount Per Period (Optional Override) */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">
+                    Amount Per Period (UGX) <span className="text-slate-500">- Leave blank to auto-calculate</span>
+                  </label>
                   <input
                     type="number"
                     value={groupForm.amount_per_period}
                     onChange={(e) => setGroupForm({ ...groupForm, amount_per_period: e.target.value })}
-                    placeholder="Weekly/Monthly payment"
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
+                    placeholder={loanDetails.suggestedPerPeriod > 0 ? `Suggested: ${formatMoney(loanDetails.suggestedPerPeriod)}` : 'Auto-calculated from total'}
+                    min="0"
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
                   />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 uppercase tracking-wide mb-2">Total Periods *</label>
-                  <select
-                    value={groupForm.total_periods}
-                    onChange={(e) => setGroupForm({ ...groupForm, total_periods: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-white"
-                  >
-                    <option value="4">4 Periods</option>
-                    <option value="8">8 Periods</option>
-                    <option value="12">12 Periods</option>
-                    <option value="16">16 Periods</option>
-                    <option value="24">24 Periods</option>
-                  </select>
                 </div>
               </div>
 
-              {/* Summary */}
-              {parseFloat(groupForm.total_amount) > 0 && (
-                <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-2 mt-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">Total Amount:</span>
-                    <span className="text-teal-400 font-mono">{formatMoney(parseFloat(groupForm.total_amount) || 0)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-400">Per Period Payment:</span>
-                    <span className="text-amber-400 font-mono">{formatMoney(parseFloat(groupForm.amount_per_period) || 0)}</span>
+              {/* Loan Summary */}
+              {loanDetails.principal > 0 && (
+                <div className="bg-slate-900 border border-slate-700 rounded-lg p-4 space-y-3 mt-4">
+                  <h5 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Loan Summary</h5>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400">Principal:</span>
+                      <span className="text-white font-mono">{formatMoney(loanDetails.principal)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400">Interest ({loanDetails.interestRate}%):</span>
+                      <span className="text-amber-400 font-mono">+ {formatMoney(loanDetails.interestAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm col-span-2 pt-2 border-t border-slate-700">
+                      <span className="text-slate-300 font-medium">Total Amount:</span>
+                      <span className="text-teal-400 font-mono font-bold">{formatMoney(loanDetails.totalAmount)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm col-span-2">
+                      <span className="text-slate-400">Per {groupForm.period_type.replace('-', ' ')} payment:</span>
+                      <span className="text-blue-400 font-mono">
+                        {formatMoney(parseFloat(groupForm.amount_per_period) || loanDetails.suggestedPerPeriod)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm col-span-2">
+                      <span className="text-slate-400">Duration:</span>
+                      <span className="text-slate-300">
+                        {groupForm.total_periods} {periodTypes.find(p => p.value === groupForm.period_type)?.label.toLowerCase()} payments
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Security Documents Upload */}
             <div className="border-t border-slate-700 pt-4">
               <h4 className="text-sm font-medium text-slate-300 mb-3">SECURITY DOCUMENTS</h4>
-              <div className="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center group cursor-pointer hover:border-teal-500/50 hover:bg-slate-700/30 transition-all">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                multiple
+                accept=".png,.jpg,.jpeg,.pdf,.doc,.docx"
+                className="hidden"
+              />
+
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center group cursor-pointer hover:border-teal-500/50 hover:bg-slate-700/30 transition-all"
+              >
                 <div className="text-3xl mb-2">📎</div>
                 <p className="text-slate-400 text-sm mb-2 group-hover:text-teal-400">Upload Agreement/Collateral Photo</p>
-                <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors">Choose Files</button>
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition-colors"
+                >
+                  Choose Files
+                </button>
+                <p className="text-xs text-slate-500 mt-2">Accepts: PNG, JPG, PDF, DOC (Max 5MB each)</p>
               </div>
+
+              {/* Uploaded Files List */}
+              {uploadedFiles.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-slate-400">{uploadedFiles.length} file(s) selected:</p>
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between bg-slate-900 border border-slate-700 rounded-lg px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">
+                          {file.type.includes('image') ? '🖼️' : file.type.includes('pdf') ? '📄' : '📎'}
+                        </span>
+                        <span className="text-sm text-slate-300 truncate max-w-[200px]">{file.name}</span>
+                        <span className="text-xs text-slate-500">({(file.size / 1024).toFixed(1)} KB)</span>
+                      </div>
+                      <button
+                        onClick={() => removeFile(index)}
+                        className="text-red-400 hover:text-red-300 p-1"
+                        title="Remove file"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
           <div className="p-5 border-t border-slate-700 flex gap-3 justify-between sticky bottom-0 bg-slate-800">
-            <button className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm flex items-center gap-2">
+            <button
+              onClick={handlePrintAgreement}
+              disabled={!createdLoanId}
+              className="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg text-sm flex items-center gap-2"
+              title={!createdLoanId ? 'Create the loan first to print agreement' : 'Print Group Agreement'}
+            >
               <span>🖨️</span> Print Group Agreement
             </button>
             <div className="flex gap-3">
@@ -4627,10 +4831,10 @@ const App = () => {
               </button>
               <button
                 onClick={handleSubmitGroupLoan}
-                disabled={submitting || !groupForm.group_name || !groupForm.total_amount}
+                disabled={submitting || uploading || !groupForm.group_name || !groupForm.principal}
                 className="px-5 py-2.5 bg-teal-500 hover:bg-teal-600 text-slate-900 rounded-lg font-semibold disabled:opacity-50"
               >
-                {submitting ? 'Creating...' : 'Issue Group Loan'}
+                {submitting ? 'Creating...' : uploading ? 'Uploading...' : 'Issue Group Loan'}
               </button>
             </div>
           </div>

@@ -113,43 +113,59 @@ class LoanPayment(db.Model):
 class GroupLoan(db.Model):
     """Group loans"""
     __tablename__ = 'group_loans'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     group_name = db.Column(db.String(100), nullable=False)
     member_count = db.Column(db.Integer, nullable=False)
-    total_amount = db.Column(db.Numeric(12, 2), nullable=False)
+    principal = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # Original loan amount before interest
+    interest_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)  # Interest rate percentage
+    interest_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # Calculated interest
+    total_amount = db.Column(db.Numeric(12, 2), nullable=False)  # principal + interest
     amount_per_period = db.Column(db.Numeric(12, 2), nullable=False)
     total_periods = db.Column(db.Integer, nullable=False)
+    period_type = db.Column(db.String(20), nullable=False, default='monthly')  # weekly, bi-weekly, monthly, bi-monthly
     periods_paid = db.Column(db.Integer, default=0)
     amount_paid = db.Column(db.Numeric(12, 2), default=0)
     balance = db.Column(db.Numeric(12, 2), nullable=False)
+    issue_date = db.Column(db.Date, nullable=True)
+    due_date = db.Column(db.Date, nullable=True)
     status = db.Column(db.Enum('active', 'overdue', 'paid', name='group_loan_status'), default='active')
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
+
     creator = db.relationship('User', foreign_keys=[created_by])
     payments = db.relationship('GroupLoanPayment', backref='group_loan', lazy='dynamic')
-    
-    def to_dict(self, include_payments=False):
+    documents = db.relationship('LoanDocument', backref='group_loan', lazy='dynamic',
+                               primaryjoin='GroupLoan.id==LoanDocument.group_loan_id')
+
+    def to_dict(self, include_payments=False, include_documents=False):
         data = {
             'id': self.id,
             'group_name': self.group_name,
             'member_count': self.member_count,
+            'principal': float(self.principal) if self.principal else 0,
+            'interest_rate': float(self.interest_rate) if self.interest_rate else 0,
+            'interest_amount': float(self.interest_amount) if self.interest_amount else 0,
             'total_amount': float(self.total_amount),
             'amount_per_period': float(self.amount_per_period),
             'total_periods': self.total_periods,
+            'period_type': self.period_type or 'monthly',
             'periods_paid': self.periods_paid,
             'periods_left': self.total_periods - self.periods_paid,
             'amount_paid': float(self.amount_paid),
             'balance': float(self.balance),
+            'issue_date': self.issue_date.isoformat() if self.issue_date else None,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
             'status': self.status,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'created_by_name': self.creator.name if self.creator else None
         }
         if include_payments:
             data['payments'] = [p.to_dict() for p in self.payments.order_by(GroupLoanPayment.payment_date.desc())]
+        if include_documents:
+            data['documents'] = [d.to_dict() for d in self.documents.filter_by(is_deleted=False)]
         return data
 
 

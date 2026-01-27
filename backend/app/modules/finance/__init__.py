@@ -290,37 +290,69 @@ def get_group_loans():
 @finance_bp.route('/group-loans', methods=['POST'])
 @jwt_required()
 def create_group_loan():
-    """Create a new group loan"""
+    """Create a new group loan with interest rate and period type"""
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
-    
+
     # Manager or finance employee can create group loans
     if user.role != 'manager' and user.assigned_business != 'finances':
         return jsonify({'error': 'Only managers or finance employees can create group loans'}), 403
-    
+
     data = request.get_json()
-    
-    required = ['group_name', 'member_count', 'total_amount', 'amount_per_period', 'total_periods']
+
+    required = ['group_name', 'member_count', 'principal', 'total_periods']
     for field in required:
         if field not in data:
             return jsonify({'error': f'{field} is required'}), 400
-    
+
+    # Get values
+    principal = float(data['principal'])
+    interest_rate = float(data.get('interest_rate', 0))
+    total_periods = int(data['total_periods'])
+    period_type = data.get('period_type', 'monthly')
+
+    # Calculate interest and total
+    interest_amount = principal * (interest_rate / 100)
+    total_amount = principal + interest_amount
+
+    # Calculate amount per period (can be overridden)
+    amount_per_period = float(data.get('amount_per_period', 0))
+    if amount_per_period == 0:
+        amount_per_period = total_amount / total_periods
+
+    # Calculate due date based on period type
+    issue_date = date.today()
+    period_days = {
+        'weekly': 7,
+        'bi-weekly': 14,
+        'monthly': 30,
+        'bi-monthly': 60
+    }
+    days_to_add = period_days.get(period_type, 30) * total_periods
+    due_date = issue_date + timedelta(days=days_to_add)
+
     loan = GroupLoan(
         group_name=data['group_name'],
-        member_count=data['member_count'],
-        total_amount=data['total_amount'],
-        amount_per_period=data['amount_per_period'],
-        total_periods=data['total_periods'],
+        member_count=int(data['member_count']),
+        principal=principal,
+        interest_rate=interest_rate,
+        interest_amount=interest_amount,
+        total_amount=total_amount,
+        amount_per_period=amount_per_period,
+        total_periods=total_periods,
+        period_type=period_type,
         periods_paid=0,
         amount_paid=0,
-        balance=data['total_amount'],
+        balance=total_amount,
+        issue_date=issue_date,
+        due_date=due_date,
         status='active',
         created_by=current_user_id
     )
-    
+
     db.session.add(loan)
     db.session.commit()
-    
+
     return jsonify(loan.to_dict()), 201
 
 
@@ -619,7 +651,52 @@ def upload_group_loan_documents(id):
             )
             db.session.add(doc)
             uploaded_docs.append(doc)
-            
+
     db.session.commit()
-    
+
     return jsonify([doc.to_dict() for doc in uploaded_docs]), 201
+
+
+@finance_bp.route('/group-loans/<int:id>', methods=['GET'])
+@jwt_required()
+def get_group_loan(id):
+    """Get group loan details with payment history and documents"""
+    loan = GroupLoan.query.get(id)
+    if not loan or loan.is_deleted:
+        return jsonify({'error': 'Group loan not found'}), 404
+
+    return jsonify(loan.to_dict(include_payments=True, include_documents=True))
+
+
+@finance_bp.route('/group-loans/<int:id>/agreement', methods=['GET'])
+@jwt_required()
+def get_group_loan_agreement(id):
+    """Generate PDF agreement for a group loan"""
+    from flask import send_file
+    from app.utils.pdf_generator import generate_group_agreement_pdf
+
+    loan = GroupLoan.query.get(id)
+    if not loan or loan.is_deleted:
+        return jsonify({'error': 'Group loan not found'}), 404
+
+    # Generate PDF
+    pdf_buffer = generate_group_agreement_pdf(loan)
+
+    return send_file(
+        pdf_buffer,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=f'group_agreement_{loan.group_name.replace(" ", "_")}_{loan.id}.pdf'
+    )
+
+
+@finance_bp.route('/group-loans/<int:id>/documents', methods=['GET'])
+@jwt_required()
+def get_group_loan_documents(id):
+    """Get all documents for a group loan"""
+    loan = GroupLoan.query.get(id)
+    if not loan or loan.is_deleted:
+        return jsonify({'error': 'Group loan not found'}), 404
+
+    documents = LoanDocument.query.filter_by(group_loan_id=id, is_deleted=False).all()
+    return jsonify([doc.to_dict() for doc in documents])

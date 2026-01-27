@@ -192,6 +192,7 @@ export const financeAPI = {
 
   // Group Loans
   getGroupLoans: () => api.get('/finance/group-loans'),
+  getGroupLoan: (id) => api.get(`/finance/group-loans/${id}`),
   createGroupLoan: (data) => api.post('/finance/group-loans', data),
   updateGroupLoan: (id, data) => api.put(`/finance/group-loans/${id}`, data),
   deleteGroupLoan: (id) => api.delete(`/finance/group-loans/${id}`),
@@ -199,6 +200,8 @@ export const financeAPI = {
   uploadGroupLoanDocuments: (id, formData) => api.post(`/finance/group-loans/${id}/documents`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
+  getGroupLoanDocuments: (id) => api.get(`/finance/group-loans/${id}/documents`),
+  getGroupLoanAgreement: (id) => api.get(`/finance/group-loans/${id}/agreement`, { responseType: 'blob' }),
 
 
   // All Payments
