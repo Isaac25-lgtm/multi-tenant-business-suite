@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.0-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
 [![React](https://img.shields.io/badge/React-18.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org)
-[![SQLite](https://img.shields.io/badge/SQLite-3.0-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://sqlite.org)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)](https://postgresql.org)
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-3.3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
@@ -126,7 +126,8 @@ This system consolidates everything into one platform with complete transparency
 | **Flask-JWT-Extended** | 4.6.0 | Authentication & authorization |
 | **Flask-CORS** | 4.0.0 | Cross-origin resource sharing |
 | **Flask-Migrate** | 4.0.5 | Database migrations |
-| **SQLite** | 3.0 | Development database (PostgreSQL ready) |
+| **PostgreSQL** | 16 | Production database (via Neon on Render) |
+| **SQLite** | 3.0 | Development database (local) |
 | **bcrypt** | 4.1.2 | Password hashing |
 | **ReportLab** | 4.0.7 | PDF generation |
 | **Pillow** | 10.1.0 | Image processing |
@@ -386,11 +387,16 @@ Docker configuration will be added for production deployment.
 ### Environment Variables
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `DATABASE_URL` | Database connection string | `sqlite:///denove_aps.db` |
+| `DATABASE_URL` | PostgreSQL connection string (production) | `sqlite:///denove_aps.db` (dev) |
 | `SECRET_KEY` | Flask secret key | `dev-secret-key` |
 | `JWT_SECRET_KEY` | JWT signing key | `dev-jwt-secret-key` |
 | `UPLOAD_FOLDER` | File upload directory | `./uploads` |
 | `MAX_CONTENT_LENGTH` | Max upload size (bytes) | `5242880` (5MB) |
+
+### Database Configuration
+- **Local Development**: SQLite (automatic, no setup required)
+- **Production (Render)**: PostgreSQL via Neon free tier
+  - The app automatically converts `postgres://` to `postgresql://` for SQLAlchemy compatibility
 
 ---
 
@@ -405,7 +411,7 @@ Docker configuration will be added for production deployment.
 - [x] Audit trail logging
 - [x] PDF receipt generation
 - [x] Role-based access control
-- [ ] Finance module backend implementation
+- [x] Finance module (group loans with interest rates, period types, file uploads, PDF agreements)
 - [ ] Reports export (Excel/CSV)
 - [ ] SMS notifications for overdue loans
 - [ ] Mobile app (React Native)
