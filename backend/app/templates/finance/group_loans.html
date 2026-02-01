@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Group Loans - Denove APS{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">Group Loans</h1>
+        <p class="text-gray-600">{{ groups|length }} group loans</p>
+    </div>
+    <button onclick="showModal('add-group-modal')" class="btn btn-primary">New Group Loan</button>
+</div>
+
+<!-- Group Loans Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Group Name</th>
+                <th class="text-right">Members</th>
+                <th class="text-right">Principal</th>
+                <th class="text-right">Total</th>
+                <th class="text-right">Balance</th>
+                <th>Period</th>
+                <th>Progress</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in groups %}
+            <tr>
+                <td class="font-medium">{{ group.group_name }}</td>
+                <td class="text-right">{{ group.member_count }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(group.principal) }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(group.total_amount) }}</td>
+                <td class="text-right {% if group.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">{{ "{:,.0f}".format(group.balance) }}</td>
+                <td>{{ group.period_type }}</td>
+                <td>{{ group.periods_paid }}/{{ group.total_periods }}</td>
+                <td>
+                    {% if group.status == 'paid' %}
+                    <span class="badge badge-success">Paid</span>
+                    {% elif group.status == 'overdue' %}
+                    <span class="badge badge-danger">Overdue</span>
+                    {% else %}
+                    <span class="badge badge-info">Active</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" class="text-indigo-600 hover:underline text-sm">View</a>
+                    <form method="POST" action="{{ url_for('finance.delete_group_loan', id=group.id) }}" class="inline" onsubmit="return confirm('Delete this group loan?')">
+                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="9" class="text-center text-gray-500 py-8">No group loans found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Add Group Loan Modal -->
+<div id="add-group-modal" class="modal">
+    <div class="modal-content">
+        <h3 class="text-lg font-semibold mb-4">New Group Loan</h3>
+        <form method="POST" action="{{ url_for('finance.create_group_loan') }}">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Group Name *</label>
+                    <input type="text" name="group_name" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Member Count</label>
+                    <input type="number" name="member_count" min="1" value="1" class="form-input">
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Principal Amount *</label>
+                    <input type="number" name="principal" min="1" step="0.01" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Interest Rate (%)</label>
+                    <input type="number" name="interest_rate" min="0" step="0.01" value="10" class="form-input">
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Total Periods *</label>
+                    <input type="number" name="total_periods" min="1" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Period Type</label>
+                    <select name="period_type" class="form-select">
+                        <option value="weekly">Weekly</option>
+                        <option value="bi-weekly">Bi-Weekly</option>
+                        <option value="monthly" selected>Monthly</option>
+                        <option value="bi-monthly">Bi-Monthly</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Issue Date</label>
+                    <input type="date" name="issue_date" value="{{ today }}" class="form-input">
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" onclick="hideModal('add-group-modal')" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Group Loan</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

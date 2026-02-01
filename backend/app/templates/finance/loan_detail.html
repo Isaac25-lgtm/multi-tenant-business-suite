@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+
+{% block title %}Loan - {{ loan.client.name }} - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('finance.loans') }}" class="text-indigo-600 hover:underline">&larr; Back to Loans</a>
+    <h1 class="text-2xl font-bold text-gray-800 mt-2">Loan for {{ loan.client.name }}</h1>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Loan Details -->
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="font-semibold text-lg mb-4">Loan Details</h2>
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                    <span class="text-gray-500">Client:</span>
+                    <span class="font-medium ml-2">{{ loan.client.name }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Phone:</span>
+                    <span class="font-medium ml-2">{{ loan.client.phone }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Issue Date:</span>
+                    <span class="font-medium ml-2">{{ loan.issue_date.strftime('%Y-%m-%d') }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Due Date:</span>
+                    <span class="font-medium ml-2">{{ loan.due_date.strftime('%Y-%m-%d') }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Duration:</span>
+                    <span class="font-medium ml-2">{{ loan.duration_weeks }} weeks</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Status:</span>
+                    {% if loan.status == 'paid' %}
+                    <span class="badge badge-success ml-2">Paid</span>
+                    {% elif loan.status == 'overdue' %}
+                    <span class="badge badge-danger ml-2">Overdue</span>
+                    {% else %}
+                    <span class="badge badge-info ml-2">Active</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Financial Summary -->
+            <h3 class="font-semibold mb-2">Financial Summary</h3>
+            <table class="data-table mb-6">
+                <tbody>
+                    <tr>
+                        <td class="text-gray-500">Principal Amount</td>
+                        <td class="text-right font-medium">UGX {{ "{:,.0f}".format(loan.principal) }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-gray-500">Interest Rate</td>
+                        <td class="text-right font-medium">{{ "{:.1f}".format(loan.interest_rate) }}%</td>
+                    </tr>
+                    <tr>
+                        <td class="text-gray-500">Interest Amount</td>
+                        <td class="text-right font-medium">UGX {{ "{:,.0f}".format(loan.interest_amount) }}</td>
+                    </tr>
+                    <tr class="bg-gray-50">
+                        <td class="text-gray-700 font-semibold">Total Amount</td>
+                        <td class="text-right font-bold">UGX {{ "{:,.0f}".format(loan.total_amount) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Payment Summary -->
+    <div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="font-semibold text-lg mb-4">Payment Summary</h2>
+
+            <div class="space-y-3">
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Total Amount:</span>
+                    <span class="font-medium">UGX {{ "{:,.0f}".format(loan.total_amount) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Amount Paid:</span>
+                    <span class="font-medium text-green-600">UGX {{ "{:,.0f}".format(loan.amount_paid) }}</span>
+                </div>
+                <div class="flex justify-between border-t pt-3">
+                    <span class="text-gray-500">Balance:</span>
+                    <span class="font-bold text-xl {% if loan.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">
+                        UGX {{ "{:,.0f}".format(loan.balance) }}
+                    </span>
+                </div>
+            </div>
+
+            {% if loan.balance > 0 %}
+            <form method="POST" action="{{ url_for('finance.pay_loan', id=loan.id) }}" class="mt-6 pt-4 border-t">
+                <h3 class="font-semibold mb-3">Record Payment</h3>
+                <div class="form-group">
+                    <label class="form-label">Amount</label>
+                    <input type="number" name="amount" min="1" max="{{ loan.balance }}" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" name="payment_date" value="{{ today }}" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notes</label>
+                    <input type="text" name="notes" class="form-input" placeholder="Optional notes">
+                </div>
+                <button type="submit" class="btn btn-success w-full">Record Payment</button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% if payments %}
+        <div class="bg-white rounded-lg shadow p-6 mt-4">
+            <h2 class="font-semibold text-lg mb-4">Payment History</h2>
+            <div class="space-y-2">
+                {% for payment in payments %}
+                <div class="flex justify-between text-sm border-b pb-2">
+                    <div>
+                        <span>{{ payment.payment_date.strftime('%Y-%m-%d') }}</span>
+                        {% if payment.notes %}
+                        <span class="text-gray-500 block text-xs">{{ payment.notes }}</span>
+                        {% endif %}
+                    </div>
+                    <span class="font-medium">UGX {{ "{:,.0f}".format(payment.amount) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

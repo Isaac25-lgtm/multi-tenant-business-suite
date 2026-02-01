@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Hardware - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Hardware</h1>
+    <p class="text-gray-600">Manage hardware inventory and sales</p>
+</div>
+
+<!-- Quick Stats -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="stat-card">
+        <div class="stat-card-value">{{ stock_count }}</div>
+        <div class="stat-card-label">Stock Items</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-value {% if low_stock > 0 %}text-red-600{% endif %}">{{ low_stock }}</div>
+        <div class="stat-card-label">Low Stock</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-value text-orange-600">{{ pending_credits }}</div>
+        <div class="stat-card-label">Pending Credits</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-value text-green-600">{{ today_sales }}</div>
+        <div class="stat-card-label">Today's Sales</div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <a href="{{ url_for('hardware.stock') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <h3 class="font-semibold text-lg text-gray-800 mb-2">Stock Management</h3>
+        <p class="text-gray-600 text-sm">View and manage inventory items</p>
+    </a>
+
+    <a href="{{ url_for('hardware.new_sale') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <h3 class="font-semibold text-lg text-gray-800 mb-2">New Sale</h3>
+        <p class="text-gray-600 text-sm">Record a new sale transaction</p>
+    </a>
+
+    <a href="{{ url_for('hardware.sales') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <h3 class="font-semibold text-lg text-gray-800 mb-2">Sales History</h3>
+        <p class="text-gray-600 text-sm">View past sales transactions</p>
+    </a>
+
+    <a href="{{ url_for('hardware.credits') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <h3 class="font-semibold text-lg text-gray-800 mb-2">Credits</h3>
+        <p class="text-gray-600 text-sm">Manage pending credit payments</p>
+    </a>
+</div>
+{% endblock %}

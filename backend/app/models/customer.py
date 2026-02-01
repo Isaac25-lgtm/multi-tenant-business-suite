@@ -1,11 +1,10 @@
 from app.extensions import db
-from datetime import datetime
 from app.utils.timezone import get_local_now
 
 
 class Customer(db.Model):
     __tablename__ = 'customers'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), nullable=False)
@@ -13,8 +12,7 @@ class Customer(db.Model):
     nin = db.Column(db.String(20), nullable=True)
     business_type = db.Column(db.Enum('boutique', 'hardware', 'finances', name='customer_business_type'))
     created_at = db.Column(db.DateTime, default=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
+
     def to_dict(self):
         return {
             'id': self.id,

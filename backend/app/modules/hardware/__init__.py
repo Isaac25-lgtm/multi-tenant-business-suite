@@ -1,696 +1,350 @@
-from flask import Blueprint, request, jsonify, send_file
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.models.user import User
-from app.models.customer import Customer
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.models.hardware import (
     HardwareCategory, HardwareStock, HardwareSale,
     HardwareSaleItem, HardwareCreditPayment
 )
+from app.models.customer import Customer
+from app.modules.auth import login_required, log_action
 from app.extensions import db
-from app.utils.helpers import (
-    manager_required, business_access_required,
-    get_date_filter_for_user, validate_date_for_user,
-    log_audit, generate_reference_number
-)
-from datetime import datetime, date, timedelta
-from app.utils.pdf_generator import generate_receipt_pdf
+from app.utils.timezone import get_local_today
+from app.utils.utils import generate_reference_number
+from datetime import date
+from decimal import Decimal
 
 hardware_bp = Blueprint('hardware', __name__)
 
 
-# ============= CATEGORIES =============
+@hardware_bp.route('/')
+@login_required('hardware')
+def index():
+    """Hardware overview page"""
+    today = get_local_today()
+    stock_count = HardwareStock.query.filter_by(is_active=True).count()
+    low_stock = HardwareStock.query.filter(
+        HardwareStock.is_active == True,
+        HardwareStock.quantity <= HardwareStock.low_stock_threshold
+    ).count()
+    pending_credits = HardwareSale.query.filter(
+        HardwareSale.is_deleted == False,
+        HardwareSale.payment_type == 'part',
+        HardwareSale.is_credit_cleared == False
+    ).count()
+    today_sales = HardwareSale.query.filter(
+        HardwareSale.sale_date == today,
+        HardwareSale.is_deleted == False
+    ).count()
 
-@hardware_bp.route('/categories', methods=['GET'])
-@jwt_required()
-@business_access_required('hardware')
-def get_categories():
-    """Get all hardware categories"""
-    categories = HardwareCategory.query.all()
-    return jsonify({
-        'categories': [cat.to_dict() for cat in categories]
-    }), 200
+    return render_template('hardware/index.html',
+        stock_count=stock_count, low_stock=low_stock,
+        pending_credits=pending_credits, today_sales=today_sales
+    )
 
 
-@hardware_bp.route('/categories', methods=['POST'])
-@jwt_required()
-@manager_required
-@business_access_required('hardware')
-def create_category():
-    """Create new hardware category (Manager only)"""
-    data = request.get_json()
-    
-    if not data.get('name'):
-        return jsonify({'error': 'Category name is required'}), 400
-    
-    category = HardwareCategory(name=data['name'])
+@hardware_bp.route('/categories')
+@login_required('hardware')
+def categories():
+    cats = HardwareCategory.query.order_by(HardwareCategory.name).all()
+    return render_template('hardware/categories.html', categories=cats)
+
+
+@hardware_bp.route('/categories/add', methods=['POST'])
+@login_required('hardware')
+def add_category():
+    name = request.form.get('name', '').strip()
+    if not name:
+        flash('Category name is required', 'error')
+        return redirect(url_for('hardware.categories'))
+    if HardwareCategory.query.filter_by(name=name).first():
+        flash('Category already exists', 'error')
+        return redirect(url_for('hardware.categories'))
+    category = HardwareCategory(name=name)
     db.session.add(category)
     db.session.commit()
-    
-    return jsonify({
-        'message': 'Category created successfully',
-        'category': category.to_dict()
-    }), 201
+
+    log_action(session['username'], 'hardware', 'create', 'category', category.id, {'name': name})
+    flash(f'Category "{name}" added', 'success')
+    return redirect(url_for('hardware.categories'))
 
 
-# ============= STOCK =============
-
-@hardware_bp.route('/stock', methods=['GET'])
-@jwt_required()
-@business_access_required('hardware')
-def get_stock():
-    """Get all stock items"""
+@hardware_bp.route('/stock')
+@login_required('hardware')
+def stock():
     show_inactive = request.args.get('show_inactive', 'false').lower() == 'true'
-    
     query = HardwareStock.query
     if not show_inactive:
         query = query.filter_by(is_active=True)
-    
-    stock_items = query.all()
-    return jsonify({
-        'stock': [item.to_dict() for item in stock_items]
-    }), 200
+    items = query.order_by(HardwareStock.item_name).all()
+    categories = HardwareCategory.query.order_by(HardwareCategory.name).all()
+    return render_template('hardware/stock.html', stock=items, categories=categories, show_inactive=show_inactive)
 
 
-@hardware_bp.route('/stock', methods=['POST'])
-@jwt_required()
-@manager_required
-@business_access_required('hardware')
+@hardware_bp.route('/stock/add', methods=['POST'])
+@login_required('hardware')
 def add_stock():
-    """Add new stock item (Manager only)"""
-    data = request.get_json()
-    user_id = int(get_jwt_identity())
-    
-    # Validate required fields
-    required = ['item_name', 'category_id', 'quantity', 'cost_price', 
-                'min_selling_price', 'max_selling_price']
-    for field in required:
-        if field not in data:
-            return jsonify({'error': f'{field} is required'}), 400
-    
-    quantity = int(data['quantity'])
-    # Use user-provided threshold, or calculate default (min 1, or 25% of quantity)
-    if 'low_stock_threshold' in data and data['low_stock_threshold']:
-        low_stock_threshold = int(data['low_stock_threshold'])
-    else:
-        low_stock_threshold = max(1, int(quantity * 0.25))
+    try:
+        item_name = request.form.get('item_name', '').strip()
+        quantity = request.form.get('quantity', type=int)
+        if not item_name or quantity is None:
+            flash('Item name and quantity required', 'error')
+            return redirect(url_for('hardware.stock'))
 
-    stock = HardwareStock(
-        item_name=data['item_name'],
-        category_id=data['category_id'],
-        quantity=quantity,
-        initial_quantity=quantity,
-        unit=data.get('unit', 'pieces'),
-        cost_price=data['cost_price'],
-        min_selling_price=data['min_selling_price'],
-        max_selling_price=data['max_selling_price'],
-        low_stock_threshold=low_stock_threshold,
-        created_by=user_id
-    )
-    
-    db.session.add(stock)
-    db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='create',
-        module='hardware',
-        entity_type='stock',
-        entity_id=stock.id,
-        description=f"Added stock item: {stock.item_name}",
-        new_values=stock.to_dict()
-    )
-    
-    return jsonify({
-        'message': 'Stock item added successfully',
-        'stock': stock.to_dict()
-    }), 201
+        low_stock_threshold = request.form.get('low_stock_threshold', type=int)
+        if low_stock_threshold is None:
+            low_stock_threshold = max(1, int(quantity * 0.25))
 
-
-@hardware_bp.route('/stock/<int:id>', methods=['PUT'])
-@jwt_required()
-@manager_required
-@business_access_required('hardware')
-def update_stock(id):
-    """Update stock item (Manager only)"""
-    stock = HardwareStock.query.get(id)
-    
-    if not stock:
-        return jsonify({'error': 'Stock item not found'}), 404
-    
-    data = request.get_json()
-    user_id = int(get_jwt_identity())
-    old_values = stock.to_dict()
-    
-    # Update fields
-    if 'item_name' in data:
-        stock.item_name = data['item_name']
-    if 'category_id' in data:
-        stock.category_id = data['category_id']
-    if 'unit' in data:
-        stock.unit = data['unit']
-    if 'cost_price' in data:
-        stock.cost_price = data['cost_price']
-    if 'min_selling_price' in data:
-        stock.min_selling_price = data['min_selling_price']
-    if 'max_selling_price' in data:
-        stock.max_selling_price = data['max_selling_price']
-    if 'is_active' in data:
-        stock.is_active = data['is_active']
-    
-    db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='update',
-        module='hardware',
-        entity_type='stock',
-        entity_id=stock.id,
-        description=f"Updated stock item: {stock.item_name}",
-        old_values=old_values,
-        new_values=stock.to_dict()
-    )
-    
-    return jsonify({
-        'message': 'Stock item updated successfully',
-        'stock': stock.to_dict()
-    }), 200
-
-
-@hardware_bp.route('/stock/<int:id>/quantity', methods=['PUT'])
-@jwt_required()
-@manager_required
-@business_access_required('hardware')
-def adjust_stock_quantity(id):
-    """Adjust stock quantity (Manager only)"""
-    stock = HardwareStock.query.get(id)
-    
-    if not stock:
-        return jsonify({'error': 'Stock item not found'}), 404
-    
-    data = request.get_json()
-    user_id = int(get_jwt_identity())
-    
-    if 'quantity' not in data:
-        return jsonify({'error': 'Quantity is required'}), 400
-    
-    old_quantity = stock.quantity
-    new_quantity = int(data['quantity'])
-    
-    stock.quantity = new_quantity
-    
-    # Update initial quantity and threshold if increasing
-    if new_quantity > stock.initial_quantity:
-        stock.initial_quantity = new_quantity
-        stock.low_stock_threshold = int(new_quantity * 0.25)
-    
-    db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='update',
-        module='hardware',
-        entity_type='stock',
-        entity_id=stock.id,
-        description=f"Adjusted quantity for {stock.item_name} from {old_quantity} to {new_quantity}"
-    )
-    
-    return jsonify({
-        'message': 'Stock quantity adjusted successfully',
-        'stock': stock.to_dict()
-    }), 200
-
-
-@hardware_bp.route('/stock/<int:id>', methods=['DELETE'])
-@jwt_required()
-@manager_required
-@business_access_required('hardware')
-def delete_stock(id):
-    """Delete stock item (Manager only)"""
-    stock = HardwareStock.query.get(id)
-    
-    if not stock:
-        return jsonify({'error': 'Stock item not found'}), 404
-    
-    user_id = int(get_jwt_identity())
-    
-    # Soft delete - just deactivate
-    stock.is_active = False
-    db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='delete',
-        module='hardware',
-        entity_type='stock',
-        entity_id=stock.id,
-        description=f"Deleted stock item: {stock.item_name}"
-    )
-    
-    return jsonify({'message': 'Stock item deleted successfully'}), 200
-
-
-# Due to length, sales and credits endpoints follow the same pattern as boutique
-# For brevity, I'll create a shared function approach
-
-def create_sale_handler(business_type, SaleModel, SaleItemModel, StockModel, reference_prefix):
-    """Shared sale creation logic"""
-    data = request.get_json()
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if not data.get('items') or len(data['items']) == 0:
-        return jsonify({'error': 'At least one item is required'}), 400
-    
-    if not data.get('payment_type'):
-        return jsonify({'error': 'Payment type is required'}), 400
-    
-    sale_date_str = data.get('sale_date', date.today().isoformat())
-    sale_date = datetime.strptime(sale_date_str, '%Y-%m-%d').date()
-    
-    can_use_date, error_msg = validate_date_for_user(user, sale_date)
-    if not can_use_date:
-        return jsonify({'error': error_msg}), 400
-    
-    total_amount = 0
-    items_data = []
-    has_other_items = False
-    
-    for item_data in data['items']:
-        quantity = int(item_data['quantity'])
-        unit_price = float(item_data['unit_price'])
-        subtotal = quantity * unit_price
-        
-        if item_data.get('stock_id'):
-            stock = StockModel.query.get(item_data['stock_id'])
-            if not stock:
-                return jsonify({'error': f"Stock item not found"}), 404
-            
-            if stock.quantity < quantity:
-                return jsonify({'error': f"Insufficient stock for {stock.item_name}"}), 400
-            
-            if user.role == 'employee':
-                if unit_price < float(stock.min_selling_price) or unit_price > float(stock.max_selling_price):
-                    return jsonify({
-                        'error': f"Price for {stock.item_name} must be between {stock.min_selling_price} and {stock.max_selling_price}"
-                    }), 400
-            
-            items_data.append({
-                'stock_id': stock.id,
-                'item_name': stock.item_name,
-                'quantity': quantity,
-                'unit_price': unit_price,
-                'subtotal': subtotal,
-                'is_other_item': False,
-                'stock_obj': stock
-            })
-        else:
-            has_other_items = True
-            items_data.append({
-                'stock_id': None,
-                'item_name': item_data['item_name'],
-                'quantity': quantity,
-                'unit_price': unit_price,
-                'subtotal': subtotal,
-                'is_other_item': True,
-                'stock_obj': None
-            })
-        
-        total_amount += subtotal
-    
-    amount_paid = float(data.get('amount_paid', 0))
-    payment_type = data['payment_type']
-    
-    if payment_type == 'full':
-        amount_paid = total_amount
-    
-    balance = total_amount - amount_paid
-    
-    customer = None
-    if payment_type == 'part':
-        if not data.get('customer_name') or not data.get('customer_phone'):
-            return jsonify({'error': 'Customer name and phone required for part payment'}), 400
-        
-        customer = Customer.query.filter_by(
-            phone=data['customer_phone'],
-            business_type=business_type
-        ).first()
-        
-        if not customer:
-            customer = Customer(
-                name=data['customer_name'],
-                phone=data['customer_phone'],
-                address=data.get('customer_address'),
-                business_type=business_type,
-                created_by=user_id
-            )
-            db.session.add(customer)
-            db.session.flush()
-    
-    reference_number = generate_reference_number(reference_prefix, SaleModel)
-    
-    sale = SaleModel(
-        reference_number=reference_number,
-        sale_date=sale_date,
-        customer_id=customer.id if customer else None,
-        payment_type=payment_type,
-        total_amount=total_amount,
-        amount_paid=amount_paid,
-        balance=balance,
-        is_credit_cleared=(balance == 0),
-        created_by=user_id
-    )
-    
-    db.session.add(sale)
-    db.session.flush()
-    
-    for item_data in items_data:
-        sale_item = SaleItemModel(
-            sale_id=sale.id,
-            stock_id=item_data['stock_id'],
-            item_name=item_data['item_name'],
-            quantity=item_data['quantity'],
-            unit_price=item_data['unit_price'],
-            subtotal=item_data['subtotal'],
-            is_other_item=item_data['is_other_item']
+        stock_item = HardwareStock(
+            item_name=item_name,
+            category_id=request.form.get('category_id', type=int),
+            quantity=quantity,
+            initial_quantity=quantity,
+            unit=request.form.get('unit', 'pieces'),
+            cost_price=Decimal(request.form.get('cost_price', '0')),
+            min_selling_price=Decimal(request.form.get('min_selling_price', '0')),
+            max_selling_price=Decimal(request.form.get('max_selling_price', '0')),
+            low_stock_threshold=low_stock_threshold
         )
-        db.session.add(sale_item)
-        
-        if item_data['stock_obj']:
-            item_data['stock_obj'].quantity -= item_data['quantity']
-    
+        db.session.add(stock_item)
+        db.session.commit()
+
+        log_action(session['username'], 'hardware', 'create', 'stock', stock_item.id,
+                   {'item_name': item_name, 'quantity': quantity})
+        flash(f'Stock item "{item_name}" added', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('hardware.stock'))
+
+
+@hardware_bp.route('/stock/<int:id>/edit', methods=['POST'])
+@login_required('hardware')
+def edit_stock(id):
+    item = HardwareStock.query.get_or_404(id)
+    try:
+        old_name = item.item_name
+        item.item_name = request.form.get('item_name', item.item_name).strip()
+        item.category_id = request.form.get('category_id', type=int) or item.category_id
+        item.unit = request.form.get('unit', item.unit)
+        item.cost_price = Decimal(request.form.get('cost_price', item.cost_price))
+        item.min_selling_price = Decimal(request.form.get('min_selling_price', item.min_selling_price))
+        item.max_selling_price = Decimal(request.form.get('max_selling_price', item.max_selling_price))
+        item.low_stock_threshold = request.form.get('low_stock_threshold', type=int) or item.low_stock_threshold
+        db.session.commit()
+
+        log_action(session['username'], 'hardware', 'update', 'stock', item.id,
+                   {'item_name': item.item_name, 'old_name': old_name})
+        flash(f'Stock item updated', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('hardware.stock'))
+
+
+@hardware_bp.route('/stock/<int:id>/adjust', methods=['POST'])
+@login_required('hardware')
+def adjust_stock(id):
+    """Adjust stock quantity"""
+    item = HardwareStock.query.get_or_404(id)
+    try:
+        adjustment = request.form.get('adjustment', type=int, default=0)
+        old_quantity = item.quantity
+        item.quantity += adjustment
+        if item.quantity < 0:
+            item.quantity = 0
+        db.session.commit()
+
+        log_action(session['username'], 'hardware', 'adjust', 'stock', item.id,
+                   {'item_name': item.item_name, 'old_quantity': old_quantity,
+                    'adjustment': adjustment, 'new_quantity': item.quantity})
+        flash(f'Stock adjusted for "{item.item_name}"', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('hardware.stock'))
+
+
+@hardware_bp.route('/stock/<int:id>/delete', methods=['POST'])
+@login_required('hardware')
+def delete_stock(id):
+    item = HardwareStock.query.get_or_404(id)
+    item.is_active = False
     db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='create',
-        module=business_type,
-        entity_type='sale',
-        entity_id=sale.id,
-        description=f"Created sale {reference_number} for UGX {total_amount:,.0f}",
-        is_flagged=has_other_items,
-        flag_reason="Sale contains 'Other' items" if has_other_items else None
-    )
-    
-    return jsonify({
-        'message': 'Sale created successfully',
-        'sale': sale.to_dict(include_items=True)
-    }), 201
+
+    log_action(session['username'], 'hardware', 'delete', 'stock', item.id,
+               {'item_name': item.item_name})
+    flash(f'Stock item deactivated', 'success')
+    return redirect(url_for('hardware.stock'))
 
 
-@hardware_bp.route('/sales', methods=['POST'])
-@jwt_required()
-@business_access_required('hardware')
-def create_hardware_sale():
-    """Create new hardware sale"""
-    return create_sale_handler('hardware', HardwareSale, HardwareSaleItem, HardwareStock, 'DNV-H-')
-
-
-# ============= SALES =============
-
-@hardware_bp.route('/sales', methods=['GET'])
-@jwt_required()
-@business_access_required('hardware')
-def get_sales():
-    """Get all hardware sales"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-
-    # Get date filter
+@hardware_bp.route('/sales')
+@login_required('hardware')
+def sales():
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    created_by = request.args.get('created_by')
-
     query = HardwareSale.query.filter_by(is_deleted=False)
-
-    # Apply date filter based on user role
-    if user.role == 'employee':
-        # Employees see only today and yesterday
-        date_filter = get_date_filter_for_user(user)
-        if date_filter:
-            query = query.filter(HardwareSale.sale_date.in_(date_filter))
-        # Employees see only their own sales
-        query = query.filter_by(created_by=user_id)
-    else:
-        # Manager can filter by date range
-        if start_date:
-            query = query.filter(HardwareSale.sale_date >= start_date)
-        if end_date:
-            query = query.filter(HardwareSale.sale_date <= end_date)
-        if created_by:
-            query = query.filter_by(created_by=created_by)
-
-    sales = query.order_by(HardwareSale.sale_date.desc()).all()
-
-    return jsonify({
-        'sales': [sale.to_dict(include_items=True) for sale in sales]
-    }), 200
+    if start_date:
+        query = query.filter(HardwareSale.sale_date >= date.fromisoformat(start_date))
+    if end_date:
+        query = query.filter(HardwareSale.sale_date <= date.fromisoformat(end_date))
+    sales_list = query.order_by(HardwareSale.sale_date.desc(), HardwareSale.id.desc()).limit(100).all()
+    return render_template('hardware/sales.html', sales=sales_list, start_date=start_date, end_date=end_date)
 
 
-@hardware_bp.route('/sales/<int:id>', methods=['GET'])
-@jwt_required()
-@business_access_required('hardware')
-def get_sale(id):
-    """Get hardware sale details"""
-    sale = HardwareSale.query.get(id)
-
-    if not sale or sale.is_deleted:
-        return jsonify({'error': 'Sale not found'}), 404
-
-    # Check access
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'Access denied'}), 403
-
-    return jsonify({
-        'sale': sale.to_dict(include_items=True)
-    }), 200
+@hardware_bp.route('/sales/new')
+@login_required('hardware')
+def new_sale():
+    stock_items = HardwareStock.query.filter_by(is_active=True).filter(HardwareStock.quantity > 0).all()
+    customers = Customer.query.filter_by(business_type='hardware').order_by(Customer.name).all()
+    return render_template('hardware/sale_form.html', stock=stock_items, customers=customers, today=get_local_today())
 
 
-@hardware_bp.route('/sales/<int:id>', methods=['DELETE'])
-@jwt_required()
-@business_access_required('hardware')
-def delete_sale(id):
-    """Soft delete hardware sale"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+@hardware_bp.route('/sales/create', methods=['POST'])
+@login_required('hardware')
+def create_sale():
+    try:
+        sale_date = date.fromisoformat(request.form.get('sale_date', str(get_local_today())))
+        payment_type = request.form.get('payment_type', 'full')
+        customer_id = request.form.get('customer_id', type=int)
+        amount_paid = Decimal(request.form.get('amount_paid', '0'))
 
-    if not user.can_delete:
-        return jsonify({'error': 'You do not have permission to delete sales'}), 403
+        item_ids = request.form.getlist('item_id[]')
+        quantities = request.form.getlist('quantity[]')
+        prices = request.form.getlist('price[]')
 
-    sale = HardwareSale.query.get(id)
+        if not item_ids:
+            flash('At least one item required', 'error')
+            return redirect(url_for('hardware.new_sale'))
 
-    if not sale or sale.is_deleted:
-        return jsonify({'error': 'Sale not found'}), 404
+        total_amount = Decimal('0')
+        items_data = []
+        for i, item_id in enumerate(item_ids):
+            qty = int(quantities[i])
+            price = Decimal(prices[i])
+            subtotal = qty * price
+            total_amount += subtotal
+            stock_item = HardwareStock.query.get(int(item_id))
+            if stock_item:
+                items_data.append({
+                    'stock_id': stock_item.id, 'item_name': stock_item.item_name,
+                    'quantity': qty, 'unit_price': price, 'subtotal': subtotal
+                })
 
-    # Check access for employees
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'You can only delete your own sales'}), 403
+        if payment_type == 'full':
+            amount_paid = total_amount
+        balance = total_amount - amount_paid
 
-    # Validate date for employees
-    if user.role == 'employee':
-        can_delete, error_msg = validate_date_for_user(user, sale.sale_date)
-        if not can_delete:
-            return jsonify({'error': 'You can only delete recent sales'}), 403
+        if payment_type == 'part' and not customer_id:
+            customer_name = request.form.get('customer_name', '').strip()
+            customer_phone = request.form.get('customer_phone', '').strip()
+            if customer_name and customer_phone:
+                customer = Customer(name=customer_name, phone=customer_phone, business_type='hardware')
+                db.session.add(customer)
+                db.session.flush()
+                customer_id = customer.id
 
-    # Soft delete
-    sale.is_deleted = True
-    sale.deleted_at = datetime.utcnow()
-    sale.deleted_by = user_id
+        sale = HardwareSale(
+            reference_number=generate_reference_number('DNV-H-', HardwareSale),
+            sale_date=sale_date, customer_id=customer_id, payment_type=payment_type,
+            total_amount=total_amount, amount_paid=amount_paid, balance=balance,
+            is_credit_cleared=(balance <= 0)
+        )
+        db.session.add(sale)
+        db.session.flush()
 
-    # Restore stock quantities
-    for item in sale.items:
-        if item.stock_id and not item.is_other_item:
-            stock = HardwareStock.query.get(item.stock_id)
+        for item_data in items_data:
+            sale_item = HardwareSaleItem(
+                sale_id=sale.id, stock_id=item_data['stock_id'],
+                item_name=item_data['item_name'], quantity=item_data['quantity'],
+                unit_price=item_data['unit_price'], subtotal=item_data['subtotal']
+            )
+            db.session.add(sale_item)
+            stock = HardwareStock.query.get(item_data['stock_id'])
             if stock:
-                stock.quantity += item.quantity
+                stock.quantity -= item_data['quantity']
 
-    db.session.commit()
+        db.session.commit()
 
-    log_audit(
-        user_id=user_id,
-        action='delete',
-        module='hardware',
-        entity_type='sale',
-        entity_id=sale.id,
-        description=f"Deleted sale {sale.reference_number}",
-        is_flagged=True,
-        flag_reason="Sale deleted"
-    )
-
-    return jsonify({'message': 'Sale deleted successfully'}), 200
+        log_action(session['username'], 'hardware', 'create', 'sale', sale.id,
+                   {'reference': sale.reference_number, 'total': float(total_amount),
+                    'payment_type': payment_type, 'items_count': len(items_data)})
+        flash(f'Sale {sale.reference_number} created', 'success')
+        return redirect(url_for('hardware.sales'))
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+        return redirect(url_for('hardware.new_sale'))
 
 
-# ============= CREDITS =============
-
-@hardware_bp.route('/credits', methods=['GET'])
-@jwt_required()
-@business_access_required('hardware')
-def get_credits():
-    """Get pending hardware credits"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-
-    query = HardwareSale.query.filter_by(
-        payment_type='part',
-        is_credit_cleared=False,
-        is_deleted=False
-    ).filter(HardwareSale.balance > 0)
-
-    # Employees see only their own credits
-    if user.role == 'employee':
-        query = query.filter_by(created_by=user_id)
-
-    credits = query.order_by(HardwareSale.sale_date.desc()).all()
-
-    return jsonify({
-        'credits': [credit.to_dict() for credit in credits]
-    }), 200
+@hardware_bp.route('/sales/<int:id>')
+@login_required('hardware')
+def view_sale(id):
+    sale = HardwareSale.query.get_or_404(id)
+    items = sale.items.all()
+    payments = HardwareCreditPayment.query.filter_by(sale_id=id).order_by(HardwareCreditPayment.payment_date.desc()).all()
+    return render_template('hardware/sale_detail.html', sale=sale, items=items, payments=payments)
 
 
-@hardware_bp.route('/credits/cleared', methods=['GET'])
-@jwt_required()
-@manager_required
-@business_access_required('hardware')
-def get_cleared_credits():
-    """Get cleared hardware credits (Manager only)"""
-    credits = HardwareSale.query.filter_by(
-        payment_type='part',
-        is_credit_cleared=True,
-        is_deleted=False
-    ).order_by(HardwareSale.updated_at.desc()).all()
+@hardware_bp.route('/sales/<int:id>/delete', methods=['POST'])
+@login_required('hardware')
+def delete_sale(id):
+    sale = HardwareSale.query.get_or_404(id)
+    try:
+        for item in sale.items:
+            if item.stock_id:
+                stock = HardwareStock.query.get(item.stock_id)
+                if stock:
+                    stock.quantity += item.quantity
+        sale.is_deleted = True
+        sale.deleted_at = db.func.now()
+        db.session.commit()
 
-    return jsonify({
-        'credits': [credit.to_dict() for credit in credits]
-    }), 200
-
-
-@hardware_bp.route('/credits/<int:id>', methods=['GET'])
-@jwt_required()
-@business_access_required('hardware')
-def get_credit_details(id):
-    """Get hardware credit details with payment history"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-
-    sale = HardwareSale.query.get(id)
-
-    if not sale or sale.is_deleted or sale.payment_type != 'part':
-        return jsonify({'error': 'Credit not found'}), 404
-
-    # Check access for employees
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'Access denied'}), 403
-
-    # Get payment history
-    payments = HardwareCreditPayment.query.filter_by(
-        sale_id=sale.id
-    ).order_by(HardwareCreditPayment.payment_date.desc()).all()
-
-    return jsonify({
-        'sale': sale.to_dict(include_items=True),
-        'payments': [payment.to_dict() for payment in payments]
-    }), 200
+        log_action(session['username'], 'hardware', 'delete', 'sale', sale.id,
+                   {'reference': sale.reference_number, 'total': float(sale.total_amount)})
+        flash(f'Sale deleted', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('hardware.sales'))
 
 
-@hardware_bp.route('/credits/<int:id>/payment', methods=['POST'])
-@jwt_required()
-@business_access_required('hardware')
-def record_credit_payment(id):
-    """Record hardware credit payment"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-
-    if not user.can_clear_credits:
-        return jsonify({'error': 'You do not have permission to clear credits'}), 403
-
-    sale = HardwareSale.query.get(id)
-
-    if not sale or sale.is_deleted or sale.payment_type != 'part':
-        return jsonify({'error': 'Credit not found'}), 404
-
-    if sale.is_credit_cleared:
-        return jsonify({'error': 'Credit already cleared'}), 400
-
-    data = request.get_json()
-
-    if not data.get('amount'):
-        return jsonify({'error': 'Payment amount is required'}), 400
-
-    amount = float(data['amount'])
-
-    if amount <= 0:
-        return jsonify({'error': 'Payment amount must be greater than zero'}), 400
-
-    if amount > float(sale.balance):
-        return jsonify({'error': 'Payment amount exceeds balance'}), 400
-
-    # Parse payment date
-    payment_date_str = data.get('payment_date', date.today().isoformat())
-    payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
-
-    # Update sale
-    sale.amount_paid = float(sale.amount_paid) + amount
-    sale.balance = float(sale.balance) - amount
-
-    if sale.balance <= 0:
-        sale.is_credit_cleared = True
-        sale.balance = 0
-
-    # Record payment
-    payment = HardwareCreditPayment(
-        sale_id=sale.id,
-        payment_date=payment_date,
-        amount=amount,
-        remaining_balance=sale.balance,
-        created_by=user_id
-    )
-
-    db.session.add(payment)
-    db.session.commit()
-
-    log_audit(
-        user_id=user_id,
-        action='create',
-        module='hardware',
-        entity_type='credit_payment',
-        entity_id=payment.id,
-        description=f"Recorded credit payment of UGX {amount:,.0f} for sale {sale.reference_number}"
-    )
-
-    return jsonify({
-        'message': 'Payment recorded successfully',
-        'sale': sale.to_dict(),
-        'payment': payment.to_dict()
-    }), 201
+@hardware_bp.route('/credits')
+@login_required('hardware')
+def credits():
+    pending = HardwareSale.query.filter(
+        HardwareSale.is_deleted == False, HardwareSale.payment_type == 'part',
+        HardwareSale.is_credit_cleared == False, HardwareSale.balance > 0
+    ).order_by(HardwareSale.sale_date.desc()).all()
+    return render_template('hardware/credits.html', credits=pending)
 
 
-# ============= RECEIPT =============
+@hardware_bp.route('/credits/<int:id>/pay', methods=['POST'])
+@login_required('hardware')
+def pay_credit(id):
+    sale = HardwareSale.query.get_or_404(id)
+    try:
+        amount = Decimal(request.form.get('amount', '0'))
+        payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
+        if amount <= 0:
+            flash('Amount must be greater than 0', 'error')
+            return redirect(url_for('hardware.credits'))
 
-@hardware_bp.route('/sales/<int:id>/receipt', methods=['GET'])
-@jwt_required()
-@business_access_required('hardware')
-def get_sale_receipt(id):
-    """Generate PDF receipt for a hardware sale"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+        sale.amount_paid += amount
+        sale.balance = sale.total_amount - sale.amount_paid
+        if sale.balance <= 0:
+            sale.balance = Decimal('0')
+            sale.is_credit_cleared = True
 
-    sale = HardwareSale.query.get(id)
+        payment = HardwareCreditPayment(
+            sale_id=sale.id, payment_date=payment_date,
+            amount=amount, remaining_balance=sale.balance
+        )
+        db.session.add(payment)
+        db.session.commit()
 
-    if not sale or sale.is_deleted:
-        return jsonify({'error': 'Sale not found'}), 404
-
-    # Check access for employees
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'Access denied'}), 403
-
-    # Generate PDF
-    pdf_buffer = generate_receipt_pdf(sale, 'HARDWARE')
-
-    return send_file(
-        pdf_buffer,
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=f'receipt_{sale.reference_number}.pdf'
-    )
+        log_action(session['username'], 'hardware', 'create', 'credit_payment', payment.id,
+                   {'sale_reference': sale.reference_number, 'amount': float(amount),
+                    'remaining_balance': float(sale.balance)})
+        flash(f'Payment recorded', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('hardware.credits'))

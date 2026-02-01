@@ -1,798 +1,432 @@
-from flask import Blueprint, request, jsonify, send_file
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.models.user import User
-from app.models.customer import Customer
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
 from app.models.boutique import (
     BoutiqueCategory, BoutiqueStock, BoutiqueSale,
     BoutiqueSaleItem, BoutiqueCreditPayment
 )
+from app.models.customer import Customer
+from app.modules.auth import login_required, log_action
 from app.extensions import db
-from app.utils.helpers import (
-    manager_required, business_access_required,
-    get_date_filter_for_user, validate_date_for_user,
-    log_audit, generate_reference_number
-)
-from datetime import datetime, date, timedelta
-from sqlalchemy import and_, or_
-from app.utils.pdf_generator import generate_receipt_pdf
+from app.utils.timezone import get_local_today
+from app.utils.utils import generate_reference_number
+from datetime import date
+from decimal import Decimal
 
 boutique_bp = Blueprint('boutique', __name__)
 
 
-# ============= CATEGORIES =============
+@boutique_bp.route('/')
+@login_required('boutique')
+def index():
+    """Boutique overview page"""
+    today = get_local_today()
 
-@boutique_bp.route('/categories', methods=['GET'])
-@jwt_required()
-@business_access_required('boutique')
-def get_categories():
-    """Get all boutique categories"""
-    categories = BoutiqueCategory.query.all()
-    return jsonify({
-        'categories': [cat.to_dict() for cat in categories]
-    }), 200
+    # Quick stats
+    stock_count = BoutiqueStock.query.filter_by(is_active=True).count()
+    low_stock = BoutiqueStock.query.filter(
+        BoutiqueStock.is_active == True,
+        BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
+    ).count()
+    pending_credits = BoutiqueSale.query.filter(
+        BoutiqueSale.is_deleted == False,
+        BoutiqueSale.payment_type == 'part',
+        BoutiqueSale.is_credit_cleared == False
+    ).count()
+    today_sales = BoutiqueSale.query.filter(
+        BoutiqueSale.sale_date == today,
+        BoutiqueSale.is_deleted == False
+    ).count()
+
+    return render_template('boutique/index.html',
+        stock_count=stock_count,
+        low_stock=low_stock,
+        pending_credits=pending_credits,
+        today_sales=today_sales
+    )
 
 
-@boutique_bp.route('/categories', methods=['POST'])
-@jwt_required()
-@manager_required
-@business_access_required('boutique')
-def create_category():
-    """Create new boutique category (Manager only)"""
-    data = request.get_json()
-    
-    if not data.get('name'):
-        return jsonify({'error': 'Category name is required'}), 400
-    
-    category = BoutiqueCategory(name=data['name'])
+# ============ CATEGORIES ============
+
+@boutique_bp.route('/categories')
+@login_required('boutique')
+def categories():
+    """List all categories"""
+    cats = BoutiqueCategory.query.order_by(BoutiqueCategory.name).all()
+    return render_template('boutique/categories.html', categories=cats)
+
+
+@boutique_bp.route('/categories/add', methods=['POST'])
+@login_required('boutique')
+def add_category():
+    """Add a new category"""
+    name = request.form.get('name', '').strip()
+    if not name:
+        flash('Category name is required', 'error')
+        return redirect(url_for('boutique.categories'))
+
+    if BoutiqueCategory.query.filter_by(name=name).first():
+        flash('Category already exists', 'error')
+        return redirect(url_for('boutique.categories'))
+
+    category = BoutiqueCategory(name=name)
     db.session.add(category)
     db.session.commit()
-    
-    return jsonify({
-        'message': 'Category created successfully',
-        'category': category.to_dict()
-    }), 201
+
+    log_action(session['username'], 'boutique', 'create', 'category', category.id, {'name': name})
+    flash(f'Category "{name}" added successfully', 'success')
+    return redirect(url_for('boutique.categories'))
 
 
-# ============= STOCK =============
+# ============ STOCK ============
 
-@boutique_bp.route('/stock', methods=['GET'])
-@jwt_required()
-@business_access_required('boutique')
-def get_stock():
-    """Get all stock items"""
+@boutique_bp.route('/stock')
+@login_required('boutique')
+def stock():
+    """List all stock items"""
     show_inactive = request.args.get('show_inactive', 'false').lower() == 'true'
-    
     query = BoutiqueStock.query
     if not show_inactive:
         query = query.filter_by(is_active=True)
-    
-    stock_items = query.all()
-    return jsonify({
-        'stock': [item.to_dict() for item in stock_items]
-    }), 200
+    items = query.order_by(BoutiqueStock.item_name).all()
+    categories = BoutiqueCategory.query.order_by(BoutiqueCategory.name).all()
+    return render_template('boutique/stock.html',
+        stock=items,
+        categories=categories,
+        show_inactive=show_inactive
+    )
 
 
-@boutique_bp.route('/stock', methods=['POST'])
-@jwt_required()
-@manager_required
-@business_access_required('boutique')
+@boutique_bp.route('/stock/add', methods=['POST'])
+@login_required('boutique')
 def add_stock():
-    """Add new stock item (Manager only)"""
-    data = request.get_json()
-    user_id = int(get_jwt_identity())
-    
-    # Validate required fields
-    required = ['item_name', 'category_id', 'quantity', 'cost_price', 
-                'min_selling_price', 'max_selling_price']
-    for field in required:
-        if field not in data:
-            return jsonify({'error': f'{field} is required'}), 400
-    
-    quantity = int(data['quantity'])
-    # Use user-provided threshold, or calculate default (min 1, or 25% of quantity)
-    if 'low_stock_threshold' in data and data['low_stock_threshold']:
-        low_stock_threshold = int(data['low_stock_threshold'])
-    else:
-        low_stock_threshold = max(1, int(quantity * 0.25))
+    """Add a new stock item"""
+    try:
+        item_name = request.form.get('item_name', '').strip()
+        category_id = request.form.get('category_id', type=int)
+        quantity = request.form.get('quantity', type=int)
+        unit = request.form.get('unit', 'pieces')
+        cost_price = Decimal(request.form.get('cost_price', '0'))
+        min_selling_price = Decimal(request.form.get('min_selling_price', '0'))
+        max_selling_price = Decimal(request.form.get('max_selling_price', '0'))
+        low_stock_threshold = request.form.get('low_stock_threshold', type=int)
 
-    stock = BoutiqueStock(
-        item_name=data['item_name'],
-        category_id=data['category_id'],
-        quantity=quantity,
-        initial_quantity=quantity,
-        unit=data.get('unit', 'pieces'),
-        cost_price=data['cost_price'],
-        min_selling_price=data['min_selling_price'],
-        max_selling_price=data['max_selling_price'],
-        low_stock_threshold=low_stock_threshold,
-        created_by=user_id
-    )
-    
-    db.session.add(stock)
-    db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='create',
-        module='boutique',
-        entity_type='stock',
-        entity_id=stock.id,
-        description=f"Added stock item: {stock.item_name}",
-        new_values=stock.to_dict()
-    )
-    
-    return jsonify({
-        'message': 'Stock item added successfully',
-        'stock': stock.to_dict()
-    }), 201
+        if not item_name or quantity is None or quantity < 0:
+            flash('Item name and valid quantity are required', 'error')
+            return redirect(url_for('boutique.stock'))
+
+        # Auto-calculate threshold if not provided
+        if low_stock_threshold is None:
+            low_stock_threshold = max(1, int(quantity * 0.25))
+
+        stock_item = BoutiqueStock(
+            item_name=item_name,
+            category_id=category_id,
+            quantity=quantity,
+            initial_quantity=quantity,
+            unit=unit,
+            cost_price=cost_price,
+            min_selling_price=min_selling_price,
+            max_selling_price=max_selling_price,
+            low_stock_threshold=low_stock_threshold
+        )
+        db.session.add(stock_item)
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'create', 'stock', stock_item.id,
+                   {'item_name': item_name, 'quantity': quantity})
+        flash(f'Stock item "{item_name}" added successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adding stock: {str(e)}', 'error')
+
+    return redirect(url_for('boutique.stock'))
 
 
-@boutique_bp.route('/stock/<int:id>', methods=['PUT'])
-@jwt_required()
-@manager_required
-@business_access_required('boutique')
-def update_stock(id):
-    """Update stock item (Manager only)"""
-    stock = BoutiqueStock.query.get(id)
-    
-    if not stock:
-        return jsonify({'error': 'Stock item not found'}), 404
-    
-    data = request.get_json()
-    user_id = int(get_jwt_identity())
-    old_values = stock.to_dict()
-    
-    # Update fields
-    if 'item_name' in data:
-        stock.item_name = data['item_name']
-    if 'category_id' in data:
-        stock.category_id = data['category_id']
-    if 'unit' in data:
-        stock.unit = data['unit']
-    if 'cost_price' in data:
-        stock.cost_price = data['cost_price']
-    if 'min_selling_price' in data:
-        stock.min_selling_price = data['min_selling_price']
-    if 'max_selling_price' in data:
-        stock.max_selling_price = data['max_selling_price']
-    if 'is_active' in data:
-        stock.is_active = data['is_active']
-    
-    db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='update',
-        module='boutique',
-        entity_type='stock',
-        entity_id=stock.id,
-        description=f"Updated stock item: {stock.item_name}",
-        old_values=old_values,
-        new_values=stock.to_dict()
-    )
-    
-    return jsonify({
-        'message': 'Stock item updated successfully',
-        'stock': stock.to_dict()
-    }), 200
+@boutique_bp.route('/stock/<int:id>/edit', methods=['POST'])
+@login_required('boutique')
+def edit_stock(id):
+    """Edit a stock item"""
+    item = BoutiqueStock.query.get_or_404(id)
+
+    try:
+        old_name = item.item_name
+        item.item_name = request.form.get('item_name', item.item_name).strip()
+        item.category_id = request.form.get('category_id', type=int) or item.category_id
+        item.unit = request.form.get('unit', item.unit)
+        item.cost_price = Decimal(request.form.get('cost_price', item.cost_price))
+        item.min_selling_price = Decimal(request.form.get('min_selling_price', item.min_selling_price))
+        item.max_selling_price = Decimal(request.form.get('max_selling_price', item.max_selling_price))
+        item.low_stock_threshold = request.form.get('low_stock_threshold', type=int) or item.low_stock_threshold
+        item.is_active = request.form.get('is_active', 'true').lower() == 'true'
+
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'update', 'stock', item.id,
+                   {'item_name': item.item_name, 'old_name': old_name})
+        flash(f'Stock item "{item.item_name}" updated successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error updating stock: {str(e)}', 'error')
+
+    return redirect(url_for('boutique.stock'))
 
 
-@boutique_bp.route('/stock/<int:id>/quantity', methods=['PUT'])
-@jwt_required()
-@manager_required
-@business_access_required('boutique')
-def adjust_stock_quantity(id):
-    """Adjust stock quantity (Manager only)"""
-    stock = BoutiqueStock.query.get(id)
-    
-    if not stock:
-        return jsonify({'error': 'Stock item not found'}), 404
-    
-    data = request.get_json()
-    user_id = int(get_jwt_identity())
-    
-    if 'quantity' not in data:
-        return jsonify({'error': 'Quantity is required'}), 400
-    
-    old_quantity = stock.quantity
-    new_quantity = int(data['quantity'])
-    
-    stock.quantity = new_quantity
-    
-    # Update initial quantity and threshold if increasing
-    if new_quantity > stock.initial_quantity:
-        stock.initial_quantity = new_quantity
-        stock.low_stock_threshold = int(new_quantity * 0.25)
-    
-    db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='update',
-        module='boutique',
-        entity_type='stock',
-        entity_id=stock.id,
-        description=f"Adjusted quantity for {stock.item_name} from {old_quantity} to {new_quantity}"
-    )
-    
-    return jsonify({
-        'message': 'Stock quantity adjusted successfully',
-        'stock': stock.to_dict()
-    }), 200
+@boutique_bp.route('/stock/<int:id>/adjust', methods=['POST'])
+@login_required('boutique')
+def adjust_stock(id):
+    """Adjust stock quantity"""
+    item = BoutiqueStock.query.get_or_404(id)
+
+    try:
+        adjustment = request.form.get('adjustment', type=int, default=0)
+        old_quantity = item.quantity
+        item.quantity += adjustment
+        if item.quantity < 0:
+            item.quantity = 0
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'adjust', 'stock', item.id,
+                   {'item_name': item.item_name, 'old_quantity': old_quantity,
+                    'adjustment': adjustment, 'new_quantity': item.quantity})
+        flash(f'Stock adjusted for "{item.item_name}"', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error adjusting stock: {str(e)}', 'error')
+
+    return redirect(url_for('boutique.stock'))
 
 
-@boutique_bp.route('/stock/<int:id>', methods=['DELETE'])
-@jwt_required()
-@manager_required
-@business_access_required('boutique')
+@boutique_bp.route('/stock/<int:id>/delete', methods=['POST'])
+@login_required('boutique')
 def delete_stock(id):
-    """Delete stock item (Manager only)"""
-    stock = BoutiqueStock.query.get(id)
-    
-    if not stock:
-        return jsonify({'error': 'Stock item not found'}), 404
-    
-    user_id = int(get_jwt_identity())
-    
-    # Soft delete - just deactivate
-    stock.is_active = False
+    """Soft delete a stock item"""
+    item = BoutiqueStock.query.get_or_404(id)
+    item.is_active = False
     db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='delete',
-        module='boutique',
-        entity_type='stock',
-        entity_id=stock.id,
-        description=f"Deleted stock item: {stock.item_name}"
-    )
-    
-    return jsonify({'message': 'Stock item deleted successfully'}), 200
+
+    log_action(session['username'], 'boutique', 'delete', 'stock', item.id,
+               {'item_name': item.item_name})
+    flash(f'Stock item "{item.item_name}" deactivated', 'success')
+    return redirect(url_for('boutique.stock'))
 
 
-# ============= SALES =============
+# ============ SALES ============
 
-@boutique_bp.route('/sales', methods=['GET'])
-@jwt_required()
-@business_access_required('boutique')
-def get_sales():
-    """Get all sales"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    # Get date filter
+@boutique_bp.route('/sales')
+@login_required('boutique')
+def sales():
+    """List all sales"""
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
-    created_by = request.args.get('created_by')
-    
+
     query = BoutiqueSale.query.filter_by(is_deleted=False)
-    
-    # Apply date filter based on user role
-    if user.role == 'employee':
-        # Employees see only today and yesterday
-        date_filter = get_date_filter_for_user(user)
-        if date_filter:
-            query = query.filter(BoutiqueSale.sale_date.in_(date_filter))
-        # Employees see only their own sales
-        query = query.filter_by(created_by=user_id)
-    else:
-        # Manager can filter by date range
-        if start_date:
-            query = query.filter(BoutiqueSale.sale_date >= start_date)
-        if end_date:
-            query = query.filter(BoutiqueSale.sale_date <= end_date)
-        if created_by:
-            query = query.filter_by(created_by=created_by)
-    
-    sales = query.order_by(BoutiqueSale.sale_date.desc()).all()
-    
-    return jsonify({
-        'sales': [sale.to_dict(include_items=True) for sale in sales]
-    }), 200
+
+    if start_date:
+        query = query.filter(BoutiqueSale.sale_date >= date.fromisoformat(start_date))
+    if end_date:
+        query = query.filter(BoutiqueSale.sale_date <= date.fromisoformat(end_date))
+
+    sales_list = query.order_by(BoutiqueSale.sale_date.desc(), BoutiqueSale.id.desc()).limit(100).all()
+    return render_template('boutique/sales.html', sales=sales_list, start_date=start_date, end_date=end_date)
 
 
-@boutique_bp.route('/sales/<int:id>', methods=['GET'])
-@jwt_required()
-@business_access_required('boutique')
-def get_sale(id):
-    """Get sale details"""
-    sale = BoutiqueSale.query.get(id)
-    
-    if not sale or sale.is_deleted:
-        return jsonify({'error': 'Sale not found'}), 404
-    
-    # Check access
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'Access denied'}), 403
-    
-    return jsonify({
-        'sale': sale.to_dict(include_items=True)
-    }), 200
+@boutique_bp.route('/sales/new')
+@login_required('boutique')
+def new_sale():
+    """New sale form"""
+    stock_items = BoutiqueStock.query.filter_by(is_active=True).filter(BoutiqueStock.quantity > 0).all()
+    customers = Customer.query.filter_by(business_type='boutique').order_by(Customer.name).all()
+    return render_template('boutique/sale_form.html', stock=stock_items, customers=customers, today=get_local_today())
 
 
-@boutique_bp.route('/sales', methods=['POST'])
-@jwt_required()
-@business_access_required('boutique')
+@boutique_bp.route('/sales/create', methods=['POST'])
+@login_required('boutique')
 def create_sale():
-    """Create new sale"""
-    data = request.get_json()
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    # Validate required fields
-    if not data.get('items') or len(data['items']) == 0:
-        return jsonify({'error': 'At least one item is required'}), 400
-    
-    if not data.get('payment_type'):
-        return jsonify({'error': 'Payment type is required'}), 400
-    
-    # Parse and validate sale date
-    sale_date_str = data.get('sale_date', date.today().isoformat())
-    sale_date = datetime.strptime(sale_date_str, '%Y-%m-%d').date()
-    
-    # Validate date for user
-    can_use_date, error_msg = validate_date_for_user(user, sale_date)
-    if not can_use_date:
-        return jsonify({'error': error_msg}), 400
-    
-    # Calculate total
-    total_amount = 0
-    items_data = []
-    has_other_items = False
-    
-    for item_data in data['items']:
-        quantity = int(item_data['quantity'])
-        unit_price = float(item_data['unit_price'])
-        subtotal = quantity * unit_price
-        
-        # Validate stock item
-        if item_data.get('stock_id'):
-            stock = BoutiqueStock.query.get(item_data['stock_id'])
-            if not stock:
-                return jsonify({'error': f"Stock item not found"}), 404
-            
-            # Check quantity
-            if stock.quantity < quantity:
-                return jsonify({'error': f"Insufficient stock for {stock.item_name}"}), 400
-            
-            # Validate price range (only for employees)
-            if user.role == 'employee':
-                if unit_price < float(stock.min_selling_price) or unit_price > float(stock.max_selling_price):
-                    return jsonify({
-                        'error': f"Price for {stock.item_name} must be between {stock.min_selling_price} and {stock.max_selling_price}"
-                    }), 400
-            
-            items_data.append({
-                'stock_id': stock.id,
-                'item_name': stock.item_name,
-                'quantity': quantity,
-                'unit_price': unit_price,
-                'subtotal': subtotal,
-                'is_other_item': False,
-                'stock_obj': stock
-            })
-        else:
-            # Other item
-            has_other_items = True
-            items_data.append({
-                'stock_id': None,
-                'item_name': item_data['item_name'],
-                'quantity': quantity,
-                'unit_price': unit_price,
-                'subtotal': subtotal,
-                'is_other_item': True,
-                'stock_obj': None
-            })
-        
-        total_amount += subtotal
-    
-    # Validate payment
-    amount_paid = float(data.get('amount_paid', 0))
-    payment_type = data['payment_type']
-    
-    if payment_type == 'full':
-        if amount_paid != total_amount:
+    """Create a new sale"""
+    try:
+        sale_date = date.fromisoformat(request.form.get('sale_date', str(get_local_today())))
+        payment_type = request.form.get('payment_type', 'full')
+        customer_id = request.form.get('customer_id', type=int)
+        amount_paid = Decimal(request.form.get('amount_paid', '0'))
+
+        # Get items from form
+        item_ids = request.form.getlist('item_id[]')
+        quantities = request.form.getlist('quantity[]')
+        prices = request.form.getlist('price[]')
+
+        if not item_ids or not quantities or not prices:
+            flash('At least one item is required', 'error')
+            return redirect(url_for('boutique.new_sale'))
+
+        # Calculate total
+        total_amount = Decimal('0')
+        items_data = []
+        for i, item_id in enumerate(item_ids):
+            qty = int(quantities[i])
+            price = Decimal(prices[i])
+            subtotal = qty * price
+            total_amount += subtotal
+
+            stock_item = BoutiqueStock.query.get(int(item_id))
+            if stock_item:
+                items_data.append({
+                    'stock_id': stock_item.id,
+                    'item_name': stock_item.item_name,
+                    'quantity': qty,
+                    'unit_price': price,
+                    'subtotal': subtotal
+                })
+
+        if payment_type == 'full':
             amount_paid = total_amount
-    
-    balance = total_amount - amount_paid
-    
-    # If part payment, customer info is required
-    customer = None
-    if payment_type == 'part':
-        if not data.get('customer_name') or not data.get('customer_phone'):
-            return jsonify({'error': 'Customer name and phone required for part payment'}), 400
-        
-        # Check if customer exists
-        customer = Customer.query.filter_by(
-            phone=data['customer_phone'],
-            business_type='boutique'
-        ).first()
-        
-        if not customer:
-            # Create new customer
-            customer = Customer(
-                name=data['customer_name'],
-                phone=data['customer_phone'],
-                address=data.get('customer_address'),
-                business_type='boutique',
-                created_by=user_id
-            )
-            db.session.add(customer)
-            db.session.flush()
-    
-    # Generate reference number
-    reference_number = generate_reference_number('DNV-B-', BoutiqueSale)
-    
-    # Create sale
-    sale = BoutiqueSale(
-        reference_number=reference_number,
-        sale_date=sale_date,
-        customer_id=customer.id if customer else None,
-        payment_type=payment_type,
-        total_amount=total_amount,
-        amount_paid=amount_paid,
-        balance=balance,
-        is_credit_cleared=(balance == 0),
-        created_by=user_id
-    )
-    
-    db.session.add(sale)
-    db.session.flush()
-    
-    # Add sale items and update stock
-    for item_data in items_data:
-        sale_item = BoutiqueSaleItem(
-            sale_id=sale.id,
-            stock_id=item_data['stock_id'],
-            item_name=item_data['item_name'],
-            quantity=item_data['quantity'],
-            unit_price=item_data['unit_price'],
-            subtotal=item_data['subtotal'],
-            is_other_item=item_data['is_other_item']
+
+        balance = total_amount - amount_paid
+
+        # Create customer if needed for credit sale
+        if payment_type == 'part' and not customer_id:
+            customer_name = request.form.get('customer_name', '').strip()
+            customer_phone = request.form.get('customer_phone', '').strip()
+            if customer_name and customer_phone:
+                customer = Customer(name=customer_name, phone=customer_phone, business_type='boutique')
+                db.session.add(customer)
+                db.session.flush()
+                customer_id = customer.id
+
+        # Create sale
+        sale = BoutiqueSale(
+            reference_number=generate_reference_number('DNV-B-', BoutiqueSale),
+            sale_date=sale_date,
+            customer_id=customer_id,
+            payment_type=payment_type,
+            total_amount=total_amount,
+            amount_paid=amount_paid,
+            balance=balance,
+            is_credit_cleared=(balance <= 0)
         )
-        db.session.add(sale_item)
-        
-        # Update stock quantity
-        if item_data['stock_obj']:
-            item_data['stock_obj'].quantity -= item_data['quantity']
-    
-    db.session.commit()
-    
-    # Build detailed description for audit
-    item_names = ', '.join([item['item_name'] for item in items_data[:3]])
-    if len(items_data) > 3:
-        item_names += f" (+{len(items_data) - 3} more)"
-    payment_info = "Full payment" if payment_type == 'full' else f"Part payment UGX {amount_paid:,.0f}/{total_amount:,.0f}"
-    customer_info = f" for {data.get('customer_name', 'customer')}" if customer else ""
-    
-    # Log audit
-    log_audit(
-        user_id=user_id,
-        action='create',
-        module='boutique',
-        entity_type='sale',
-        entity_id=sale.id,
-        description=f"Sold {item_names}{customer_info} - {payment_info} (Ref: {reference_number})",
-        is_flagged=has_other_items,
-        flag_reason="Sale contains 'Other' items" if has_other_items else None
-    )
-    
-    return jsonify({
-        'message': 'Sale created successfully',
-        'sale': sale.to_dict(include_items=True)
-    }), 201
+        db.session.add(sale)
+        db.session.flush()
 
+        # Create sale items and update stock
+        for item_data in items_data:
+            sale_item = BoutiqueSaleItem(
+                sale_id=sale.id,
+                stock_id=item_data['stock_id'],
+                item_name=item_data['item_name'],
+                quantity=item_data['quantity'],
+                unit_price=item_data['unit_price'],
+                subtotal=item_data['subtotal']
+            )
+            db.session.add(sale_item)
 
-@boutique_bp.route('/sales/<int:id>', methods=['PUT'])
-@jwt_required()
-@business_access_required('boutique')
-def update_sale(id):
-    """Update sale (limited to amount_paid for employees, full edit for managers)"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if not user.can_edit:
-        return jsonify({'error': 'You do not have permission to edit sales'}), 403
-    
-    sale = BoutiqueSale.query.get(id)
-    
-    if not sale or sale.is_deleted:
-        return jsonify({'error': 'Sale not found'}), 404
-    
-    # Check access for employees
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'You can only edit your own sales'}), 403
-    
-    # Validate date for employees
-    if user.role == 'employee':
-        can_edit, error_msg = validate_date_for_user(user, sale.sale_date)
-        if not can_edit:
-            return jsonify({'error': 'You can only edit recent sales'}), 403
-    
-    data = request.get_json()
-    old_values = sale.to_dict()
-    
-    # Allow updating amount_paid (for adding more payment to part-payment sales)
-    if 'amount_paid' in data:
-        new_amount_paid = float(data['amount_paid'])
-        if new_amount_paid < 0:
-            return jsonify({'error': 'Amount paid cannot be negative'}), 400
-        if new_amount_paid > float(sale.total_amount):
-            return jsonify({'error': 'Amount paid cannot exceed total amount'}), 400
-        
-        sale.amount_paid = new_amount_paid
-        sale.balance = float(sale.total_amount) - new_amount_paid
-        
-        if sale.balance <= 0:
-            sale.is_credit_cleared = True
-            sale.balance = 0
-    
-    # Manager can update sale date
-    if user.role == 'manager' and 'sale_date' in data:
-        sale_date = datetime.strptime(data['sale_date'], '%Y-%m-%d').date()
-        sale.sale_date = sale_date
-    
-    db.session.commit()
-    
-    # Build change description
-    changes = []
-    if 'amount_paid' in data:
-        changes.append(f"Payment updated to UGX {float(sale.amount_paid):,.0f}/{float(sale.total_amount):,.0f}")
-        if sale.is_credit_cleared:
-            changes.append("Credit cleared!")
-    if 'sale_date' in data:
-        changes.append(f"Date changed to {sale.sale_date}")
-    
-    log_audit(
-        user_id=user_id,
-        action='update',
-        module='boutique',
-        entity_type='sale',
-        entity_id=sale.id,
-        description=f"Edited {sale.reference_number}: {', '.join(changes) if changes else 'No changes'}",
-        old_values=old_values,
-        new_values=sale.to_dict(),
-        is_flagged=True,
-        flag_reason="Sale edited"
-    )
-    
-    return jsonify({
-        'message': 'Sale updated successfully',
-        'sale': sale.to_dict(include_items=True)
-    }), 200
-
-@boutique_bp.route('/sales/<int:id>', methods=['DELETE'])
-@jwt_required()
-@business_access_required('boutique')
-def delete_sale(id):
-    """Soft delete sale"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if not user.can_delete:
-        return jsonify({'error': 'You do not have permission to delete sales'}), 403
-    
-    sale = BoutiqueSale.query.get(id)
-    
-    if not sale or sale.is_deleted:
-        return jsonify({'error': 'Sale not found'}), 404
-    
-    # Check access for employees
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'You can only delete your own sales'}), 403
-    
-    # Validate date for employees
-    if user.role == 'employee':
-        can_delete, error_msg = validate_date_for_user(user, sale.sale_date)
-        if not can_delete:
-            return jsonify({'error': 'You can only delete recent sales'}), 403
-    
-    # Soft delete
-    sale.is_deleted = True
-    sale.deleted_at = datetime.utcnow()
-    sale.deleted_by = user_id
-    
-    # Restore stock quantities
-    for item in sale.items:
-        if item.stock_id and not item.is_other_item:
-            stock = BoutiqueStock.query.get(item.stock_id)
+            # Update stock quantity
+            stock = BoutiqueStock.query.get(item_data['stock_id'])
             if stock:
-                stock.quantity += item.quantity
-    
-    db.session.commit()
-    
-    # Build description with sale details
-    item_count = len(sale.items)
-    item_names = ', '.join([item.item_name for item in sale.items[:2]])
-    if item_count > 2:
-        item_names += f" (+{item_count - 2} more)"
-    
-    log_audit(
-        user_id=user_id,
-        action='delete',
-        module='boutique',
-        entity_type='sale',
-        entity_id=sale.id,
-        description=f"Deleted sale of {item_names} worth UGX {float(sale.total_amount):,.0f} (Ref: {sale.reference_number})",
-        is_flagged=True,
-        flag_reason="Sale deleted - stock restored"
-    )
-    
-    return jsonify({'message': 'Sale deleted successfully'}), 200
+                stock.quantity -= item_data['quantity']
+
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'create', 'sale', sale.id,
+                   {'reference': sale.reference_number, 'total': float(total_amount),
+                    'payment_type': payment_type, 'items_count': len(items_data)})
+        flash(f'Sale {sale.reference_number} created successfully', 'success')
+        return redirect(url_for('boutique.sales'))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error creating sale: {str(e)}', 'error')
+        return redirect(url_for('boutique.new_sale'))
 
 
-# ============= CREDITS =============
-
-@boutique_bp.route('/credits', methods=['GET'])
-@jwt_required()
-@business_access_required('boutique')
-def get_credits():
-    """Get pending credits"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    query = BoutiqueSale.query.filter_by(
-        payment_type='part',
-        is_credit_cleared=False,
-        is_deleted=False
-    ).filter(BoutiqueSale.balance > 0)
-    
-    # Employees see only their own credits
-    if user.role == 'employee':
-        query = query.filter_by(created_by=user_id)
-    
-    credits = query.order_by(BoutiqueSale.sale_date.desc()).all()
-    
-    return jsonify({
-        'credits': [credit.to_dict() for credit in credits]
-    }), 200
+@boutique_bp.route('/sales/<int:id>')
+@login_required('boutique')
+def view_sale(id):
+    """View sale details"""
+    sale = BoutiqueSale.query.get_or_404(id)
+    items = sale.items.all()
+    payments = BoutiqueCreditPayment.query.filter_by(sale_id=id).order_by(BoutiqueCreditPayment.payment_date.desc()).all()
+    return render_template('boutique/sale_detail.html', sale=sale, items=items, payments=payments)
 
 
-@boutique_bp.route('/credits/cleared', methods=['GET'])
-@jwt_required()
-@manager_required
-@business_access_required('boutique')
-def get_cleared_credits():
-    """Get cleared credits (Manager only)"""
-    credits = BoutiqueSale.query.filter_by(
-        payment_type='part',
-        is_credit_cleared=True,
-        is_deleted=False
-    ).order_by(BoutiqueSale.updated_at.desc()).all()
-    
-    return jsonify({
-        'credits': [credit.to_dict() for credit in credits]
-    }), 200
+@boutique_bp.route('/sales/<int:id>/delete', methods=['POST'])
+@login_required('boutique')
+def delete_sale(id):
+    """Soft delete a sale and restore stock"""
+    sale = BoutiqueSale.query.get_or_404(id)
+
+    try:
+        # Restore stock quantities
+        for item in sale.items:
+            if item.stock_id:
+                stock = BoutiqueStock.query.get(item.stock_id)
+                if stock:
+                    stock.quantity += item.quantity
+
+        sale.is_deleted = True
+        sale.deleted_at = db.func.now()
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'delete', 'sale', sale.id,
+                   {'reference': sale.reference_number, 'total': float(sale.total_amount)})
+        flash(f'Sale {sale.reference_number} deleted', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting sale: {str(e)}', 'error')
+
+    return redirect(url_for('boutique.sales'))
 
 
-@boutique_bp.route('/credits/<int:id>', methods=['GET'])
-@jwt_required()
-@business_access_required('boutique')
-def get_credit_details(id):
-    """Get credit details with payment history"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    sale = BoutiqueSale.query.get(id)
-    
-    if not sale or sale.is_deleted or sale.payment_type != 'part':
-        return jsonify({'error': 'Credit not found'}), 404
-    
-    # Check access for employees
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'Access denied'}), 403
-    
-    # Get payment history
-    payments = BoutiqueCreditPayment.query.filter_by(
-        sale_id=sale.id
-    ).order_by(BoutiqueCreditPayment.payment_date.desc()).all()
-    
-    return jsonify({
-        'sale': sale.to_dict(include_items=True),
-        'payments': [payment.to_dict() for payment in payments]
-    }), 200
+# ============ CREDITS ============
+
+@boutique_bp.route('/credits')
+@login_required('boutique')
+def credits():
+    """List pending credits"""
+    pending = BoutiqueSale.query.filter(
+        BoutiqueSale.is_deleted == False,
+        BoutiqueSale.payment_type == 'part',
+        BoutiqueSale.is_credit_cleared == False,
+        BoutiqueSale.balance > 0
+    ).order_by(BoutiqueSale.sale_date.desc()).all()
+
+    return render_template('boutique/credits.html', credits=pending)
 
 
-@boutique_bp.route('/credits/<int:id>/payment', methods=['POST'])
-@jwt_required()
-@business_access_required('boutique')
-def record_credit_payment(id):
-    """Record credit payment"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if not user.can_clear_credits:
-        return jsonify({'error': 'You do not have permission to clear credits'}), 403
-    
-    sale = BoutiqueSale.query.get(id)
-    
-    if not sale or sale.is_deleted or sale.payment_type != 'part':
-        return jsonify({'error': 'Credit not found'}), 404
-    
-    if sale.is_credit_cleared:
-        return jsonify({'error': 'Credit already cleared'}), 400
-    
-    data = request.get_json()
-    
-    if not data.get('amount'):
-        return jsonify({'error': 'Payment amount is required'}), 400
-    
-    amount = float(data['amount'])
-    
-    if amount <= 0:
-        return jsonify({'error': 'Payment amount must be greater than zero'}), 400
-    
-    if amount > float(sale.balance):
-        return jsonify({'error': 'Payment amount exceeds balance'}), 400
-    
-    # Parse payment date
-    payment_date_str = data.get('payment_date', date.today().isoformat())
-    payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
-    
-    # Update sale
-    sale.amount_paid = float(sale.amount_paid) + amount
-    sale.balance = float(sale.balance) - amount
-    
-    if sale.balance <= 0:
-        sale.is_credit_cleared = True
-        sale.balance = 0
-    
-    # Record payment
-    payment = BoutiqueCreditPayment(
-        sale_id=sale.id,
-        payment_date=payment_date,
-        amount=amount,
-        remaining_balance=sale.balance,
-        created_by=user_id
-    )
-    
-    db.session.add(payment)
-    db.session.commit()
-    
-    log_audit(
-        user_id=user_id,
-        action='create',
-        module='boutique',
-        entity_type='credit_payment',
-        entity_id=payment.id,
-        description=f"Recorded credit payment of UGX {amount:,.0f} for sale {sale.reference_number}"
-    )
-    
-    return jsonify({
-        'message': 'Payment recorded successfully',
-        'sale': sale.to_dict(),
-        'payment': payment.to_dict()
-    }), 201
+@boutique_bp.route('/credits/<int:id>/pay', methods=['POST'])
+@login_required('boutique')
+def pay_credit(id):
+    """Record a credit payment"""
+    sale = BoutiqueSale.query.get_or_404(id)
 
+    try:
+        amount = Decimal(request.form.get('amount', '0'))
+        payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
 
-# ============= RECEIPT =============
+        if amount <= 0:
+            flash('Payment amount must be greater than 0', 'error')
+            return redirect(url_for('boutique.credits'))
 
-@boutique_bp.route('/sales/<int:id>/receipt', methods=['GET'])
-@jwt_required()
-@business_access_required('boutique')
-def get_sale_receipt(id):
-    """Generate PDF receipt for a sale"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
+        # Update sale
+        sale.amount_paid += amount
+        sale.balance = sale.total_amount - sale.amount_paid
+        if sale.balance <= 0:
+            sale.balance = Decimal('0')
+            sale.is_credit_cleared = True
 
-    sale = BoutiqueSale.query.get(id)
+        # Create payment record
+        payment = BoutiqueCreditPayment(
+            sale_id=sale.id,
+            payment_date=payment_date,
+            amount=amount,
+            remaining_balance=sale.balance
+        )
+        db.session.add(payment)
+        db.session.commit()
 
-    if not sale or sale.is_deleted:
-        return jsonify({'error': 'Sale not found'}), 404
+        log_action(session['username'], 'boutique', 'create', 'credit_payment', payment.id,
+                   {'sale_reference': sale.reference_number, 'amount': float(amount),
+                    'remaining_balance': float(sale.balance)})
+        flash(f'Payment of UGX {amount:,.0f} recorded for {sale.reference_number}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error recording payment: {str(e)}', 'error')
 
-    # Check access for employees
-    if user.role == 'employee' and sale.created_by != user_id:
-        return jsonify({'error': 'Access denied'}), 403
-
-    # Generate PDF
-    pdf_buffer = generate_receipt_pdf(sale, 'BOUTIQUE')
-
-    return send_file(
-        pdf_buffer,
-        mimetype='application/pdf',
-        as_attachment=True,
-        download_name=f'receipt_{sale.reference_number}.pdf'
-    )
+    return redirect(url_for('boutique.credits'))

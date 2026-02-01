@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}Sale {{ sale.reference_number }} - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('boutique.sales') }}" class="text-indigo-600 hover:underline">&larr; Back to Sales</a>
+    <h1 class="text-2xl font-bold text-gray-800 mt-2">Sale {{ sale.reference_number }}</h1>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Sale Details -->
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="font-semibold text-lg mb-4">Sale Details</h2>
+
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div>
+                    <span class="text-gray-500">Date:</span>
+                    <span class="font-medium ml-2">{{ sale.sale_date.strftime('%Y-%m-%d') }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Customer:</span>
+                    <span class="font-medium ml-2">{{ sale.customer.name if sale.customer else '-' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Payment Type:</span>
+                    <span class="font-medium ml-2">{{ sale.payment_type|title }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500">Status:</span>
+                    {% if sale.payment_type == 'full' %}
+                    <span class="badge badge-success ml-2">Paid</span>
+                    {% elif sale.is_credit_cleared %}
+                    <span class="badge badge-success ml-2">Cleared</span>
+                    {% else %}
+                    <span class="badge badge-warning ml-2">Pending</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Items Table -->
+            <h3 class="font-semibold mb-2">Items</h3>
+            <table class="data-table mb-6">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th class="text-right">Qty</th>
+                        <th class="text-right">Price</th>
+                        <th class="text-right">Subtotal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr>
+                        <td>{{ item.item_name }}</td>
+                        <td class="text-right">{{ item.quantity }}</td>
+                        <td class="text-right">{{ "{:,.0f}".format(item.unit_price) }}</td>
+                        <td class="text-right">{{ "{:,.0f}".format(item.subtotal) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="font-semibold">
+                        <td colspan="3" class="text-right">Total:</td>
+                        <td class="text-right">UGX {{ "{:,.0f}".format(sale.total_amount) }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+
+    <!-- Payment Summary -->
+    <div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="font-semibold text-lg mb-4">Payment Summary</h2>
+
+            <div class="space-y-3">
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Total Amount:</span>
+                    <span class="font-medium">UGX {{ "{:,.0f}".format(sale.total_amount) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Amount Paid:</span>
+                    <span class="font-medium text-green-600">UGX {{ "{:,.0f}".format(sale.amount_paid) }}</span>
+                </div>
+                <div class="flex justify-between border-t pt-3">
+                    <span class="text-gray-500">Balance:</span>
+                    <span class="font-bold text-xl {% if sale.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">
+                        UGX {{ "{:,.0f}".format(sale.balance) }}
+                    </span>
+                </div>
+            </div>
+
+            {% if sale.payment_type == 'part' and not sale.is_credit_cleared %}
+            <form method="POST" action="{{ url_for('boutique.pay_credit', id=sale.id) }}" class="mt-6 pt-4 border-t">
+                <h3 class="font-semibold mb-3">Record Payment</h3>
+                <div class="form-group">
+                    <label class="form-label">Amount</label>
+                    <input type="number" name="amount" min="1" max="{{ sale.balance }}" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" name="payment_date" value="{{ sale.sale_date }}" required class="form-input">
+                </div>
+                <button type="submit" class="btn btn-success w-full">Record Payment</button>
+            </form>
+            {% endif %}
+        </div>
+
+        {% if payments %}
+        <div class="bg-white rounded-lg shadow p-6 mt-4">
+            <h2 class="font-semibold text-lg mb-4">Payment History</h2>
+            <div class="space-y-2">
+                {% for payment in payments %}
+                <div class="flex justify-between text-sm">
+                    <span>{{ payment.payment_date.strftime('%Y-%m-%d') }}</span>
+                    <span class="font-medium">UGX {{ "{:,.0f}".format(payment.amount) }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

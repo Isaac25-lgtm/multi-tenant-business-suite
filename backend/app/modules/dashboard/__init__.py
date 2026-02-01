@@ -1,31 +1,24 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity
-from app.models.user import User
+from flask import Blueprint, render_template, request
 from app.models.boutique import BoutiqueSale, BoutiqueStock
 from app.models.hardware import HardwareSale, HardwareStock
 from app.models.finance import Loan, GroupLoan, LoanPayment, GroupLoanPayment
-from app.models.audit import AuditLog
+from app.models.user import AuditLog
+from app.modules.auth import manager_required
 from app.extensions import db
-from datetime import datetime, date, timedelta
-from sqlalchemy import func, and_
+from datetime import date, timedelta
+from sqlalchemy import func
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
 
-@dashboard_bp.route('/manager', methods=['GET'])
-@jwt_required()
-def get_manager_dashboard():
-    """Get manager dashboard data"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if user.role != 'manager':
-        return jsonify({'error': 'Manager access required'}), 403
-    
+@dashboard_bp.route('/')
+@manager_required
+def index():
+    """Unified dashboard view"""
     today = date.today()
     yesterday = today - timedelta(days=1)
-    
-    # Today's revenue and transaction count by business
+
+    # ============ BOUTIQUE STATS ============
     boutique_today_query = db.session.query(
         func.sum(BoutiqueSale.amount_paid),
         func.count(BoutiqueSale.id)
@@ -33,9 +26,30 @@ def get_manager_dashboard():
         BoutiqueSale.sale_date == today,
         BoutiqueSale.is_deleted == False
     ).first()
-    boutique_today = boutique_today_query[0] or 0
+    boutique_today = float(boutique_today_query[0] or 0)
     boutique_today_count = boutique_today_query[1] or 0
-    
+
+    boutique_yesterday = float(db.session.query(
+        func.sum(BoutiqueSale.amount_paid)
+    ).filter(
+        BoutiqueSale.sale_date == yesterday,
+        BoutiqueSale.is_deleted == False
+    ).scalar() or 0)
+
+    boutique_credits = float(db.session.query(
+        func.sum(BoutiqueSale.balance)
+    ).filter(
+        BoutiqueSale.is_credit_cleared == False,
+        BoutiqueSale.payment_type == 'part',
+        BoutiqueSale.is_deleted == False
+    ).scalar() or 0)
+
+    boutique_low_stock = BoutiqueStock.query.filter(
+        BoutiqueStock.is_active == True,
+        BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
+    ).count()
+
+    # ============ HARDWARE STATS ============
     hardware_today_query = db.session.query(
         func.sum(HardwareSale.amount_paid),
         func.count(HardwareSale.id)
@@ -43,353 +57,220 @@ def get_manager_dashboard():
         HardwareSale.sale_date == today,
         HardwareSale.is_deleted == False
     ).first()
-    hardware_today = hardware_today_query[0] or 0
+    hardware_today = float(hardware_today_query[0] or 0)
     hardware_today_count = hardware_today_query[1] or 0
-    
-    today_repayments = db.session.query(func.sum(LoanPayment.amount)).filter(LoanPayment.payment_date == today, LoanPayment.is_deleted == False).scalar() or 0
-    today_group_repayments = db.session.query(func.sum(GroupLoanPayment.amount)).filter(GroupLoanPayment.payment_date == today, GroupLoanPayment.is_deleted == False).scalar() or 0
-    total_today = float(boutique_today) + float(hardware_today) + float(today_repayments) + float(today_group_repayments)
-    
-    # Yesterday's revenue
-    boutique_yesterday = db.session.query(
-        func.sum(BoutiqueSale.amount_paid)
-    ).filter(
-        BoutiqueSale.sale_date == yesterday,
-        BoutiqueSale.is_deleted == False
-    ).scalar() or 0
-    
-    hardware_yesterday = db.session.query(
+
+    hardware_yesterday = float(db.session.query(
         func.sum(HardwareSale.amount_paid)
     ).filter(
         HardwareSale.sale_date == yesterday,
         HardwareSale.is_deleted == False
-    ).scalar() or 0
-    
-    yesterday_repayments = db.session.query(func.sum(LoanPayment.amount)).filter(LoanPayment.payment_date == yesterday, LoanPayment.is_deleted == False).scalar() or 0
-    yesterday_group_repayments = db.session.query(func.sum(GroupLoanPayment.amount)).filter(GroupLoanPayment.payment_date == yesterday, GroupLoanPayment.is_deleted == False).scalar() or 0
-    total_yesterday = float(boutique_yesterday) + float(hardware_yesterday) + float(yesterday_repayments) + float(yesterday_group_repayments)
-    
-    # Credits outstanding (pending)
-    boutique_credits = db.session.query(
-        func.sum(BoutiqueSale.balance)
-    ).filter(
-        BoutiqueSale.is_credit_cleared == False,
-        BoutiqueSale.payment_type == 'part',
-        BoutiqueSale.is_deleted == False
-    ).scalar() or 0
-    
-    hardware_credits = db.session.query(
+    ).scalar() or 0)
+
+    hardware_credits = float(db.session.query(
         func.sum(HardwareSale.balance)
     ).filter(
         HardwareSale.is_credit_cleared == False,
         HardwareSale.payment_type == 'part',
         HardwareSale.is_deleted == False
-    ).scalar() or 0
-    
-    total_credits = float(boutique_credits) + float(hardware_credits)
-    
-    # Today's cleared credits
-    boutique_cleared_today = db.session.query(
-        func.sum(BoutiqueSale.amount_paid - BoutiqueSale.total_amount + BoutiqueSale.balance)
-    ).filter(
-        BoutiqueSale.sale_date == today,
-        BoutiqueSale.is_credit_cleared == True,
-        BoutiqueSale.is_deleted == False
-    ).scalar() or 0
-    
-    hardware_cleared_today = db.session.query(
-        func.sum(HardwareSale.amount_paid - HardwareSale.total_amount + HardwareSale.balance)
-    ).filter(
-        HardwareSale.sale_date == today,
-        HardwareSale.is_credit_cleared == True,
-        HardwareSale.is_deleted == False
-    ).scalar() or 0
-    
-    # ============ FINANCE STATS ============
-    
-    # 1. Total Outstanding (Active + Due Soon + Overdue)
-    active_loans_balance = db.session.query(func.sum(Loan.balance)).filter(
-        Loan.is_deleted == False,
-        Loan.balance > 0
-    ).scalar() or 0
-    
-    active_group_balance = db.session.query(func.sum(GroupLoan.balance)).filter(
-        GroupLoan.is_deleted == False,
-        GroupLoan.balance > 0
-    ).scalar() or 0
-    
-    total_outstanding_loans = float(active_loans_balance) + float(active_group_balance)
-    
-    # 2. Overdue Loans Count
-    overdue_loans_count = Loan.query.filter(
-        Loan.is_deleted == False,
-        Loan.status == 'overdue'
-    ).count()
-    
-    # 3. Today's New Loans (Principal amount issued)
-    new_loans_today = db.session.query(func.sum(Loan.principal)).filter(
-        Loan.is_deleted == False,
-        Loan.issue_date == today
-    ).scalar() or 0
-    
-    new_group_loans_today = db.session.query(func.sum(GroupLoan.total_amount)).filter(
-        GroupLoan.is_deleted == False,
-        GroupLoan.created_at >= today
-    ).scalar() or 0
-    
-    total_new_loans_today = float(new_loans_today) + float(new_group_loans_today)
-    new_loans_count = Loan.query.filter(Loan.issue_date == today).count() + GroupLoan.query.filter(GroupLoan.created_at >= today).count()
-    
-    # 4. Today's Repayments (Cash In)
-    loan_repayments_today = db.session.query(func.sum(LoanPayment.amount)).filter(
-        LoanPayment.is_deleted == False,
-        LoanPayment.payment_date == today
-    ).scalar() or 0
-    
-    group_repayments_today = db.session.query(func.sum(GroupLoanPayment.amount)).filter(
-        GroupLoanPayment.is_deleted == False,
-        GroupLoanPayment.payment_date == today
-    ).scalar() or 0
-    
-    total_repayments_today = float(loan_repayments_today) + float(group_repayments_today)
-    
-    # Low stock alerts
-    boutique_low_stock = BoutiqueStock.query.filter(
-        BoutiqueStock.is_active == True,
-        BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
-    ).count()
-    
+    ).scalar() or 0)
+
     hardware_low_stock = HardwareStock.query.filter(
         HardwareStock.is_active == True,
         HardwareStock.quantity <= HardwareStock.low_stock_threshold
     ).count()
-    
-    # Recent sales trend (last 7 days)
+
+    # ============ FINANCE STATS ============
+    today_repayments = float(db.session.query(func.sum(LoanPayment.amount)).filter(
+        LoanPayment.payment_date == today,
+        LoanPayment.is_deleted == False
+    ).scalar() or 0)
+
+    today_group_repayments = float(db.session.query(func.sum(GroupLoanPayment.amount)).filter(
+        GroupLoanPayment.payment_date == today,
+        GroupLoanPayment.is_deleted == False
+    ).scalar() or 0)
+
+    active_loans_balance = float(db.session.query(func.sum(Loan.balance)).filter(
+        Loan.is_deleted == False,
+        Loan.balance > 0
+    ).scalar() or 0)
+
+    active_group_balance = float(db.session.query(func.sum(GroupLoan.balance)).filter(
+        GroupLoan.is_deleted == False,
+        GroupLoan.balance > 0
+    ).scalar() or 0)
+
+    overdue_loans_count = Loan.query.filter(
+        Loan.is_deleted == False,
+        Loan.status == 'overdue'
+    ).count()
+
+    overdue_groups_count = GroupLoan.query.filter(
+        GroupLoan.is_deleted == False,
+        GroupLoan.status == 'overdue'
+    ).count()
+
+    # ============ TOTALS ============
+    total_today = boutique_today + hardware_today + today_repayments + today_group_repayments
+    total_yesterday = boutique_yesterday + hardware_yesterday
+    total_credits = boutique_credits + hardware_credits
+    total_outstanding_loans = active_loans_balance + active_group_balance
+    total_low_stock = boutique_low_stock + hardware_low_stock
+    total_transactions = boutique_today_count + hardware_today_count
+
+    # ============ SALES TREND (LAST 7 DAYS) ============
     sales_trend = []
     for i in range(6, -1, -1):
         target_date = today - timedelta(days=i)
-        
-        daily_boutique = db.session.query(
+
+        daily_boutique = float(db.session.query(
             func.sum(BoutiqueSale.amount_paid)
         ).filter(
             BoutiqueSale.sale_date == target_date,
             BoutiqueSale.is_deleted == False
-        ).scalar() or 0
-        
-        daily_hardware = db.session.query(
+        ).scalar() or 0)
+
+        daily_hardware = float(db.session.query(
             func.sum(HardwareSale.amount_paid)
         ).filter(
             HardwareSale.sale_date == target_date,
             HardwareSale.is_deleted == False
-        ).scalar() or 0
-        
-        daily_finance = db.session.query(
+        ).scalar() or 0)
+
+        daily_finance = float(db.session.query(
             func.sum(LoanPayment.amount)
         ).filter(
             LoanPayment.payment_date == target_date,
             LoanPayment.is_deleted == False
-        ).scalar() or 0
-        
-        daily_group_finance = db.session.query(
+        ).scalar() or 0)
+
+        daily_group_finance = float(db.session.query(
             func.sum(GroupLoanPayment.amount)
         ).filter(
             GroupLoanPayment.payment_date == target_date,
             GroupLoanPayment.is_deleted == False
-        ).scalar() or 0
-        
-        total_finance = float(daily_finance) + float(daily_group_finance)
-        
+        ).scalar() or 0)
+
         sales_trend.append({
-            'date': target_date.isoformat(),
-            'boutique': float(daily_boutique),
-            'hardware': float(daily_hardware),
-            'finance': total_finance,
-            'total': float(daily_boutique) + float(daily_hardware) + total_finance
+            'date': target_date.strftime('%a'),
+            'boutique': daily_boutique,
+            'hardware': daily_hardware,
+            'finance': daily_finance + daily_group_finance,
+            'total': daily_boutique + daily_hardware + daily_finance + daily_group_finance
         })
-    
-    return jsonify({
-        'stats': {
+
+    # ============ LOW STOCK ALERTS ============
+    low_stock_items = []
+
+    boutique_low = BoutiqueStock.query.filter(
+        BoutiqueStock.is_active == True,
+        BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
+    ).limit(5).all()
+    for item in boutique_low:
+        low_stock_items.append({
+            'business': 'Boutique',
+            'item': item.item_name,
+            'quantity': item.quantity,
+            'unit': item.unit
+        })
+
+    hardware_low = HardwareStock.query.filter(
+        HardwareStock.is_active == True,
+        HardwareStock.quantity <= HardwareStock.low_stock_threshold
+    ).limit(5).all()
+    for item in hardware_low:
+        low_stock_items.append({
+            'business': 'Hardware',
+            'item': item.item_name,
+            'quantity': item.quantity,
+            'unit': item.unit
+        })
+
+    return render_template('dashboard.html',
+        today=today,
+        stats={
             'today_revenue': total_today,
             'yesterday_revenue': total_yesterday,
             'credits_outstanding': total_credits,
-            'low_stock_alerts': boutique_low_stock + hardware_low_stock,
-            'transactions_today': boutique_today_count + hardware_today_count
+            'loans_outstanding': total_outstanding_loans,
+            'low_stock_alerts': total_low_stock,
+            'transactions_today': total_transactions,
+            'overdue_loans': overdue_loans_count + overdue_groups_count
         },
-        'by_business': {
+        by_business={
             'boutique': {
-                'today': float(boutique_today),
-                'yesterday': float(boutique_yesterday),
-                'credits': float(boutique_credits),
-                'cleared_today': float(boutique_cleared_today),
+                'today': boutique_today,
+                'yesterday': boutique_yesterday,
+                'credits': boutique_credits,
                 'transactions': boutique_today_count,
                 'low_stock': boutique_low_stock
             },
             'hardware': {
-                'today': float(hardware_today),
-                'yesterday': float(hardware_yesterday),
-                'credits': float(hardware_credits),
-                'cleared_today': float(hardware_cleared_today),
+                'today': hardware_today,
+                'yesterday': hardware_yesterday,
+                'credits': hardware_credits,
                 'transactions': hardware_today_count,
                 'low_stock': hardware_low_stock
             },
             'finance': {
                 'outstanding': total_outstanding_loans,
-                'new_loans_today': total_new_loans_today,
-                'repayments_today': total_repayments_today,
-                'overdue_count': overdue_loans_count,
-                'transactions': new_loans_count
+                'repayments_today': today_repayments + today_group_repayments,
+                'overdue_count': overdue_loans_count + overdue_groups_count
             }
         },
-        'sales_trend': sales_trend
-    }), 200
+        sales_trend=sales_trend,
+        low_stock_items=low_stock_items
+    )
 
 
-@dashboard_bp.route('/employee', methods=['GET'])
-@jwt_required()
-def get_employee_dashboard():
-    """Get employee dashboard data"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if user.role != 'employee':
-        return jsonify({'error': 'Employee access required'}), 403
-    
-    today = date.today()
-    
-    # Determine which business module to use
-    if user.assigned_business == 'boutique':
-        SaleModel = BoutiqueSale
-    elif user.assigned_business == 'hardware':
-        SaleModel = HardwareSale
-    else:
-        return jsonify({'error': 'Invalid business assignment'}), 400
-    
-    # Today's sales for this employee
-    my_sales_today = db.session.query(
-        func.count(SaleModel.id),
-        func.sum(SaleModel.amount_paid)
-    ).filter(
-        SaleModel.sale_date == today,
-        SaleModel.created_by == user_id,
-        SaleModel.is_deleted == False
-    ).first()
-    
-    sales_count = my_sales_today[0] or 0
-    sales_amount = float(my_sales_today[1] or 0)
-    
-    # Pending credits for this employee
-    my_credits = db.session.query(
-        func.count(SaleModel.id),
-        func.sum(SaleModel.balance)
-    ).filter(
-        SaleModel.payment_type == 'part',
-        SaleModel.is_credit_cleared == False,
-        SaleModel.created_by == user_id,
-        SaleModel.is_deleted == False
-    ).first()
-    
-    credits_count = my_credits[0] or 0
-    credits_amount = float(my_credits[1] or 0)
-    
-    # Recent transactions (today and yesterday)
-    yesterday = today - timedelta(days=1)
-    recent_sales = SaleModel.query.filter(
-        SaleModel.created_by == user_id,
-        SaleModel.sale_date.in_([today, yesterday]),
-        SaleModel.is_deleted == False
-    ).order_by(SaleModel.created_at.desc()).limit(10).all()
-    
-    return jsonify({
-        'stats': {
-            'my_sales_today': sales_amount,
-            'sales_count_today': sales_count,
-            'pending_credits': credits_amount,
-            'credits_count': credits_count
-        },
-        'recent_sales': [sale.to_dict() for sale in recent_sales]
-    }), 200
+@dashboard_bp.route('/audit-trail')
+@manager_required
+def audit_trail():
+    """View audit trail - manager only"""
+    # Get filter parameters
+    username_filter = request.args.get('username', '')
+    section_filter = request.args.get('section', '')
+    action_filter = request.args.get('action', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 50
 
-
-@dashboard_bp.route('/notifications', methods=['GET'])
-@jwt_required()
-def get_notifications():
-    """Get notifications and alerts"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    notifications = []
-    
-    if user.role == 'manager':
-        # Low stock alerts
-        boutique_low_stock = BoutiqueStock.query.filter(
-            BoutiqueStock.is_active == True,
-            BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
-        ).all()
-        
-        for stock in boutique_low_stock:
-            notifications.append({
-                'type': 'low_stock',
-                'business': 'boutique',
-                'message': f"Low stock alert: {stock.item_name} ({stock.quantity} {stock.unit} remaining)",
-                'severity': 'warning'
-            })
-        
-        hardware_low_stock = HardwareStock.query.filter(
-            HardwareStock.is_active == True,
-            HardwareStock.quantity <= HardwareStock.low_stock_threshold
-        ).all()
-        
-        for stock in hardware_low_stock:
-            notifications.append({
-                'type': 'low_stock',
-                'business': 'hardware',
-                'message': f"Low stock alert: {stock.item_name} ({stock.quantity} {stock.unit} remaining)",
-                'severity': 'warning'
-            })
-    
-    return jsonify({
-        'notifications': notifications
-    }), 200
-
-
-@dashboard_bp.route('/audit', methods=['GET'])
-@jwt_required()
-def get_audit_logs():
-    """Get audit logs (Manager only)"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if user.role != 'manager':
-        return jsonify({'error': 'Manager access required'}), 403
-    
-    # Get query parameters for filtering
-    employee_id = request.args.get('employee_id')
-    action = request.args.get('action')
-    module = request.args.get('module')
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    flagged_only = request.args.get('flagged_only', 'false').lower() == 'true'
-    
+    # Build query
     query = AuditLog.query
-    
-    if employee_id:
-        query = query.filter(AuditLog.user_id == employee_id)
-    if action:
-        query = query.filter(AuditLog.action == action)
-    if module:
-        query = query.filter(AuditLog.module == module)
-    if start_date:
-        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
-        query = query.filter(AuditLog.created_at >= start_dt)
-    if end_date:
-        end_dt = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
-        query = query.filter(AuditLog.created_at < end_dt)
-    if flagged_only:
-        query = query.filter(AuditLog.is_flagged == True)
-    
-    # Order by most recent first, limit to 500
-    logs = query.order_by(AuditLog.created_at.desc()).limit(500).all()
-    
-    return jsonify({
-        'audit_logs': [log.to_dict() for log in logs]
-    }), 200
+
+    if username_filter:
+        query = query.filter(AuditLog.username.ilike(f'%{username_filter}%'))
+    if section_filter:
+        query = query.filter(AuditLog.section == section_filter)
+    if action_filter:
+        query = query.filter(AuditLog.action == action_filter)
+
+    # Order by most recent first
+    query = query.order_by(AuditLog.created_at.desc())
+
+    # Paginate
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    logs = pagination.items
+
+    # Get unique values for filters
+    sections = db.session.query(AuditLog.section).distinct().all()
+    sections = [s[0] for s in sections]
+
+    actions = db.session.query(AuditLog.action).distinct().all()
+    actions = [a[0] for a in actions]
+
+    usernames = db.session.query(AuditLog.username).distinct().all()
+    usernames = [u[0] for u in usernames]
+
+    return render_template('audit_trail.html',
+        logs=logs,
+        pagination=pagination,
+        sections=sections,
+        actions=actions,
+        usernames=usernames,
+        filters={
+            'username': username_filter,
+            'section': section_filter,
+            'action': action_filter
+        }
+    )

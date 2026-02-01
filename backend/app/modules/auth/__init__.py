@@ -1,190 +1,142 @@
-from flask import Blueprint, request, jsonify
-from flask_jwt_extended import (
-    create_access_token, create_refresh_token,
-    jwt_required, get_jwt_identity
-)
-from app.models.user import User
-from app.utils.helpers import log_audit
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from app.models.user import User, AuditLog
 from app.extensions import db
+from app.utils.timezone import get_local_now
+from functools import wraps
+import json
 
 auth_bp = Blueprint('auth', __name__)
 
 
-@auth_bp.route('/login', methods=['POST'])
-def login():
-    """User login endpoint"""
-    data = request.get_json()
-    
-    if not data or not data.get('username') or not data.get('password'):
-        return jsonify({'error': 'Username and password required'}), 400
-    
-    username = data.get('username')
-    password = data.get('password')
-    assigned_business = data.get('assigned_business')  # Optional for employees
-    
-    # Find user
-    user = User.query.filter_by(username=username).first()
-    
-    if not user or not user.check_password(password):
-        return jsonify({'error': 'Invalid username or password'}), 401
-    
-    if not user.is_active:
-        return jsonify({'error': 'Account is deactivated'}), 403
-    
-    # For employees, validate business assignment
-    if user.role == 'employee' and assigned_business:
-        if user.assigned_business != assigned_business and user.assigned_business != 'all':
-            return jsonify({'error': 'You do not have access to this business'}), 403
-    
-    # Generate tokens (identity must be a string)
-    access_token = create_access_token(identity=str(user.id))
-    refresh_token = create_refresh_token(identity=str(user.id))
-    
-    # Log the login
-    log_audit(
-        user_id=user.id,
-        action='login',
-        module='auth',
-        entity_type='user',
-        entity_id=user.id,
-        description=f"{user.name} logged in"
+def log_action(username, section, action, entity, entity_id=None, details=None):
+    """Log an action to the audit trail"""
+    log = AuditLog(
+        username=username,
+        section=section,
+        action=action,
+        entity=entity,
+        entity_id=entity_id,
+        details=json.dumps(details) if details else None,
+        ip_address=request.remote_addr
     )
-    
-    return jsonify({
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'user': user.to_dict()
-    }), 200
-
-
-@auth_bp.route('/demo-login', methods=['POST'])
-def demo_login():
-    """One-click demo login - bypasses password for demo users"""
-    data = request.get_json()
-
-    if not data or not data.get('role'):
-        return jsonify({'error': 'Role parameter required'}), 400
-
-    role = data.get('role').lower()
-
-    # Map role to demo username
-    demo_users = {
-        'manager': 'manager',
-        'boutique': 'sarah',
-        'hardware': 'david',
-        'finance': 'grace'  # Note: grace has 'finances' business
-    }
-
-    if role not in demo_users:
-        return jsonify({'error': 'Invalid role'}), 400
-
-    username = demo_users[role]
-
-    # Find user directly by username (skip password check for demo)
-    user = User.query.filter_by(username=username).first()
-
-    if not user:
-        return jsonify({'error': 'Demo user not found'}), 404
-
-    if not user.is_active:
-        return jsonify({'error': 'Account is deactivated'}), 403
-
-    # Generate tokens (same as regular login)
-    access_token = create_access_token(identity=str(user.id))
-    refresh_token = create_refresh_token(identity=str(user.id))
-
-    # Log the demo login
-    log_audit(
-        user_id=user.id,
-        action='login',
-        module='auth',
-        entity_type='user',
-        entity_id=user.id,
-        description=f"{user.name} logged in (demo mode)"
-    )
-
-    return jsonify({
-        'access_token': access_token,
-        'refresh_token': refresh_token,
-        'user': user.to_dict()
-    }), 200
-
-
-@auth_bp.route('/logout', methods=['POST'])
-@jwt_required()
-def logout():
-    """User logout endpoint"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if user:
-        log_audit(
-            user_id=user.id,
-            action='logout',
-            module='auth',
-            entity_type='user',
-            entity_id=user.id,
-            description=f"{user.name} logged out"
-        )
-    
-    return jsonify({'message': 'Successfully logged out'}), 200
-
-
-@auth_bp.route('/me', methods=['GET'])
-@jwt_required()
-def get_current_user():
-    """Get current user profile"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    
-    return jsonify({'user': user.to_dict()}), 200
-
-
-@auth_bp.route('/change-password', methods=['PUT'])
-@jwt_required()
-def change_password():
-    """Change user password"""
-    user_id = int(get_jwt_identity())
-    user = User.query.get(user_id)
-    
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    
-    data = request.get_json()
-    old_password = data.get('old_password')
-    new_password = data.get('new_password')
-    
-    if not old_password or not new_password:
-        return jsonify({'error': 'Old and new passwords required'}), 400
-    
-    if not user.check_password(old_password):
-        return jsonify({'error': 'Current password is incorrect'}), 401
-    
-    if len(new_password) < 6:
-        return jsonify({'error': 'New password must be at least 6 characters'}), 400
-    
-    user.set_password(new_password)
+    db.session.add(log)
     db.session.commit()
-    
-    log_audit(
-        user_id=user.id,
-        action='update',
-        module='auth',
-        entity_type='user',
-        entity_id=user.id,
-        description=f"{user.name} changed password"
-    )
-    
-    return jsonify({'message': 'Password changed successfully'}), 200
 
 
-@auth_bp.route('/refresh', methods=['POST'])
-@jwt_required(refresh=True)
-def refresh():
-    """Refresh access token"""
-    user_id = int(get_jwt_identity())
-    access_token = create_access_token(identity=user_id)
-    return jsonify({'access_token': access_token}), 200
+def get_current_user():
+    """Get the current logged in user from session"""
+    return session.get('username')
+
+
+def get_current_section():
+    """Get the current section from session"""
+    return session.get('section')
+
+
+def login_required(section):
+    """Decorator to require login for a specific section"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'username' not in session:
+                flash('Please login to access this section', 'error')
+                return redirect(url_for('auth.login', section=section))
+
+            # Check if user has access to this section
+            user_section = session.get('section')
+            if user_section != 'manager' and user_section != section:
+                flash(f'You do not have access to the {section} section', 'error')
+                return redirect(url_for('auth.login', section=section))
+
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def manager_required(f):
+    """Decorator to require manager access"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' not in session:
+            flash('Please login as manager', 'error')
+            return redirect(url_for('auth.login', section='manager'))
+
+        if session.get('section') != 'manager':
+            flash('Manager access required', 'error')
+            # Redirect to their own section, not dashboard (to avoid loop)
+            user_section = session.get('section')
+            if user_section == 'boutique':
+                return redirect(url_for('boutique.index'))
+            elif user_section == 'hardware':
+                return redirect(url_for('hardware.index'))
+            elif user_section == 'finance':
+                return redirect(url_for('finance.index'))
+            # If unknown section, send to login
+            return redirect(url_for('auth.login', section='manager'))
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+@auth_bp.route('/login')
+@auth_bp.route('/login/<section>')
+def login(section='boutique'):
+    """Show login page for a section"""
+    if section not in ['manager', 'boutique', 'hardware', 'finance']:
+        section = 'boutique'
+    return render_template('auth/login.html', section=section)
+
+
+@auth_bp.route('/login/<section>', methods=['POST'])
+def do_login(section='boutique'):
+    """Process login - for now, any username works"""
+    username = request.form.get('username', '').strip()
+
+    if not username:
+        flash('Username is required', 'error')
+        return redirect(url_for('auth.login', section=section))
+
+    # Create user if doesn't exist
+    user = User.query.filter_by(username=username).first()
+    if not user:
+        user = User(username=username, role=section)
+        db.session.add(user)
+
+    user.last_login = get_local_now()
+    db.session.commit()
+
+    # Set session
+    session['username'] = username
+    session['section'] = section
+    session['user_id'] = user.id
+
+    # Log the login
+    log_action(username, section, 'login', 'session')
+
+    flash(f'Welcome, {username}!', 'success')
+
+    # Redirect to appropriate section
+    if section == 'manager':
+        return redirect(url_for('dashboard.index'))
+    elif section == 'boutique':
+        return redirect(url_for('boutique.index'))
+    elif section == 'hardware':
+        return redirect(url_for('hardware.index'))
+    elif section == 'finance':
+        return redirect(url_for('finance.index'))
+
+    return redirect(url_for('dashboard.index'))
+
+
+@auth_bp.route('/logout')
+def logout():
+    """Logout and clear session"""
+    username = session.get('username', 'unknown')
+    section = session.get('section', 'unknown')
+
+    if username != 'unknown':
+        log_action(username, section, 'logout', 'session')
+
+    session.clear()
+    flash('You have been logged out', 'success')
+    return redirect(url_for('auth.login'))

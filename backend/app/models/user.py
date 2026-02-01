@@ -1,45 +1,51 @@
 from app.extensions import db
-from datetime import datetime
 from app.utils.timezone import get_local_now
-import bcrypt
 
 
 class User(db.Model):
+    """Simple user model for tracking who does what"""
     __tablename__ = 'users'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(255), nullable=False)
-    name = db.Column(db.String(100), nullable=False)
-    role = db.Column(db.Enum('manager', 'employee', name='user_role'), nullable=False)
-    assigned_business = db.Column(db.Enum('boutique', 'hardware', 'finances', 'all', name='business_type'), nullable=False)
+    role = db.Column(db.Enum('manager', 'boutique', 'hardware', 'finance', name='user_role'), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    can_backdate = db.Column(db.Boolean, default=False)
-    backdate_limit = db.Column(db.Integer, default=1)  # Days
-    can_edit = db.Column(db.Boolean, default=True)
-    can_delete = db.Column(db.Boolean, default=True)
-    can_clear_credits = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    updated_at = db.Column(db.DateTime, onupdate=get_local_now)
-    
-    def set_password(self, password):
-        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    
-    def check_password(self, password):
-        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
-    
+    last_login = db.Column(db.DateTime, nullable=True)
+
     def to_dict(self):
         return {
             'id': self.id,
             'username': self.username,
-            'name': self.name,
             'role': self.role,
-            'assigned_business': self.assigned_business,
             'is_active': self.is_active,
-            'can_backdate': self.can_backdate,
-            'backdate_limit': self.backdate_limit,
-            'can_edit': self.can_edit,
-            'can_delete': self.can_delete,
-            'can_clear_credits': self.can_clear_credits,
+            'last_login': self.last_login.isoformat() if self.last_login else None
+        }
+
+
+class AuditLog(db.Model):
+    """Track all actions in the system"""
+    __tablename__ = 'audit_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), nullable=False)
+    section = db.Column(db.String(50), nullable=False)  # boutique, hardware, finance, customers
+    action = db.Column(db.String(50), nullable=False)   # create, update, delete, view
+    entity = db.Column(db.String(50), nullable=False)   # stock, sale, loan, etc.
+    entity_id = db.Column(db.Integer, nullable=True)
+    details = db.Column(db.Text, nullable=True)         # JSON with old/new values
+    ip_address = db.Column(db.String(45), nullable=True)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'section': self.section,
+            'action': self.action,
+            'entity': self.entity,
+            'entity_id': self.entity_id,
+            'details': self.details,
+            'ip_address': self.ip_address,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }

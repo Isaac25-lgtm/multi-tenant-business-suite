@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Boutique Sales - Denove APS{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">Boutique Sales</h1>
+        <p class="text-gray-600">{{ sales|length }} transactions</p>
+    </div>
+    <a href="{{ url_for('boutique.new_sale') }}" class="btn btn-primary">New Sale</a>
+</div>
+
+<!-- Date Filter -->
+<div class="bg-white rounded-lg shadow p-4 mb-4">
+    <form method="GET" class="flex flex-wrap items-end gap-4">
+        <div>
+            <label class="form-label">From Date</label>
+            <input type="date" name="start_date" value="{{ start_date or '' }}" class="form-input">
+        </div>
+        <div>
+            <label class="form-label">To Date</label>
+            <input type="date" name="end_date" value="{{ end_date or '' }}" class="form-input">
+        </div>
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="{{ url_for('boutique.sales') }}" class="btn btn-secondary">Clear</a>
+    </form>
+</div>
+
+<!-- Sales Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Reference</th>
+                <th>Date</th>
+                <th>Customer</th>
+                <th class="text-right">Total</th>
+                <th class="text-right">Paid</th>
+                <th class="text-right">Balance</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for sale in sales %}
+            <tr>
+                <td class="font-medium">{{ sale.reference_number }}</td>
+                <td>{{ sale.sale_date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ sale.customer.name if sale.customer else '-' }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(sale.total_amount) }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(sale.amount_paid) }}</td>
+                <td class="text-right {% if sale.balance > 0 %}text-orange-600{% endif %}">{{ "{:,.0f}".format(sale.balance) }}</td>
+                <td>
+                    {% if sale.payment_type == 'full' %}
+                    <span class="badge badge-success">Full</span>
+                    {% elif sale.is_credit_cleared %}
+                    <span class="badge badge-success">Cleared</span>
+                    {% else %}
+                    <span class="badge badge-warning">Credit</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('boutique.view_sale', id=sale.id) }}" class="text-indigo-600 hover:underline text-sm">View</a>
+                    <form method="POST" action="{{ url_for('boutique.delete_sale', id=sale.id) }}" class="inline" onsubmit="return confirm('Delete this sale? Stock will be restored.')">
+                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" class="text-center text-gray-500 py-8">No sales found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

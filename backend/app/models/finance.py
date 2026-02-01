@@ -1,24 +1,21 @@
 from app.extensions import db
-from datetime import datetime
 from app.utils.timezone import get_local_now
 
 
 class LoanClient(db.Model):
     """Loan clients (borrowers)"""
     __tablename__ = 'loan_clients'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    nin = db.Column(db.String(20), nullable=True)  # National ID Number
+    nin = db.Column(db.String(20), nullable=True)
     phone = db.Column(db.String(20), nullable=False)
     address = db.Column(db.String(200), nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
-    creator = db.relationship('User', foreign_keys=[created_by])
+
     loans = db.relationship('Loan', backref='client', lazy='dynamic')
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -34,11 +31,11 @@ class LoanClient(db.Model):
 class Loan(db.Model):
     """Individual loans"""
     __tablename__ = 'loans'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey('loan_clients.id'), nullable=False)
     principal = db.Column(db.Numeric(12, 2), nullable=False)
-    interest_rate = db.Column(db.Numeric(5, 2), nullable=False)  # Percentage
+    interest_rate = db.Column(db.Numeric(5, 2), nullable=False)
     interest_amount = db.Column(db.Numeric(12, 2), nullable=False)
     total_amount = db.Column(db.Numeric(12, 2), nullable=False)
     amount_paid = db.Column(db.Numeric(12, 2), default=0)
@@ -50,13 +47,10 @@ class Loan(db.Model):
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     deleted_at = db.Column(db.DateTime, nullable=True)
-    deleted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    
-    creator = db.relationship('User', foreign_keys=[created_by])
+
     payments = db.relationship('LoanPayment', backref='loan', lazy='dynamic')
-    
+
     def to_dict(self, include_payments=False):
         data = {
             'id': self.id,
@@ -72,8 +66,7 @@ class Loan(db.Model):
             'issue_date': self.issue_date.isoformat() if self.issue_date else None,
             'due_date': self.due_date.isoformat() if self.due_date else None,
             'status': self.status,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'created_by_name': self.creator.name if self.creator else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
         if include_payments:
             data['payments'] = [p.to_dict() for p in self.payments.order_by(LoanPayment.payment_date.desc())]
@@ -83,7 +76,7 @@ class Loan(db.Model):
 class LoanPayment(db.Model):
     """Loan payments"""
     __tablename__ = 'loan_payments'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=False)
     payment_date = db.Column(db.Date, nullable=False)
@@ -92,10 +85,7 @@ class LoanPayment(db.Model):
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
-    creator = db.relationship('User', foreign_keys=[created_by])
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -105,8 +95,7 @@ class LoanPayment(db.Model):
             'amount': float(self.amount),
             'balance_after': float(self.balance_after),
             'notes': self.notes,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'created_by_name': self.creator.name if self.creator else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 
@@ -117,13 +106,13 @@ class GroupLoan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     group_name = db.Column(db.String(100), nullable=False)
     member_count = db.Column(db.Integer, nullable=False)
-    principal = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # Original loan amount before interest
-    interest_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)  # Interest rate percentage
-    interest_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)  # Calculated interest
-    total_amount = db.Column(db.Numeric(12, 2), nullable=False)  # principal + interest
+    principal = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    interest_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)
+    interest_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
+    total_amount = db.Column(db.Numeric(12, 2), nullable=False)
     amount_per_period = db.Column(db.Numeric(12, 2), nullable=False)
     total_periods = db.Column(db.Integer, nullable=False)
-    period_type = db.Column(db.String(20), nullable=False, default='monthly')  # weekly, bi-weekly, monthly, bi-monthly
+    period_type = db.Column(db.String(20), nullable=False, default='monthly')
     periods_paid = db.Column(db.Integer, default=0)
     amount_paid = db.Column(db.Numeric(12, 2), default=0)
     balance = db.Column(db.Numeric(12, 2), nullable=False)
@@ -133,9 +122,7 @@ class GroupLoan(db.Model):
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
 
-    creator = db.relationship('User', foreign_keys=[created_by])
     payments = db.relationship('GroupLoanPayment', backref='group_loan', lazy='dynamic')
     documents = db.relationship('LoanDocument', backref='group_loan', lazy='dynamic',
                                primaryjoin='GroupLoan.id==LoanDocument.group_loan_id')
@@ -159,8 +146,7 @@ class GroupLoan(db.Model):
             'issue_date': self.issue_date.isoformat() if self.issue_date else None,
             'due_date': self.due_date.isoformat() if self.due_date else None,
             'status': self.status,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'created_by_name': self.creator.name if self.creator else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
         if include_payments:
             data['payments'] = [p.to_dict() for p in self.payments.order_by(GroupLoanPayment.payment_date.desc())]
@@ -172,7 +158,7 @@ class GroupLoan(db.Model):
 class GroupLoanPayment(db.Model):
     """Group loan payments"""
     __tablename__ = 'group_loan_payments'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     group_loan_id = db.Column(db.Integer, db.ForeignKey('group_loans.id'), nullable=False)
     payment_date = db.Column(db.Date, nullable=False)
@@ -182,10 +168,7 @@ class GroupLoanPayment(db.Model):
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
-    creator = db.relationship('User', foreign_keys=[created_by])
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -196,15 +179,14 @@ class GroupLoanPayment(db.Model):
             'periods_covered': self.periods_covered,
             'balance_after': float(self.balance_after),
             'notes': self.notes,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'created_by_name': self.creator.name if self.creator else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 
 class LoanDocument(db.Model):
     """Loan security documents/agreements"""
     __tablename__ = 'loan_documents'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True)
     group_loan_id = db.Column(db.Integer, db.ForeignKey('group_loans.id'), nullable=True)
@@ -213,15 +195,11 @@ class LoanDocument(db.Model):
     file_type = db.Column(db.String(50), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
-    creator = db.relationship('User', foreign_keys=[created_by])
-    
+
     def to_dict(self):
         return {
             'id': self.id,
             'filename': self.filename,
             'file_type': self.file_type,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'created_by_name': self.creator.name if self.creator else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }

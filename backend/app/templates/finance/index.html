@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Finance - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">Finance</h1>
+    <p class="text-gray-600">Loan management and tracking</p>
+</div>
+
+<!-- Quick Stats -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="stat-card">
+        <div class="stat-card-value">{{ active_loans }}</div>
+        <div class="stat-card-label">Active Loans</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-value">{{ active_groups }}</div>
+        <div class="stat-card-label">Active Groups</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-value {% if overdue_loans + overdue_groups > 0 %}text-red-600{% endif %}">{{ overdue_loans + overdue_groups }}</div>
+        <div class="stat-card-label">Overdue</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(total_outstanding) }}</div>
+        <div class="stat-card-label">Outstanding</div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <a href="{{ url_for('finance.clients') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <h3 class="font-semibold text-lg text-gray-800 mb-2">Clients</h3>
+        <p class="text-gray-600 text-sm">Manage loan clients</p>
+    </a>
+
+    <a href="{{ url_for('finance.loans') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <h3 class="font-semibold text-lg text-gray-800 mb-2">Individual Loans</h3>
+        <p class="text-gray-600 text-sm">Manage individual loans</p>
+    </a>
+
+    <a href="{{ url_for('finance.group_loans') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <h3 class="font-semibold text-lg text-gray-800 mb-2">Group Loans</h3>
+        <p class="text-gray-600 text-sm">Manage group loans</p>
+    </a>
+
+    <a href="{{ url_for('finance.payments') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+        <h3 class="font-semibold text-lg text-gray-800 mb-2">Payments</h3>
+        <p class="text-gray-600 text-sm">View payment history</p>
+    </a>
+</div>
+{% endblock %}

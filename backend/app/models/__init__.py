@@ -1,8 +1,8 @@
 # Import all models here for Flask-Migrate to detect them
-from app.models.user import User
 from app.models.customer import Customer
+from app.models.user import User, AuditLog
 from app.models.boutique import (
-    BoutiqueCategory, BoutiqueStock, BoutiqueSale, 
+    BoutiqueCategory, BoutiqueStock, BoutiqueSale,
     BoutiqueSaleItem, BoutiqueCreditPayment
 )
 from app.models.hardware import (
@@ -11,15 +11,12 @@ from app.models.hardware import (
 )
 from app.models.finance import (
     LoanClient, Loan, LoanPayment,
-    GroupLoan, GroupLoanPayment
+    GroupLoan, GroupLoanPayment, LoanDocument
 )
-from app.models.audit import AuditLog
 
 __all__ = [
-    'User', 'Customer', 
+    'Customer', 'User', 'AuditLog',
     'BoutiqueCategory', 'BoutiqueStock', 'BoutiqueSale', 'BoutiqueSaleItem', 'BoutiqueCreditPayment',
     'HardwareCategory', 'HardwareStock', 'HardwareSale', 'HardwareSaleItem', 'HardwareCreditPayment',
-    'LoanClient', 'Loan', 'LoanPayment', 'GroupLoan', 'GroupLoanPayment',
-    'AuditLog'
+    'LoanClient', 'Loan', 'LoanPayment', 'GroupLoan', 'GroupLoanPayment', 'LoanDocument'
 ]
-

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Audit Trail - Denove APS{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">Audit Trail</h1>
+        <p class="text-gray-600">Monitor all system activity</p>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="bg-white rounded-lg shadow p-4 mb-6">
+    <form method="GET" class="flex flex-wrap gap-4 items-end">
+        <div class="flex-1 min-w-[150px]">
+            <label class="form-label">Username</label>
+            <select name="username" class="form-select">
+                <option value="">All Users</option>
+                {% for user in usernames %}
+                <option value="{{ user }}" {% if filters.username == user %}selected{% endif %}>{{ user }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex-1 min-w-[150px]">
+            <label class="form-label">Section</label>
+            <select name="section" class="form-select">
+                <option value="">All Sections</option>
+                {% for section in sections %}
+                <option value="{{ section }}" {% if filters.section == section %}selected{% endif %}>{{ section|title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex-1 min-w-[150px]">
+            <label class="form-label">Action</label>
+            <select name="action" class="form-select">
+                <option value="">All Actions</option>
+                {% for action in actions %}
+                <option value="{{ action }}" {% if filters.action == action %}selected{% endif %}>{{ action|title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex gap-2">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="{{ url_for('dashboard.audit_trail') }}" class="btn btn-secondary">Clear</a>
+        </div>
+    </form>
+</div>
+
+<!-- Audit Log Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Section</th>
+                <th>Action</th>
+                <th>Entity</th>
+                <th>Details</th>
+                <th>IP Address</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td class="whitespace-nowrap text-sm">
+                    {{ log.created_at.strftime('%Y-%m-%d %H:%M') }}
+                </td>
+                <td class="font-medium">{{ log.username }}</td>
+                <td>
+                    <span class="px-2 py-1 text-xs rounded-full
+                        {% if log.section == 'manager' %}bg-purple-100 text-purple-800
+                        {% elif log.section == 'boutique' %}bg-pink-100 text-pink-800
+                        {% elif log.section == 'hardware' %}bg-orange-100 text-orange-800
+                        {% elif log.section == 'finance' %}bg-green-100 text-green-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {{ log.section|title }}
+                    </span>
+                </td>
+                <td>
+                    <span class="px-2 py-1 text-xs rounded-full
+                        {% if log.action == 'create' %}bg-green-100 text-green-800
+                        {% elif log.action == 'update' %}bg-blue-100 text-blue-800
+                        {% elif log.action == 'delete' %}bg-red-100 text-red-800
+                        {% elif log.action == 'login' %}bg-indigo-100 text-indigo-800
+                        {% elif log.action == 'logout' %}bg-gray-100 text-gray-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {{ log.action|title }}
+                    </span>
+                </td>
+                <td>
+                    {{ log.entity|title }}
+                    {% if log.entity_id %}
+                    <span class="text-gray-500">#{{ log.entity_id }}</span>
+                    {% endif %}
+                </td>
+                <td class="max-w-xs truncate text-sm text-gray-600" title="{{ log.details or '' }}">
+                    {% if log.details %}
+                    {{ log.details[:50] }}{% if log.details|length > 50 %}...{% endif %}
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td class="text-sm text-gray-500">{{ log.ip_address or '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="text-center text-gray-500 py-8">No audit logs found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+{% if pagination.pages > 1 %}
+<div class="mt-4 flex justify-center gap-2">
+    {% if pagination.has_prev %}
+    <a href="{{ url_for('dashboard.audit_trail', page=pagination.prev_num, **filters) }}" class="btn btn-secondary">Previous</a>
+    {% endif %}
+
+    <span class="px-4 py-2 text-gray-600">
+        Page {{ pagination.page }} of {{ pagination.pages }}
+    </span>
+
+    {% if pagination.has_next %}
+    <a href="{{ url_for('dashboard.audit_trail', page=pagination.next_num, **filters) }}" class="btn btn-secondary">Next</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

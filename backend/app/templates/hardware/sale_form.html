@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}New Hardware Sale - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">New Hardware Sale</h1>
+    <p class="text-gray-600">Record a new sale transaction</p>
+</div>
+
+<form method="POST" action="{{ url_for('hardware.create_sale') }}" class="bg-white rounded-lg shadow p-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="form-group">
+            <label class="form-label">Sale Date</label>
+            <input type="date" name="sale_date" value="{{ today }}" required class="form-input">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Payment Type</label>
+            <select name="payment_type" id="payment-type" required class="form-select" onchange="toggleCustomerFields()">
+                <option value="full">Full Payment</option>
+                <option value="part">Part Payment (Credit)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Existing Customer</label>
+            <select name="customer_id" id="customer-select" class="form-select">
+                <option value="">-- Select or Add New --</option>
+                {% for customer in customers %}
+                <option value="{{ customer.id }}">{{ customer.name }} ({{ customer.phone }})</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- New Customer Fields (for credit sales) -->
+    <div id="new-customer-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded">
+        <div class="form-group">
+            <label class="form-label">New Customer Name</label>
+            <input type="text" name="customer_name" class="form-input" placeholder="Enter customer name">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Phone Number</label>
+            <input type="text" name="customer_phone" class="form-input" placeholder="Enter phone number">
+        </div>
+    </div>
+
+    <!-- Sale Items -->
+    <div class="mb-6">
+        <h3 class="font-semibold text-gray-800 mb-4">Sale Items</h3>
+        <div id="items-container">
+            <div class="sale-item grid grid-cols-12 gap-2 mb-2 items-end">
+                <div class="col-span-5">
+                    <label class="form-label">Item</label>
+                    <select name="item_id[]" required class="form-select item-select" onchange="updatePrice(this)">
+                        <option value="">-- Select Item --</option>
+                        {% for item in stock %}
+                        <option value="{{ item.id }}" data-price="{{ item.max_selling_price }}" data-qty="{{ item.quantity }}">
+                            {{ item.item_name }} ({{ item.quantity }} {{ item.unit }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-span-2">
+                    <label class="form-label">Qty</label>
+                    <input type="number" name="quantity[]" min="1" value="1" required class="form-input item-quantity" onchange="calculateTotal()">
+                </div>
+                <div class="col-span-3">
+                    <label class="form-label">Price</label>
+                    <input type="number" name="price[]" min="0" step="0.01" required class="form-input item-price" onchange="calculateTotal()">
+                </div>
+                <div class="col-span-2">
+                    <label class="form-label">Subtotal</label>
+                    <div class="item-subtotal font-medium py-2">UGX 0</div>
+                </div>
+            </div>
+        </div>
+        <button type="button" onclick="addItem()" class="btn btn-outline mt-2">+ Add Item</button>
+    </div>
+
+    <!-- Totals -->
+    <div class="border-t pt-4 mb-6">
+        <div class="flex justify-between items-center text-lg mb-2">
+            <span class="font-semibold">Total Amount:</span>
+            <span id="sale-total" class="font-bold text-xl">UGX 0</span>
+        </div>
+        <div id="amount-paid-field" class="hidden">
+            <label class="form-label">Amount Paid</label>
+            <input type="number" name="amount_paid" min="0" step="0.01" class="form-input w-48" placeholder="Enter amount paid">
+        </div>
+    </div>
+
+    <div class="flex justify-end gap-2">
+        <a href="{{ url_for('hardware.sales') }}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Create Sale</button>
+    </div>
+</form>
+
+<script>
+function toggleCustomerFields() {
+    const paymentType = document.getElementById('payment-type').value;
+    const newCustomerFields = document.getElementById('new-customer-fields');
+    const amountPaidField = document.getElementById('amount-paid-field');
+
+    if (paymentType === 'part') {
+        newCustomerFields.classList.remove('hidden');
+        amountPaidField.classList.remove('hidden');
+    } else {
+        newCustomerFields.classList.add('hidden');
+        amountPaidField.classList.add('hidden');
+    }
+}
+
+function updatePrice(select) {
+    const option = select.options[select.selectedIndex];
+    const price = option.dataset.price || 0;
+    const row = select.closest('.sale-item');
+    row.querySelector('.item-price').value = price;
+    calculateTotal();
+}
+
+function addItem() {
+    const container = document.getElementById('items-container');
+    const firstItem = container.querySelector('.sale-item');
+    const newItem = firstItem.cloneNode(true);
+
+    // Reset values
+    newItem.querySelector('.item-select').value = '';
+    newItem.querySelector('.item-quantity').value = 1;
+    newItem.querySelector('.item-price').value = '';
+    newItem.querySelector('.item-subtotal').textContent = 'UGX 0';
+
+    // Add remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'text-red-600 hover:underline text-sm';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = function() {
+        newItem.remove();
+        calculateTotal();
+    };
+    newItem.appendChild(removeBtn);
+
+    container.appendChild(newItem);
+}
+
+function calculateTotal() {
+    const items = document.querySelectorAll('.sale-item');
+    let total = 0;
+
+    items.forEach(item => {
+        const qty = parseFloat(item.querySelector('.item-quantity').value) || 0;
+        const price = parseFloat(item.querySelector('.item-price').value) || 0;
+        const subtotal = qty * price;
+
+        item.querySelector('.item-subtotal').textContent = formatCurrency(subtotal);
+        total += subtotal;
+    });
+
+    document.getElementById('sale-total').textContent = formatCurrency(total);
+}
+</script>
+{% endblock %}

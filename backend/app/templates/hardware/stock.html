@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Hardware Stock - Denove APS{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">Hardware Stock</h1>
+        <p class="text-gray-600">{{ stock|length }} items</p>
+    </div>
+    <button onclick="showModal('add-stock-modal')" class="btn btn-primary">Add Stock Item</button>
+</div>
+
+<!-- Filter -->
+<div class="bg-white rounded-lg shadow p-4 mb-4">
+    <form method="GET" class="flex items-center gap-4">
+        <label class="flex items-center">
+            <input type="checkbox" name="show_inactive" value="true" {% if show_inactive %}checked{% endif %} onchange="this.form.submit()" class="mr-2">
+            Show inactive items
+        </label>
+    </form>
+</div>
+
+<!-- Stock Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Item Name</th>
+                <th>Category</th>
+                <th class="text-right">Quantity</th>
+                <th class="text-right">Cost</th>
+                <th class="text-right">Min Price</th>
+                <th class="text-right">Max Price</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in stock %}
+            <tr class="{% if item.is_low_stock %}bg-yellow-50{% endif %}">
+                <td class="font-medium">{{ item.item_name }}</td>
+                <td>{{ item.category.name if item.category else '-' }}</td>
+                <td class="text-right">
+                    {{ item.quantity }} {{ item.unit }}
+                    {% if item.is_low_stock %}
+                    <span class="badge badge-warning ml-2">Low</span>
+                    {% endif %}
+                </td>
+                <td class="text-right">{{ "{:,.0f}".format(item.cost_price) }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(item.min_selling_price) }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(item.max_selling_price) }}</td>
+                <td>
+                    {% if item.is_active %}
+                    <span class="badge badge-success">Active</span>
+                    {% else %}
+                    <span class="badge badge-danger">Inactive</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button onclick="editStock({{ item.id }}, '{{ item.item_name }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" class="text-indigo-600 hover:underline text-sm">Edit</button>
+                    <form method="POST" action="{{ url_for('hardware.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
+                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Deactivate</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" class="text-center text-gray-500 py-8">No stock items found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Add Stock Modal -->
+<div id="add-stock-modal" class="modal">
+    <div class="modal-content">
+        <h3 class="text-lg font-semibold mb-4">Add Stock Item</h3>
+        <form method="POST" action="{{ url_for('hardware.add_stock') }}">
+            <div class="form-group">
+                <label class="form-label">Item Name *</label>
+                <input type="text" name="item_name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select name="category_id" class="form-select">
+                    <option value="">-- Select Category --</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Quantity *</label>
+                    <input type="number" name="quantity" min="0" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Unit</label>
+                    <input type="text" name="unit" value="pieces" class="form-input">
+                </div>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Cost Price</label>
+                    <input type="number" name="cost_price" min="0" step="0.01" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Min Sell Price</label>
+                    <input type="number" name="min_selling_price" min="0" step="0.01" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Sell Price</label>
+                    <input type="number" name="max_selling_price" min="0" step="0.01" class="form-input">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Low Stock Threshold</label>
+                <input type="number" name="low_stock_threshold" min="0" class="form-input" placeholder="Auto-calculated if empty">
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" onclick="hideModal('add-stock-modal')" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Item</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Stock Modal -->
+<div id="edit-stock-modal" class="modal">
+    <div class="modal-content">
+        <h3 class="text-lg font-semibold mb-4">Edit Stock Item</h3>
+        <form id="edit-stock-form" method="POST">
+            <div class="form-group">
+                <label class="form-label">Item Name *</label>
+                <input type="text" name="item_name" id="edit-item-name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Category</label>
+                <select name="category_id" id="edit-category-id" class="form-select">
+                    <option value="">-- Select Category --</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Unit</label>
+                <input type="text" name="unit" id="edit-unit" class="form-input">
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Cost Price</label>
+                    <input type="number" name="cost_price" id="edit-cost-price" min="0" step="0.01" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Min Sell Price</label>
+                    <input type="number" name="min_selling_price" id="edit-min-price" min="0" step="0.01" class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Max Sell Price</label>
+                    <input type="number" name="max_selling_price" id="edit-max-price" min="0" step="0.01" class="form-input">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Low Stock Threshold</label>
+                <input type="number" name="low_stock_threshold" id="edit-threshold" min="0" class="form-input">
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" onclick="hideModal('edit-stock-modal')" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editStock(id, name, categoryId, unit, costPrice, minPrice, maxPrice, threshold) {
+    document.getElementById('edit-stock-form').action = '/hardware/stock/' + id + '/edit';
+    document.getElementById('edit-item-name').value = name;
+    document.getElementById('edit-category-id').value = categoryId || '';
+    document.getElementById('edit-unit').value = unit;
+    document.getElementById('edit-cost-price').value = costPrice;
+    document.getElementById('edit-min-price').value = minPrice;
+    document.getElementById('edit-max-price').value = maxPrice;
+    document.getElementById('edit-threshold').value = threshold;
+    showModal('edit-stock-modal');
+}
+</script>
+{% endblock %}

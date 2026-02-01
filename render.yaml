@@ -1,7 +1,6 @@
 services:
-  # Backend API Service
   - type: web
-    name: denove-aps-backend
+    name: denove-aps
     runtime: python
     plan: starter
     region: oregon
@@ -18,27 +17,6 @@ services:
       - key: MAX_CONTENT_LENGTH
         value: "5242880"
       - key: DATABASE_URL
-        sync: false  # Set this manually in Render dashboard with your Neon connection string
+        sync: false  # Set manually in Render dashboard with your PostgreSQL connection string
       - key: SECRET_KEY
         generateValue: true
-      - key: JWT_SECRET_KEY
-        generateValue: true
-
-  # Frontend Static Site
-  - type: web
-    name: denove-aps-frontend
-    runtime: static
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    envVars:
-      - key: VITE_API_URL
-        fromService:
-          name: denove-aps-backend
-          type: web
-          property: host
-

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Customers - Denove APS{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">Customers</h1>
+        <p class="text-gray-600">{{ customers|length }} customers</p>
+    </div>
+    <button onclick="showModal('add-customer-modal')" class="btn btn-primary">Add Customer</button>
+</div>
+
+<!-- Filter -->
+<div class="bg-white rounded-lg shadow p-4 mb-4">
+    <form method="GET" class="flex flex-wrap items-end gap-4">
+        <div>
+            <label class="form-label">Business Type</label>
+            <select name="business_type" class="form-select" onchange="this.form.submit()">
+                <option value="">All Types</option>
+                <option value="boutique" {% if business_type == 'boutique' %}selected{% endif %}>Boutique</option>
+                <option value="hardware" {% if business_type == 'hardware' %}selected{% endif %}>Hardware</option>
+                <option value="finances" {% if business_type == 'finances' %}selected{% endif %}>Finance</option>
+            </select>
+        </div>
+        <a href="{{ url_for('customers.index') }}" class="btn btn-secondary">Clear Filter</a>
+    </form>
+</div>
+
+<!-- Customers Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Address</th>
+                <th>NIN</th>
+                <th>Business Type</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for customer in customers %}
+            <tr>
+                <td class="font-medium">{{ customer.name }}</td>
+                <td>{{ customer.phone }}</td>
+                <td>{{ customer.address or '-' }}</td>
+                <td>{{ customer.nin or '-' }}</td>
+                <td>
+                    {% if customer.business_type %}
+                    <span class="badge {% if customer.business_type == 'boutique' %}badge-info{% elif customer.business_type == 'hardware' %}badge-warning{% else %}badge-success{% endif %}">
+                        {{ customer.business_type|title }}
+                    </span>
+                    {% else %}
+                    -
+                    {% endif %}
+                </td>
+                <td>
+                    <button onclick="editCustomer({{ customer.id }}, '{{ customer.name }}', '{{ customer.phone }}', '{{ customer.address or '' }}', '{{ customer.nin or '' }}')" class="text-indigo-600 hover:underline text-sm">Edit</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="text-center text-gray-500 py-8">No customers found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Add Customer Modal -->
+<div id="add-customer-modal" class="modal">
+    <div class="modal-content">
+        <h3 class="text-lg font-semibold mb-4">Add Customer</h3>
+        <form method="POST" action="{{ url_for('customers.add') }}">
+            <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input type="text" name="name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phone *</label>
+                <input type="text" name="phone" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Address</label>
+                <input type="text" name="address" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">NIN</label>
+                <input type="text" name="nin" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Business Type</label>
+                <select name="business_type" class="form-select">
+                    <option value="">-- Select --</option>
+                    <option value="boutique">Boutique</option>
+                    <option value="hardware">Hardware</option>
+                    <option value="finances">Finance</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" onclick="hideModal('add-customer-modal')" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Add Customer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Edit Customer Modal -->
+<div id="edit-customer-modal" class="modal">
+    <div class="modal-content">
+        <h3 class="text-lg font-semibold mb-4">Edit Customer</h3>
+        <form id="edit-customer-form" method="POST">
+            <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input type="text" name="name" id="edit-name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phone *</label>
+                <input type="text" name="phone" id="edit-phone" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Address</label>
+                <input type="text" name="address" id="edit-address" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">NIN</label>
+                <input type="text" name="nin" id="edit-nin" class="form-input">
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" onclick="hideModal('edit-customer-modal')" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editCustomer(id, name, phone, address, nin) {
+    document.getElementById('edit-customer-form').action = '/customers/' + id + '/edit';
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-phone').value = phone;
+    document.getElementById('edit-address').value = address;
+    document.getElementById('edit-nin').value = nin;
+    showModal('edit-customer-modal');
+}
+</script>
+{% endblock %}

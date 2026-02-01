@@ -1,15 +1,14 @@
 from app.extensions import db
-from datetime import datetime
 from app.utils.timezone import get_local_now
 
 
 class HardwareCategory(db.Model):
     __tablename__ = 'hardware_categories'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -19,7 +18,7 @@ class HardwareCategory(db.Model):
 
 class HardwareStock(db.Model):
     __tablename__ = 'hardware_stock'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     item_name = db.Column(db.String(100), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('hardware_categories.id'))
@@ -33,10 +32,9 @@ class HardwareStock(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
+
     category = db.relationship('HardwareCategory', backref='stock_items')
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -57,7 +55,7 @@ class HardwareStock(db.Model):
 
 class HardwareSale(db.Model):
     __tablename__ = 'hardware_sales'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     reference_number = db.Column(db.String(20), unique=True)
     sale_date = db.Column(db.Date, nullable=False)
@@ -70,14 +68,11 @@ class HardwareSale(db.Model):
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     deleted_at = db.Column(db.DateTime, nullable=True)
-    deleted_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
-    
+
     customer = db.relationship('Customer', backref='hardware_sales', foreign_keys=[customer_id])
-    creator = db.relationship('User', foreign_keys=[created_by])
     items = db.relationship('HardwareSaleItem', backref='sale', lazy='dynamic')
-    
+
     def to_dict(self, include_items=False):
         data = {
             'id': self.id,
@@ -89,8 +84,7 @@ class HardwareSale(db.Model):
             'amount_paid': float(self.amount_paid),
             'balance': float(self.balance),
             'is_credit_cleared': self.is_credit_cleared,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'created_by_name': self.creator.name if self.creator else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
         if include_items:
             data['items'] = [item.to_dict() for item in self.items]
@@ -99,7 +93,7 @@ class HardwareSale(db.Model):
 
 class HardwareSaleItem(db.Model):
     __tablename__ = 'hardware_sale_items'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     sale_id = db.Column(db.Integer, db.ForeignKey('hardware_sales.id'))
     stock_id = db.Column(db.Integer, db.ForeignKey('hardware_stock.id'), nullable=True)
@@ -109,7 +103,7 @@ class HardwareSaleItem(db.Model):
     subtotal = db.Column(db.Numeric(12, 2), nullable=False)
     is_other_item = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    
+
     def to_dict(self):
         return {
             'id': self.id,
@@ -123,23 +117,19 @@ class HardwareSaleItem(db.Model):
 
 class HardwareCreditPayment(db.Model):
     __tablename__ = 'hardware_credit_payments'
-    
+
     id = db.Column(db.Integer, primary_key=True)
     sale_id = db.Column(db.Integer, db.ForeignKey('hardware_sales.id'))
     payment_date = db.Column(db.Date, nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     remaining_balance = db.Column(db.Numeric(12, 2), nullable=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
-    
-    creator = db.relationship('User', foreign_keys=[created_by])
-    
+
     def to_dict(self):
         return {
             'id': self.id,
             'payment_date': self.payment_date.isoformat(),
             'amount': float(self.amount),
             'remaining_balance': float(self.remaining_balance),
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'created_by_name': self.creator.name if self.creator else None
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
