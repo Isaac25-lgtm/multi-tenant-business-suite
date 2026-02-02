@@ -58,10 +58,21 @@
                     {% endif %}
                 </td>
                 <td>
-                    <button onclick="editStock({{ item.id }}, '{{ item.item_name }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" class="text-indigo-600 hover:underline text-sm">Edit</button>
+                    <button onclick="editStock({{ item.id }}, '{{ item.item_name }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ 'true' if item.is_active else 'false' }})" class="text-indigo-600 hover:underline text-sm">Edit</button>
+                    {% if item.is_active %}
                     <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
-                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Deactivate</button>
+                        <button type="submit" class="text-orange-600 hover:underline text-sm ml-2">Deactivate</button>
                     </form>
+                    {% else %}
+                    <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}" class="inline">
+                        <button type="submit" class="text-green-600 hover:underline text-sm ml-2">Reactivate</button>
+                    </form>
+                    {% endif %}
+                    {% if current_section == 'manager' %}
+                    <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('PERMANENTLY DELETE this item? This cannot be undone!')">
+                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                    </form>
+                    {% endif %}
                 </td>
             </tr>
             {% else %}

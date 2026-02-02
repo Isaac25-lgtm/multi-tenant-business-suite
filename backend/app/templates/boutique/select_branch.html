@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Select Branch - Boutique - Denove APS{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-12">
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Boutique</h1>
+        <p class="text-gray-600">Select the branch you want to work with</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {% for code, name in branches.items() %}
+        <a href="{{ url_for('boutique.select_branch', branch=code) }}"
+           class="section-card hover:border-indigo-500 hover:shadow-lg transition-all group">
+            <div class="text-center py-8">
+                <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-indigo-100 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
+                    <span class="text-4xl font-bold text-indigo-600">{{ code }}</span>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-800">{{ name }}</h2>
+                <p class="text-gray-500 mt-2">Click to enter</p>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if is_manager %}
+    <div class="mt-8 text-center">
+        <a href="{{ url_for('boutique.select_branch', branch='ALL') }}"
+           class="btn btn-outline">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
+            </svg>
+            View All Branches
+        </a>
+        <p class="text-gray-500 text-sm mt-2">Manager: View combined data from all branches</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

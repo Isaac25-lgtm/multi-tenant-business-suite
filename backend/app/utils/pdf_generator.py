@@ -3,6 +3,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph
+from reportlab.lib.colors import HexColor
 from datetime import datetime
 import io
 
@@ -12,22 +13,65 @@ def format_currency(amount):
     return f"UGX {amount:,.0f}"
 
 
+def draw_logo_header(c, width, y):
+    """Draw the Denove APS logo header on PDF"""
+    # Draw logo box (indigo background)
+    logo_color = HexColor('#4f46e5')
+    gold_color = HexColor('#fbbf24')
+
+    # Logo box
+    box_x = width/2 - 100
+    box_y = y - 30
+    c.setFillColor(logo_color)
+    c.roundRect(box_x, box_y, 45, 40, 8, fill=1, stroke=0)
+
+    # Letter D in the box
+    c.setFillColor(HexColor('#ffffff'))
+    c.setFont("Helvetica-Bold", 24)
+    c.drawString(box_x + 12, box_y + 10, "D")
+
+    # Gold coin circle
+    c.setFillColor(gold_color)
+    c.circle(box_x + 30, box_y + 20, 8, fill=1, stroke=0)
+    c.setFillColor(logo_color)
+    c.setFont("Helvetica-Bold", 8)
+    c.drawCentredString(box_x + 30, box_y + 17, "$")
+
+    # Company name
+    c.setFillColor(HexColor('#1f2937'))
+    c.setFont("Helvetica-Bold", 22)
+    c.drawString(box_x + 55, box_y + 18, "DENOVE")
+
+    c.setFillColor(HexColor('#6b7280'))
+    c.setFont("Helvetica", 14)
+    c.drawString(box_x + 55, box_y + 2, "APS")
+
+    # Underline
+    c.setStrokeColor(logo_color)
+    c.setLineWidth(2)
+    c.line(box_x + 55, box_y - 2, box_x + 115, box_y - 2)
+
+    # Reset colors
+    c.setStrokeColor(HexColor('#000000'))
+    c.setFillColor(HexColor('#000000'))
+    c.setLineWidth(1)
+
+    return y - 50
+
+
 def generate_receipt_pdf(sale, business_name):
     """Generate PDF receipt for a sale"""
     buffer = io.BytesIO()
-    
+
     # Create PDF
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-    
-    # Set font
-    c.setFont("Helvetica-Bold", 16)
-    
-    # Header
-    y = height - 40
-    c.drawCentredString(width/2, y, "DENOVE APS")
-    
-    y -= 20
+
+    # Header with logo
+    y = height - 20
+    y = draw_logo_header(c, width, y)
+
+    y -= 10
     c.setFont("Helvetica", 12)
     c.drawCentredString(width/2, y, f"[{business_name}]")
     
@@ -158,12 +202,11 @@ def generate_group_agreement_pdf(group_loan):
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    # Header
-    y = height - 40
-    c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(width/2, y, "DENOVE APS")
+    # Header with logo
+    y = height - 20
+    y = draw_logo_header(c, width, y)
 
-    y -= 25
+    y -= 10
     c.setFont("Helvetica-Bold", 14)
     c.drawCentredString(width/2, y, "GROUP LOAN AGREEMENT")
 

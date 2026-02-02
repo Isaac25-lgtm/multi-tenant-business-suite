@@ -66,7 +66,7 @@
 <div id="add-group-modal" class="modal">
     <div class="modal-content">
         <h3 class="text-lg font-semibold mb-4">New Group Loan</h3>
-        <form method="POST" action="{{ url_for('finance.create_group_loan') }}">
+        <form method="POST" action="{{ url_for('finance.preview_group_loan_agreement') }}">
             <div class="grid grid-cols-2 gap-4">
                 <div class="form-group">
                     <label class="form-label">Group Name *</label>
@@ -103,14 +103,22 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Issue Date</label>
-                    <input type="date" name="issue_date" value="{{ today }}" class="form-input">
+                    <input type="date" name="issue_date" value="{{ today }}" class="form-input date-restricted-input">
                 </div>
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button type="button" onclick="hideModal('add-group-modal')" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create Group Loan</button>
+                <button type="submit" class="btn btn-primary">Preview Agreement</button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+// Initialize date restrictions based on user role
+document.addEventListener('DOMContentLoaded', function() {
+    const isManager = '{{ current_section }}' === 'manager';
+    initDateRestrictions(isManager);
+});
+</script>
 {% endblock %}

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
+  <!-- Background shape -->
+  <rect x="5" y="10" width="45" height="40" rx="8" fill="#4f46e5"/>
+
+  <!-- Letter D stylized -->
+  <path d="M15 18 L15 42 L28 42 C38 42 42 35 42 30 C42 25 38 18 28 18 Z"
+        fill="none" stroke="white" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Coins/Money symbol inside -->
+  <circle cx="28" cy="30" r="6" fill="#fbbf24" stroke="white" stroke-width="1"/>
+  <text x="28" y="33" text-anchor="middle" fill="#4f46e5" font-size="8" font-weight="bold">$</text>
+
+  <!-- Company Name -->
+  <text x="58" y="32" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#1f2937">
+    DENOVE
+  </text>
+  <text x="58" y="48" font-family="Arial, sans-serif" font-size="14" fill="#6b7280">
+    APS
+  </text>
+
+  <!-- Tagline accent -->
+  <rect x="58" y="52" width="60" height="2" fill="#4f46e5" rx="1"/>
+</svg>

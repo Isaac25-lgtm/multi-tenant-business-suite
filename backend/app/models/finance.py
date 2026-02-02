@@ -50,6 +50,8 @@ class Loan(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
 
     payments = db.relationship('LoanPayment', backref='loan', lazy='dynamic')
+    documents = db.relationship('LoanDocument', backref='loan', lazy='dynamic',
+                               primaryjoin='Loan.id==LoanDocument.loan_id')
 
     def to_dict(self, include_payments=False):
         data = {

@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block title %}Add Employee - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('dashboard.users') }}" class="text-indigo-600 hover:underline">&larr; Back to Users</a>
+    <h1 class="text-2xl font-bold text-gray-800 mt-2">Add New Employee</h1>
+</div>
+
+<div class="max-w-2xl">
+    <form method="POST" action="{{ url_for('dashboard.create_user') }}" enctype="multipart/form-data" class="section-card">
+        <!-- Profile Picture -->
+        <div class="form-group mb-6">
+            <label class="form-label">Profile Picture</label>
+            <div class="flex items-center gap-4">
+                <div id="preview-container" class="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-gray-300">
+                    <span id="preview-placeholder" class="text-4xl text-gray-400">?</span>
+                    <img id="preview-image" src="" alt="Preview" class="w-full h-full object-cover hidden">
+                </div>
+                <div>
+                    <input type="file" id="profile_picture" name="profile_picture" accept=".png,.jpg,.jpeg,.gif"
+                           class="hidden" onchange="previewImage(this)">
+                    <button type="button" onclick="document.getElementById('profile_picture').click()"
+                            class="btn btn-outline">Upload Photo</button>
+                    <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF (max 2MB)</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Username -->
+            <div class="form-group">
+                <label class="form-label">Username *</label>
+                <input type="text" name="username" required class="form-input" placeholder="john_doe">
+            </div>
+
+            <!-- Full Name -->
+            <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" name="full_name" class="form-input" placeholder="John Doe">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Email -->
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" class="form-input" placeholder="john@example.com">
+            </div>
+
+            <!-- Phone -->
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="text" name="phone" class="form-input" placeholder="+256 700 000000">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Role -->
+            <div class="form-group">
+                <label class="form-label">Primary Role *</label>
+                <select name="role" required class="form-select" id="role-select" onchange="toggleBranchField()">
+                    <option value="boutique">Boutique Employee</option>
+                    <option value="hardware">Hardware Employee</option>
+                    <option value="finance">Finance Employee</option>
+                    <option value="manager">Manager</option>
+                </select>
+            </div>
+
+            <!-- Boutique Branch -->
+            <div class="form-group" id="branch-group">
+                <label class="form-label">Boutique Branch</label>
+                <select name="boutique_branch" class="form-select">
+                    <option value="">All Branches</option>
+                    <option value="K">Branch K</option>
+                    <option value="B">Branch B</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Password -->
+        <div class="form-group">
+            <label class="form-label">Password (Optional)</label>
+            <input type="password" name="password" class="form-input" placeholder="Leave empty for open access">
+            <p class="text-xs text-gray-500 mt-1">If left empty, the employee can log in without a password (open access mode).</p>
+        </div>
+
+        <!-- Additional Access Permissions -->
+        <div class="form-group">
+            <label class="form-label">Additional Access Permissions</label>
+            <p class="text-xs text-gray-500 mb-2">Grant access to sections beyond the primary role:</p>
+            <div class="space-y-2">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_access_boutique" class="form-checkbox">
+                    <span>Can access Boutique section</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_access_hardware" class="form-checkbox">
+                    <span>Can access Hardware section</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_access_finance" class="form-checkbox">
+                    <span>Can access Finance section</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_access_customers" class="form-checkbox">
+                    <span>Can access Customers section</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="flex gap-2 pt-4 border-t">
+            <button type="submit" class="btn btn-primary">Create Employee</button>
+            <a href="{{ url_for('dashboard.users') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+function previewImage(input) {
+    const preview = document.getElementById('preview-image');
+    const placeholder = document.getElementById('preview-placeholder');
+
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.classList.remove('hidden');
+            placeholder.classList.add('hidden');
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function toggleBranchField() {
+    const role = document.getElementById('role-select').value;
+    const branchGroup = document.getElementById('branch-group');
+    if (role === 'boutique') {
+        branchGroup.style.display = 'block';
+    } else {
+        branchGroup.style.display = 'none';
+    }
+}
+
+// Initial toggle
+document.addEventListener('DOMContentLoaded', toggleBranchField);
+</script>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ user.username }} - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('dashboard.view_user', id=user.id) }}" class="text-indigo-600 hover:underline">&larr; Back to Profile</a>
+    <h1 class="text-2xl font-bold text-gray-800 mt-2">Edit Employee: {{ user.username }}</h1>
+</div>
+
+<div class="max-w-2xl">
+    <form method="POST" action="{{ url_for('dashboard.edit_user', id=user.id) }}" enctype="multipart/form-data" class="section-card">
+        <!-- Profile Picture -->
+        <div class="form-group mb-6">
+            <label class="form-label">Profile Picture</label>
+            <div class="flex items-center gap-4">
+                <div id="preview-container" class="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-gray-300">
+                    {% if user.profile_picture %}
+                    <img id="preview-image" src="{{ url_for('static', filename=user.profile_picture) }}" alt="Preview" class="w-full h-full object-cover">
+                    <span id="preview-placeholder" class="text-4xl text-gray-400 hidden">{{ (user.full_name or user.username)[0]|upper }}</span>
+                    {% else %}
+                    <span id="preview-placeholder" class="text-4xl text-gray-400">{{ (user.full_name or user.username)[0]|upper }}</span>
+                    <img id="preview-image" src="" alt="Preview" class="w-full h-full object-cover hidden">
+                    {% endif %}
+                </div>
+                <div>
+                    <input type="file" id="profile_picture" name="profile_picture" accept=".png,.jpg,.jpeg,.gif"
+                           class="hidden" onchange="previewImage(this)">
+                    <button type="button" onclick="document.getElementById('profile_picture').click()"
+                            class="btn btn-outline">Change Photo</button>
+                    <p class="text-xs text-gray-500 mt-1">PNG, JPG, GIF (max 2MB)</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Username (read-only) -->
+            <div class="form-group">
+                <label class="form-label">Username</label>
+                <input type="text" value="{{ user.username }}" readonly class="form-input bg-gray-100">
+                <p class="text-xs text-gray-500 mt-1">Username cannot be changed</p>
+            </div>
+
+            <!-- Full Name -->
+            <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input type="text" name="full_name" value="{{ user.full_name or '' }}" class="form-input" placeholder="John Doe">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Email -->
+            <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" name="email" value="{{ user.email or '' }}" class="form-input" placeholder="john@example.com">
+            </div>
+
+            <!-- Phone -->
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="text" name="phone" value="{{ user.phone or '' }}" class="form-input" placeholder="+256 700 000000">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <!-- Role -->
+            <div class="form-group">
+                <label class="form-label">Primary Role</label>
+                <select name="role" class="form-select" id="role-select" onchange="toggleBranchField()">
+                    <option value="boutique" {% if user.role == 'boutique' %}selected{% endif %}>Boutique Employee</option>
+                    <option value="hardware" {% if user.role == 'hardware' %}selected{% endif %}>Hardware Employee</option>
+                    <option value="finance" {% if user.role == 'finance' %}selected{% endif %}>Finance Employee</option>
+                    <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
+                </select>
+            </div>
+
+            <!-- Boutique Branch -->
+            <div class="form-group" id="branch-group" style="{% if user.role != 'boutique' %}display: none;{% endif %}">
+                <label class="form-label">Boutique Branch</label>
+                <select name="boutique_branch" class="form-select">
+                    <option value="">All Branches</option>
+                    <option value="K" {% if user.boutique_branch == 'K' %}selected{% endif %}>Branch K</option>
+                    <option value="B" {% if user.boutique_branch == 'B' %}selected{% endif %}>Branch B</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Password -->
+        <div class="form-group">
+            <label class="form-label">New Password</label>
+            <input type="password" name="password" class="form-input" placeholder="Leave empty to keep current password">
+            <p class="text-xs text-gray-500 mt-1">
+                {% if user.password_hash %}
+                Password is currently set. Enter a new password to change it.
+                {% else %}
+                No password set (open access mode). Set a password to require login.
+                {% endif %}
+            </p>
+        </div>
+
+        <!-- Active Status -->
+        <div class="form-group">
+            <label class="flex items-center gap-2">
+                <input type="checkbox" name="is_active" {% if user.is_active %}checked{% endif %} class="form-checkbox">
+                <span class="font-medium">Account Active</span>
+            </label>
+            <p class="text-xs text-gray-500 mt-1">Inactive accounts cannot log in.</p>
+        </div>
+
+        <!-- Additional Access Permissions -->
+        <div class="form-group">
+            <label class="form-label">Additional Access Permissions</label>
+            <p class="text-xs text-gray-500 mb-2">Grant access to sections beyond the primary role:</p>
+            <div class="space-y-2">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_access_boutique" {% if user.can_access_boutique %}checked{% endif %} class="form-checkbox">
+                    <span>Can access Boutique section</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_access_hardware" {% if user.can_access_hardware %}checked{% endif %} class="form-checkbox">
+                    <span>Can access Hardware section</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_access_finance" {% if user.can_access_finance %}checked{% endif %} class="form-checkbox">
+                    <span>Can access Finance section</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_access_customers" {% if user.can_access_customers %}checked{% endif %} class="form-checkbox">
+                    <span>Can access Customers section</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="flex gap-2 pt-4 border-t">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ url_for('dashboard.view_user', id=user.id) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+
+    <!-- Delete Account -->
+    <div class="section-card mt-6 border-red-200">
+        <h3 class="font-semibold text-red-600 mb-2">Danger Zone</h3>
+        <p class="text-gray-600 text-sm mb-4">Permanently delete this account. This action cannot be undone.</p>
+        <form method="POST" action="{{ url_for('dashboard.delete_user', id=user.id) }}"
+              onsubmit="return confirm('Are you sure you want to permanently delete this account?')">
+            <button type="submit" class="btn btn-danger">Delete Account</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function previewImage(input) {
+    const preview = document.getElementById('preview-image');
+    const placeholder = document.getElementById('preview-placeholder');
+
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            preview.src = e.target.result;
+            preview.classList.remove('hidden');
+            if (placeholder) placeholder.classList.add('hidden');
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function toggleBranchField() {
+    const role = document.getElementById('role-select').value;
+    const branchGroup = document.getElementById('branch-group');
+    if (role === 'boutique') {
+        branchGroup.style.display = 'block';
+    } else {
+        branchGroup.style.display = 'none';
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}User Management - Denove APS{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">User Management</h1>
+        <p class="text-gray-600">{{ users|length }} employees</p>
+    </div>
+    <a href="{{ url_for('dashboard.create_user') }}" class="btn btn-primary">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        Add Employee
+    </a>
+</div>
+
+<!-- Users Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for user in users %}
+    <div class="section-card">
+        <div class="flex items-center gap-4 mb-4">
+            {% if user.profile_picture %}
+            <img src="{{ url_for('static', filename=user.profile_picture) }}"
+                 alt="{{ user.full_name or user.username }}"
+                 class="w-16 h-16 rounded-full object-cover border-2 border-indigo-300">
+            {% else %}
+            <div class="w-16 h-16 rounded-full bg-indigo-100 flex items-center justify-center border-2 border-indigo-300">
+                <span class="text-2xl font-bold text-indigo-600">
+                    {{ (user.full_name or user.username)[0]|upper }}
+                </span>
+            </div>
+            {% endif %}
+            <div class="flex-1">
+                <h3 class="font-semibold text-lg">{{ user.full_name or user.username }}</h3>
+                <p class="text-gray-500 text-sm">@{{ user.username }}</p>
+                <span class="badge {% if user.role == 'manager' %}badge-info{% else %}badge-success{% endif %}">
+                    {{ user.role|title }}
+                </span>
+                {% if not user.is_active %}
+                <span class="badge badge-danger ml-1">Inactive</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="text-sm text-gray-600 space-y-1 mb-4">
+            {% if user.email %}
+            <p><span class="text-gray-500">Email:</span> {{ user.email }}</p>
+            {% endif %}
+            {% if user.phone %}
+            <p><span class="text-gray-500">Phone:</span> {{ user.phone }}</p>
+            {% endif %}
+            {% if user.boutique_branch %}
+            <p><span class="text-gray-500">Branch:</span> {{ user.boutique_branch }}</p>
+            {% endif %}
+            <p><span class="text-gray-500">Last login:</span>
+                {{ user.last_login.strftime('%Y-%m-%d %H:%M') if user.last_login else 'Never' }}
+            </p>
+        </div>
+
+        <!-- Access Permissions -->
+        <div class="flex flex-wrap gap-1 mb-4">
+            {% if user.role == 'manager' or user.can_access_boutique or user.role == 'boutique' %}
+            <span class="text-xs px-2 py-1 bg-pink-100 text-pink-700 rounded">Boutique</span>
+            {% endif %}
+            {% if user.role == 'manager' or user.can_access_hardware or user.role == 'hardware' %}
+            <span class="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded">Hardware</span>
+            {% endif %}
+            {% if user.role == 'manager' or user.can_access_finance or user.role == 'finance' %}
+            <span class="text-xs px-2 py-1 bg-green-100 text-green-700 rounded">Finance</span>
+            {% endif %}
+            {% if user.role == 'manager' or user.can_access_customers %}
+            <span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">Customers</span>
+            {% endif %}
+        </div>
+
+        <!-- Actions -->
+        <div class="flex gap-2 pt-3 border-t">
+            <a href="{{ url_for('dashboard.view_user', id=user.id) }}" class="text-indigo-600 hover:underline text-sm">View</a>
+            <a href="{{ url_for('dashboard.edit_user', id=user.id) }}" class="text-indigo-600 hover:underline text-sm">Edit</a>
+            <form method="POST" action="{{ url_for('dashboard.toggle_user_active', id=user.id) }}" class="inline">
+                <button type="submit" class="text-{{ 'red' if user.is_active else 'green' }}-600 hover:underline text-sm">
+                    {{ 'Deactivate' if user.is_active else 'Activate' }}
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-span-3 text-center text-gray-500 py-8">
+        <p>No employees found.</p>
+        <a href="{{ url_for('dashboard.create_user') }}" class="text-indigo-600 hover:underline">Add your first employee</a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

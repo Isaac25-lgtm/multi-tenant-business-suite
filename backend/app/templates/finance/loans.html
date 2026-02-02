@@ -64,7 +64,7 @@
 <div id="add-loan-modal" class="modal">
     <div class="modal-content">
         <h3 class="text-lg font-semibold mb-4">New Loan</h3>
-        <form method="POST" action="{{ url_for('finance.create_loan') }}">
+        <form method="POST" action="{{ url_for('finance.preview_loan_agreement') }}">
             <div class="form-group">
                 <label class="form-label">Client *</label>
                 <select name="client_id" required class="form-select">
@@ -91,14 +91,22 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Issue Date</label>
-                    <input type="date" name="issue_date" value="{{ today }}" class="form-input">
+                    <input type="date" name="issue_date" value="{{ today }}" class="form-input date-restricted-input">
                 </div>
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button type="button" onclick="hideModal('add-loan-modal')" class="btn btn-secondary">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create Loan</button>
+                <button type="submit" class="btn btn-primary">Preview Agreement</button>
             </div>
         </form>
     </div>
 </div>
+
+<script>
+// Initialize date restrictions based on user role
+document.addEventListener('DOMContentLoaded', function() {
+    const isManager = '{{ current_section }}' === 'manager';
+    initDateRestrictions(isManager);
+});
+</script>
 {% endblock %}

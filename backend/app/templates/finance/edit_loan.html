@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Loan - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="text-indigo-600 hover:underline">&larr; Back to Loan</a>
+    <h1 class="text-2xl font-bold text-gray-800 mt-2">Edit Loan - {{ loan.client.name }}</h1>
+</div>
+
+<div class="max-w-2xl">
+    <form method="POST" action="{{ url_for('finance.edit_loan', id=loan.id) }}" class="section-card">
+        <h2 class="font-semibold text-lg mb-4">Loan Information</h2>
+
+        <!-- Client Info (Read-only) -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="form-group">
+                <label class="form-label">Client</label>
+                <input type="text" value="{{ loan.client.name }}" readonly class="form-input bg-gray-100">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="text" value="{{ loan.client.phone }}" readonly class="form-input bg-gray-100">
+            </div>
+        </div>
+
+        <!-- Financial Info (Read-only) -->
+        <div class="grid grid-cols-3 gap-4 mb-6">
+            <div class="form-group">
+                <label class="form-label">Principal</label>
+                <input type="text" value="UGX {{ '{:,.0f}'.format(loan.principal) }}" readonly class="form-input bg-gray-100">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Interest Rate</label>
+                <input type="text" value="{{ '{:.1f}'.format(loan.interest_rate) }}%" readonly class="form-input bg-gray-100">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Total Amount</label>
+                <input type="text" value="UGX {{ '{:,.0f}'.format(loan.total_amount) }}" readonly class="form-input bg-gray-100">
+            </div>
+        </div>
+
+        <!-- Editable Dates (Manager Only) -->
+        {% if is_manager %}
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <h3 class="font-semibold text-yellow-800 mb-2">Edit Loan Dates (Manager Only)</h3>
+            <p class="text-sm text-yellow-700 mb-4">Changing these dates will affect the loan duration and status.</p>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Issue Date *</label>
+                    <input type="date" name="issue_date" value="{{ loan.issue_date }}" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Due Date *</label>
+                    <input type="date" name="due_date" value="{{ loan.due_date }}" required class="form-input">
+                </div>
+            </div>
+        </div>
+
+        <div class="flex gap-2 pt-4 border-t">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+        {% else %}
+        <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+            <p class="text-gray-600">Only managers can edit loan dates.</p>
+        </div>
+
+        <div class="flex gap-2 pt-4 border-t">
+            <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="btn btn-secondary">Back</a>
+        </div>
+        {% endif %}
+    </form>
+
+    <!-- Current Status -->
+    <div class="section-card mt-4">
+        <h3 class="font-semibold mb-2">Current Status</h3>
+        <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+                <span class="text-gray-500">Status:</span>
+                <span class="badge {% if loan.status == 'paid' %}badge-success{% elif loan.status == 'overdue' %}badge-danger{% else %}badge-info{% endif %} ml-1">
+                    {{ loan.status|title }}
+                </span>
+            </div>
+            <div>
+                <span class="text-gray-500">Duration:</span>
+                <span class="font-medium ml-1">{{ loan.duration_weeks }} weeks</span>
+            </div>
+            <div>
+                <span class="text-gray-500">Balance:</span>
+                <span class="font-medium ml-1 {% if loan.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">
+                    UGX {{ '{:,.0f}'.format(loan.balance) }}
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

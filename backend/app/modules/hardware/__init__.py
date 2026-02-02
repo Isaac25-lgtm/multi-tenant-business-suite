@@ -8,10 +8,29 @@ from app.modules.auth import login_required, log_action
 from app.extensions import db
 from app.utils.timezone import get_local_today
 from app.utils.utils import generate_reference_number
-from datetime import date
-from decimal import Decimal
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 
 hardware_bp = Blueprint('hardware', __name__)
+
+
+def safe_decimal(value, default='0'):
+    """Safely convert a value to Decimal, handling empty strings and invalid values"""
+    if value is None or value == '':
+        return Decimal(default)
+    try:
+        return Decimal(str(value).strip())
+    except (InvalidOperation, ValueError):
+        return Decimal(default)
+
+
+def check_date_permission(entry_date, user_section):
+    """Check if user has permission to enter data for the given date"""
+    today = get_local_today()
+    yesterday = today - timedelta(days=1)
+    if user_section == 'manager':
+        return True
+    return yesterday <= entry_date <= today
 
 
 @hardware_bp.route('/')
@@ -98,9 +117,9 @@ def add_stock():
             quantity=quantity,
             initial_quantity=quantity,
             unit=request.form.get('unit', 'pieces'),
-            cost_price=Decimal(request.form.get('cost_price', '0')),
-            min_selling_price=Decimal(request.form.get('min_selling_price', '0')),
-            max_selling_price=Decimal(request.form.get('max_selling_price', '0')),
+            cost_price=safe_decimal(request.form.get('cost_price', '0')),
+            min_selling_price=safe_decimal(request.form.get('min_selling_price', '0')),
+            max_selling_price=safe_decimal(request.form.get('max_selling_price', '0')),
             low_stock_threshold=low_stock_threshold
         )
         db.session.add(stock_item)
@@ -124,9 +143,9 @@ def edit_stock(id):
         item.item_name = request.form.get('item_name', item.item_name).strip()
         item.category_id = request.form.get('category_id', type=int) or item.category_id
         item.unit = request.form.get('unit', item.unit)
-        item.cost_price = Decimal(request.form.get('cost_price', item.cost_price))
-        item.min_selling_price = Decimal(request.form.get('min_selling_price', item.min_selling_price))
-        item.max_selling_price = Decimal(request.form.get('max_selling_price', item.max_selling_price))
+        item.cost_price = safe_decimal(request.form.get('cost_price'), str(item.cost_price))
+        item.min_selling_price = safe_decimal(request.form.get('min_selling_price'), str(item.min_selling_price))
+        item.max_selling_price = safe_decimal(request.form.get('max_selling_price'), str(item.max_selling_price))
         item.low_stock_threshold = request.form.get('low_stock_threshold', type=int) or item.low_stock_threshold
         db.session.commit()
 
@@ -175,6 +194,41 @@ def delete_stock(id):
     return redirect(url_for('hardware.stock'))
 
 
+@hardware_bp.route('/stock/<int:id>/reactivate', methods=['POST'])
+@login_required('hardware')
+def reactivate_stock(id):
+    """Reactivate a deactivated stock item"""
+    item = HardwareStock.query.get_or_404(id)
+    item.is_active = True
+    db.session.commit()
+
+    log_action(session['username'], 'hardware', 'reactivate', 'stock', item.id,
+               {'item_name': item.item_name})
+    flash(f'Stock item "{item.item_name}" reactivated', 'success')
+    return redirect(url_for('hardware.stock'))
+
+
+@hardware_bp.route('/stock/<int:id>/permanent-delete', methods=['POST'])
+@login_required('hardware')
+def permanent_delete_stock(id):
+    """Permanently delete a stock item - manager only"""
+    user_section = session.get('section', '')
+    if user_section != 'manager':
+        flash('Only managers can permanently delete stock items', 'error')
+        return redirect(url_for('hardware.stock'))
+
+    item = HardwareStock.query.get_or_404(id)
+    item_name = item.item_name
+
+    db.session.delete(item)
+    db.session.commit()
+
+    log_action(session['username'], 'hardware', 'permanent_delete', 'stock', id,
+               {'item_name': item_name})
+    flash(f'Stock item "{item_name}" permanently deleted', 'success')
+    return redirect(url_for('hardware.stock'))
+
+
 @hardware_bp.route('/sales')
 @login_required('hardware')
 def sales():
@@ -204,7 +258,13 @@ def create_sale():
         sale_date = date.fromisoformat(request.form.get('sale_date', str(get_local_today())))
         payment_type = request.form.get('payment_type', 'full')
         customer_id = request.form.get('customer_id', type=int)
-        amount_paid = Decimal(request.form.get('amount_paid', '0'))
+        amount_paid = safe_decimal(request.form.get('amount_paid', '0'))
+
+        # Check date permission for non-managers
+        user_section = session.get('section', '')
+        if not check_date_permission(sale_date, user_section):
+            flash('You can only enter sales for today or yesterday. Contact a manager for older entries.', 'error')
+            return redirect(url_for('hardware.new_sale'))
 
         item_ids = request.form.getlist('item_id[]')
         quantities = request.form.getlist('quantity[]')
@@ -217,8 +277,19 @@ def create_sale():
         total_amount = Decimal('0')
         items_data = []
         for i, item_id in enumerate(item_ids):
-            qty = int(quantities[i])
-            price = Decimal(prices[i])
+            # Skip empty items
+            if not item_id or not quantities[i] or not prices[i]:
+                continue
+
+            try:
+                qty = int(quantities[i])
+                price = safe_decimal(prices[i])
+            except (ValueError, TypeError):
+                continue
+
+            if qty <= 0 or price <= 0:
+                continue
+
             subtotal = qty * price
             total_amount += subtotal
             stock_item = HardwareStock.query.get(int(item_id))
@@ -227,6 +298,10 @@ def create_sale():
                     'stock_id': stock_item.id, 'item_name': stock_item.item_name,
                     'quantity': qty, 'unit_price': price, 'subtotal': subtotal
                 })
+
+        if not items_data:
+            flash('At least one valid item with quantity and price is required', 'error')
+            return redirect(url_for('hardware.new_sale'))
 
         if payment_type == 'full':
             amount_paid = total_amount
@@ -321,8 +396,15 @@ def credits():
 def pay_credit(id):
     sale = HardwareSale.query.get_or_404(id)
     try:
-        amount = Decimal(request.form.get('amount', '0'))
+        amount = safe_decimal(request.form.get('amount', '0'))
         payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
+
+        # Check date permission for non-managers
+        user_section = session.get('section', '')
+        if not check_date_permission(payment_date, user_section):
+            flash('You can only enter payments for today or yesterday. Contact a manager for older entries.', 'error')
+            return redirect(url_for('hardware.credits'))
+
         if amount <= 0:
             flash('Amount must be greater than 0', 'error')
             return redirect(url_for('hardware.credits'))

@@ -4,44 +4,144 @@ from app.models.boutique import (
     BoutiqueSaleItem, BoutiqueCreditPayment
 )
 from app.models.customer import Customer
+from app.models.user import User
 from app.modules.auth import login_required, log_action
 from app.extensions import db
 from app.utils.timezone import get_local_today
 from app.utils.utils import generate_reference_number
-from datetime import date
-from decimal import Decimal
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 
 boutique_bp = Blueprint('boutique', __name__)
+
+# Branch names
+BRANCHES = {
+    'K': 'Branch K (Kikuubo)',
+    'B': 'Branch B (Bugolobi)'
+}
+
+
+def get_current_branch():
+    """Get the current branch from session"""
+    return session.get('boutique_branch')
+
+
+def get_user_branch():
+    """Get branch assigned to the current user"""
+    user_id = session.get('user_id')
+    if user_id:
+        user = User.query.get(user_id)
+        if user:
+            return user.boutique_branch
+    return None
+
+
+def safe_decimal(value, default='0'):
+    """Safely convert a value to Decimal, handling empty strings and invalid values"""
+    if value is None or value == '':
+        return Decimal(default)
+    try:
+        return Decimal(str(value).strip())
+    except (InvalidOperation, ValueError):
+        return Decimal(default)
+
+
+def check_date_permission(entry_date, user_section):
+    """Check if user has permission to enter data for the given date"""
+    today = get_local_today()
+    yesterday = today - timedelta(days=1)
+
+    # Managers can enter data for any date
+    if user_section == 'manager':
+        return True
+
+    # Employees can only enter data for today or yesterday
+    return yesterday <= entry_date <= today
 
 
 @boutique_bp.route('/')
 @login_required('boutique')
 def index():
-    """Boutique overview page"""
+    """Boutique branch selection or overview page"""
+    user_section = session.get('section', '')
+    current_branch = get_current_branch()
+    user_branch = get_user_branch()
+
+    # If user is assigned to a specific branch, set it automatically
+    if user_branch and user_section != 'manager':
+        session['boutique_branch'] = user_branch
+        current_branch = user_branch
+
+    # If no branch selected and not manager, show branch selection
+    if not current_branch and user_section != 'manager':
+        return render_template('boutique/select_branch.html', branches=BRANCHES)
+
+    # For managers without branch selected, show branch selection with option to view all
+    if not current_branch and user_section == 'manager':
+        return render_template('boutique/select_branch.html', branches=BRANCHES, is_manager=True)
+
     today = get_local_today()
 
-    # Quick stats
-    stock_count = BoutiqueStock.query.filter_by(is_active=True).count()
-    low_stock = BoutiqueStock.query.filter(
-        BoutiqueStock.is_active == True,
-        BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
-    ).count()
-    pending_credits = BoutiqueSale.query.filter(
+    # Build queries with branch filter
+    stock_query = BoutiqueStock.query.filter_by(is_active=True)
+    sales_query = BoutiqueSale.query.filter_by(is_deleted=False)
+    credits_query = BoutiqueSale.query.filter(
         BoutiqueSale.is_deleted == False,
         BoutiqueSale.payment_type == 'part',
         BoutiqueSale.is_credit_cleared == False
+    )
+
+    # Filter by branch unless viewing all
+    if current_branch != 'ALL':
+        stock_query = stock_query.filter(
+            db.or_(BoutiqueStock.branch == current_branch, BoutiqueStock.branch == None)
+        )
+        sales_query = sales_query.filter(BoutiqueSale.branch == current_branch)
+        credits_query = credits_query.filter(BoutiqueSale.branch == current_branch)
+
+    # Quick stats
+    stock_count = stock_query.count()
+    low_stock = stock_query.filter(
+        BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
     ).count()
-    today_sales = BoutiqueSale.query.filter(
-        BoutiqueSale.sale_date == today,
-        BoutiqueSale.is_deleted == False
-    ).count()
+    pending_credits = credits_query.count()
+    today_sales = sales_query.filter(BoutiqueSale.sale_date == today).count()
+
+    branch_name = 'All Branches' if current_branch == 'ALL' else BRANCHES.get(current_branch, current_branch)
 
     return render_template('boutique/index.html',
         stock_count=stock_count,
         low_stock=low_stock,
         pending_credits=pending_credits,
-        today_sales=today_sales
+        today_sales=today_sales,
+        current_branch=current_branch,
+        branch_name=branch_name,
+        branches=BRANCHES,
+        is_manager=(user_section == 'manager')
     )
+
+
+@boutique_bp.route('/select-branch/<branch>')
+@login_required('boutique')
+def select_branch(branch):
+    """Select a branch to work with"""
+    user_section = session.get('section', '')
+    user_branch = get_user_branch()
+
+    # If user is assigned to a specific branch and not manager, they can't change
+    if user_branch and user_section != 'manager' and branch != user_branch:
+        flash(f'You are assigned to {BRANCHES.get(user_branch, user_branch)} only', 'error')
+        return redirect(url_for('boutique.index'))
+
+    # Allow managers to view all or specific branch
+    if branch in BRANCHES or (branch == 'ALL' and user_section == 'manager'):
+        session['boutique_branch'] = branch
+        branch_name = 'All Branches' if branch == 'ALL' else BRANCHES.get(branch, branch)
+        flash(f'Switched to {branch_name}', 'success')
+    else:
+        flash('Invalid branch', 'error')
+
+    return redirect(url_for('boutique.index'))
 
 
 # ============ CATEGORIES ============
@@ -104,9 +204,9 @@ def add_stock():
         category_id = request.form.get('category_id', type=int)
         quantity = request.form.get('quantity', type=int)
         unit = request.form.get('unit', 'pieces')
-        cost_price = Decimal(request.form.get('cost_price', '0'))
-        min_selling_price = Decimal(request.form.get('min_selling_price', '0'))
-        max_selling_price = Decimal(request.form.get('max_selling_price', '0'))
+        cost_price = safe_decimal(request.form.get('cost_price', '0'))
+        min_selling_price = safe_decimal(request.form.get('min_selling_price', '0'))
+        max_selling_price = safe_decimal(request.form.get('max_selling_price', '0'))
         low_stock_threshold = request.form.get('low_stock_threshold', type=int)
 
         if not item_name or quantity is None or quantity < 0:
@@ -152,9 +252,9 @@ def edit_stock(id):
         item.item_name = request.form.get('item_name', item.item_name).strip()
         item.category_id = request.form.get('category_id', type=int) or item.category_id
         item.unit = request.form.get('unit', item.unit)
-        item.cost_price = Decimal(request.form.get('cost_price', item.cost_price))
-        item.min_selling_price = Decimal(request.form.get('min_selling_price', item.min_selling_price))
-        item.max_selling_price = Decimal(request.form.get('max_selling_price', item.max_selling_price))
+        item.cost_price = safe_decimal(request.form.get('cost_price'), str(item.cost_price))
+        item.min_selling_price = safe_decimal(request.form.get('min_selling_price'), str(item.min_selling_price))
+        item.max_selling_price = safe_decimal(request.form.get('max_selling_price'), str(item.max_selling_price))
         item.low_stock_threshold = request.form.get('low_stock_threshold', type=int) or item.low_stock_threshold
         item.is_active = request.form.get('is_active', 'true').lower() == 'true'
 
@@ -209,6 +309,41 @@ def delete_stock(id):
     return redirect(url_for('boutique.stock'))
 
 
+@boutique_bp.route('/stock/<int:id>/reactivate', methods=['POST'])
+@login_required('boutique')
+def reactivate_stock(id):
+    """Reactivate a deactivated stock item"""
+    item = BoutiqueStock.query.get_or_404(id)
+    item.is_active = True
+    db.session.commit()
+
+    log_action(session['username'], 'boutique', 'reactivate', 'stock', item.id,
+               {'item_name': item.item_name})
+    flash(f'Stock item "{item.item_name}" reactivated', 'success')
+    return redirect(url_for('boutique.stock'))
+
+
+@boutique_bp.route('/stock/<int:id>/permanent-delete', methods=['POST'])
+@login_required('boutique')
+def permanent_delete_stock(id):
+    """Permanently delete a stock item - manager only"""
+    user_section = session.get('section', '')
+    if user_section != 'manager':
+        flash('Only managers can permanently delete stock items', 'error')
+        return redirect(url_for('boutique.stock'))
+
+    item = BoutiqueStock.query.get_or_404(id)
+    item_name = item.item_name
+
+    db.session.delete(item)
+    db.session.commit()
+
+    log_action(session['username'], 'boutique', 'permanent_delete', 'stock', id,
+               {'item_name': item_name})
+    flash(f'Stock item "{item_name}" permanently deleted', 'success')
+    return redirect(url_for('boutique.stock'))
+
+
 # ============ SALES ============
 
 @boutique_bp.route('/sales')
@@ -246,7 +381,13 @@ def create_sale():
         sale_date = date.fromisoformat(request.form.get('sale_date', str(get_local_today())))
         payment_type = request.form.get('payment_type', 'full')
         customer_id = request.form.get('customer_id', type=int)
-        amount_paid = Decimal(request.form.get('amount_paid', '0'))
+        amount_paid = safe_decimal(request.form.get('amount_paid', '0'))
+
+        # Check date permission for non-managers
+        user_section = session.get('section', '')
+        if not check_date_permission(sale_date, user_section):
+            flash('You can only enter sales for today or yesterday. Contact a manager for older entries.', 'error')
+            return redirect(url_for('boutique.new_sale'))
 
         # Get items from form
         item_ids = request.form.getlist('item_id[]')
@@ -257,12 +398,23 @@ def create_sale():
             flash('At least one item is required', 'error')
             return redirect(url_for('boutique.new_sale'))
 
-        # Calculate total
+        # Calculate total - filter out empty items
         total_amount = Decimal('0')
         items_data = []
         for i, item_id in enumerate(item_ids):
-            qty = int(quantities[i])
-            price = Decimal(prices[i])
+            # Skip empty items
+            if not item_id or not quantities[i] or not prices[i]:
+                continue
+
+            try:
+                qty = int(quantities[i])
+                price = safe_decimal(prices[i])
+            except (ValueError, TypeError):
+                continue
+
+            if qty <= 0 or price <= 0:
+                continue
+
             subtotal = qty * price
             total_amount += subtotal
 
@@ -275,6 +427,10 @@ def create_sale():
                     'unit_price': price,
                     'subtotal': subtotal
                 })
+
+        if not items_data:
+            flash('At least one valid item with quantity and price is required', 'error')
+            return redirect(url_for('boutique.new_sale'))
 
         if payment_type == 'full':
             amount_paid = total_amount
@@ -397,8 +553,14 @@ def pay_credit(id):
     sale = BoutiqueSale.query.get_or_404(id)
 
     try:
-        amount = Decimal(request.form.get('amount', '0'))
+        amount = safe_decimal(request.form.get('amount', '0'))
         payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
+
+        # Check date permission for non-managers
+        user_section = session.get('section', '')
+        if not check_date_permission(payment_date, user_section):
+            flash('You can only enter payments for today or yesterday. Contact a manager for older entries.', 'error')
+            return redirect(url_for('boutique.credits'))
 
         if amount <= 0:
             flash('Payment amount must be greater than 0', 'error')

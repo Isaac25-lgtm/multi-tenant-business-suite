@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user.full_name or user.username }} - Denove APS{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('dashboard.users') }}" class="text-indigo-600 hover:underline">&larr; Back to Users</a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Profile Card -->
+    <div class="lg:col-span-1">
+        <div class="section-card text-center">
+            {% if user.profile_picture %}
+            <img src="{{ url_for('static', filename=user.profile_picture) }}"
+                 alt="{{ user.full_name or user.username }}"
+                 class="w-32 h-32 rounded-full object-cover border-4 border-indigo-300 mx-auto mb-4">
+            {% else %}
+            <div class="w-32 h-32 rounded-full bg-indigo-100 flex items-center justify-center border-4 border-indigo-300 mx-auto mb-4">
+                <span class="text-5xl font-bold text-indigo-600">
+                    {{ (user.full_name or user.username)[0]|upper }}
+                </span>
+            </div>
+            {% endif %}
+
+            <h1 class="text-2xl font-bold text-gray-800">{{ user.full_name or user.username }}</h1>
+            <p class="text-gray-500">@{{ user.username }}</p>
+
+            <div class="mt-3">
+                <span class="badge {% if user.role == 'manager' %}badge-info{% else %}badge-success{% endif %}">
+                    {{ user.role|title }}
+                </span>
+                {% if not user.is_active %}
+                <span class="badge badge-danger ml-1">Inactive</span>
+                {% endif %}
+            </div>
+
+            <div class="mt-6 pt-4 border-t text-left">
+                {% if user.email %}
+                <div class="flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                    <span class="text-gray-600">{{ user.email }}</span>
+                </div>
+                {% endif %}
+                {% if user.phone %}
+                <div class="flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                    </svg>
+                    <span class="text-gray-600">{{ user.phone }}</span>
+                </div>
+                {% endif %}
+                {% if user.boutique_branch %}
+                <div class="flex items-center gap-2 mb-2">
+                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                    </svg>
+                    <span class="text-gray-600">Branch {{ user.boutique_branch }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Actions -->
+            <div class="mt-6 pt-4 border-t flex flex-col gap-2">
+                <a href="{{ url_for('dashboard.edit_user', id=user.id) }}" class="btn btn-primary w-full">Edit Profile</a>
+                <form method="POST" action="{{ url_for('dashboard.toggle_user_active', id=user.id) }}">
+                    <button type="submit" class="btn {{ 'btn-danger' if user.is_active else 'btn-success' }} w-full">
+                        {{ 'Deactivate Account' if user.is_active else 'Activate Account' }}
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Details and Activity -->
+    <div class="lg:col-span-2">
+        <!-- Access Permissions -->
+        <div class="section-card mb-6">
+            <h2 class="font-semibold text-lg mb-4">Access Permissions</h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="p-3 rounded-lg {{ 'bg-green-50 border border-green-200' if user.role == 'manager' or user.can_access_boutique or user.role == 'boutique' else 'bg-gray-50 border border-gray-200' }}">
+                    <div class="flex items-center gap-2">
+                        {% if user.role == 'manager' or user.can_access_boutique or user.role == 'boutique' %}
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        {% else %}
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        {% endif %}
+                        <span class="font-medium">Boutique</span>
+                    </div>
+                </div>
+                <div class="p-3 rounded-lg {{ 'bg-green-50 border border-green-200' if user.role == 'manager' or user.can_access_hardware or user.role == 'hardware' else 'bg-gray-50 border border-gray-200' }}">
+                    <div class="flex items-center gap-2">
+                        {% if user.role == 'manager' or user.can_access_hardware or user.role == 'hardware' %}
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        {% else %}
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        {% endif %}
+                        <span class="font-medium">Hardware</span>
+                    </div>
+                </div>
+                <div class="p-3 rounded-lg {{ 'bg-green-50 border border-green-200' if user.role == 'manager' or user.can_access_finance or user.role == 'finance' else 'bg-gray-50 border border-gray-200' }}">
+                    <div class="flex items-center gap-2">
+                        {% if user.role == 'manager' or user.can_access_finance or user.role == 'finance' %}
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        {% else %}
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        {% endif %}
+                        <span class="font-medium">Finance</span>
+                    </div>
+                </div>
+                <div class="p-3 rounded-lg {{ 'bg-green-50 border border-green-200' if user.role == 'manager' or user.can_access_customers else 'bg-gray-50 border border-gray-200' }}">
+                    <div class="flex items-center gap-2">
+                        {% if user.role == 'manager' or user.can_access_customers %}
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        {% else %}
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                        </svg>
+                        {% endif %}
+                        <span class="font-medium">Customers</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Account Info -->
+        <div class="section-card mb-6">
+            <h2 class="font-semibold text-lg mb-4">Account Information</h2>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <span class="text-gray-500 block text-sm">Created</span>
+                    <span class="font-medium">{{ user.created_at.strftime('%B %d, %Y') if user.created_at else 'Unknown' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block text-sm">Last Login</span>
+                    <span class="font-medium">{{ user.last_login.strftime('%B %d, %Y at %H:%M') if user.last_login else 'Never' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block text-sm">Password Status</span>
+                    <span class="font-medium">{{ 'Password Set' if user.password_hash else 'Open Access (No Password)' }}</span>
+                </div>
+                <div>
+                    <span class="text-gray-500 block text-sm">Status</span>
+                    <span class="font-medium {{ 'text-green-600' if user.is_active else 'text-red-600' }}">
+                        {{ 'Active' if user.is_active else 'Inactive' }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="section-card">
+            <h2 class="font-semibold text-lg mb-4">Recent Activity</h2>
+            {% if recent_logs %}
+            <div class="space-y-3">
+                {% for log in recent_logs %}
+                <div class="flex justify-between items-start text-sm border-b pb-2">
+                    <div>
+                        <span class="font-medium">{{ log.action|title }}</span>
+                        <span class="text-gray-500">{{ log.entity }}</span>
+                        {% if log.entity_id %}
+                        <span class="text-gray-400">#{{ log.entity_id }}</span>
+                        {% endif %}
+                        <span class="text-gray-400 block text-xs">{{ log.section }}</span>
+                    </div>
+                    <span class="text-gray-500 text-xs">
+                        {{ log.created_at.strftime('%Y-%m-%d %H:%M') if log.created_at else '' }}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-4">No recent activity</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
