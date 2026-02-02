@@ -8,13 +8,16 @@
     --text-primary: #1f2937;
     --text-secondary: #374151;
     --text-muted: #6b7280;
-    --border-color: #e5e7eb;
-    --border-strong: #d1d5db;
-    --shadow-color: rgba(0, 0, 0, 0.1);
+    --border-color: #1f2937;
+    --border-strong: #111827;
+    --border-section: #000000;
+    --shadow-color: rgba(0, 0, 0, 0.15);
     --card-bg: #ffffff;
     --input-bg: #ffffff;
     --nav-bg: #4f46e5;
     --footer-bg: #1f2937;
+    --guideline-bg: #f0fdf4;
+    --guideline-border: #22c55e;
 }
 
 [data-theme="dark"] {
@@ -24,13 +27,16 @@
     --text-primary: #f9fafb;
     --text-secondary: #e5e7eb;
     --text-muted: #9ca3af;
-    --border-color: #4b5563;
-    --border-strong: #6b7280;
+    --border-color: #6b7280;
+    --border-strong: #9ca3af;
+    --border-section: #e5e7eb;
     --shadow-color: rgba(0, 0, 0, 0.3);
     --card-bg: #374151;
     --input-bg: #1f2937;
     --nav-bg: #312e81;
     --footer-bg: #111827;
+    --guideline-bg: #064e3b;
+    --guideline-border: #10b981;
 }
 
 /* ============ DARK MODE BASE STYLES ============ */
@@ -40,26 +46,100 @@ body {
     transition: background-color 0.3s, color 0.3s;
 }
 
-/* ============ SECTION CARDS WITH CLEAR BORDERS ============ */
+/* ============ SECTION CARDS WITH CLEAR BLACK BORDERS ============ */
 .section-card {
     background: var(--card-bg);
-    border: 2px solid var(--border-strong);
+    border: 3px solid var(--border-section);
     border-radius: 0.75rem;
     padding: 1.5rem;
-    box-shadow: 0 2px 8px var(--shadow-color);
+    box-shadow: 0 4px 12px var(--shadow-color);
     margin-bottom: 1rem;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .section-card:hover {
     border-color: #4f46e5;
-    box-shadow: 0 4px 12px var(--shadow-color);
+    box-shadow: 0 6px 16px var(--shadow-color);
 }
 
 .section-card-header {
-    border-bottom: 2px solid var(--border-color);
+    border-bottom: 2px solid var(--border-section);
     padding-bottom: 1rem;
     margin-bottom: 1rem;
+}
+
+.section-card-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.section-card-title svg {
+    width: 1.25rem;
+    height: 1.25rem;
+}
+
+/* ============ GUIDELINE/HELPER TEXT ============ */
+.guideline {
+    background: var(--guideline-bg);
+    border-left: 4px solid var(--guideline-border);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0 0.375rem 0.375rem 0;
+    font-size: 0.875rem;
+    color: #166534;
+}
+
+[data-theme="dark"] .guideline {
+    color: #86efac;
+}
+
+.guideline-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 500;
+}
+
+.guideline-icon svg {
+    width: 1rem;
+    height: 1rem;
+    flex-shrink: 0;
+}
+
+/* Action hint - small helper text near buttons */
+.action-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+/* Quick tip box */
+.quick-tip {
+    background: #eff6ff;
+    border: 2px solid #3b82f6;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+}
+
+[data-theme="dark"] .quick-tip {
+    background: #1e3a5f;
+    border-color: #60a5fa;
+}
+
+.quick-tip-title {
+    font-weight: 600;
+    color: #1d4ed8;
+    margin-bottom: 0.25rem;
+}
+
+[data-theme="dark"] .quick-tip-title {
+    color: #93c5fd;
 }
 
 /* Clickable sections with clear visual cues */
@@ -78,11 +158,11 @@ body {
     transform: translateY(-1px);
 }
 
-/* Table styles */
+/* Table styles with strong borders */
 .data-table {
     width: 100%;
     border-collapse: collapse;
-    border: 2px solid var(--border-strong);
+    border: 3px solid var(--border-section);
     border-radius: 0.5rem;
     overflow: hidden;
 }
@@ -91,7 +171,7 @@ body {
 .data-table td {
     padding: 0.75rem;
     text-align: left;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 2px solid var(--border-color);
     border-right: 1px solid var(--border-color);
 }
 
@@ -101,10 +181,15 @@ body {
 }
 
 .data-table th {
-    background-color: var(--bg-tertiary);
+    background-color: #1f2937;
     font-weight: 600;
-    color: var(--text-secondary);
-    border-bottom: 2px solid var(--border-strong);
+    color: #ffffff;
+    border-bottom: 3px solid var(--border-section);
+}
+
+[data-theme="dark"] .data-table th {
+    background-color: #111827;
+    color: #f9fafb;
 }
 
 .data-table tbody tr {
@@ -116,13 +201,17 @@ body {
     background-color: var(--bg-tertiary);
 }
 
-/* Card styles */
+.data-table tbody tr:nth-child(even) {
+    background-color: var(--bg-secondary);
+}
+
+/* Card styles with strong black borders */
 .stat-card {
     background: var(--card-bg);
-    border: 2px solid var(--border-strong);
+    border: 3px solid var(--border-section);
     border-radius: 0.75rem;
     padding: 1.5rem;
-    box-shadow: 0 2px 8px var(--shadow-color);
+    box-shadow: 0 4px 12px var(--shadow-color);
     transition: border-color 0.2s, transform 0.2s;
 }
 
@@ -141,6 +230,9 @@ body {
     font-size: 0.875rem;
     color: var(--text-muted);
     margin-top: 0.25rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
 }
 
 /* Form styles */
@@ -159,7 +251,7 @@ body {
 .form-input {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 2px solid var(--border-strong);
+    border: 2px solid var(--border-section);
     border-radius: 0.375rem;
     font-size: 0.875rem;
     background-color: var(--input-bg);
@@ -176,7 +268,7 @@ body {
 .form-select {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 2px solid var(--border-strong);
+    border: 2px solid var(--border-section);
     border-radius: 0.375rem;
     font-size: 0.875rem;
     background-color: var(--input-bg);
@@ -193,7 +285,7 @@ body {
 .form-textarea {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    border: 2px solid var(--border-strong);
+    border: 2px solid var(--border-section);
     border-radius: 0.375rem;
     font-size: 0.875rem;
     resize: vertical;
@@ -205,6 +297,51 @@ body {
     outline: none;
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+/* ============ ACTION CARDS (Clickable sections with guidelines) ============ */
+.action-card {
+    background: var(--card-bg);
+    border: 3px solid var(--border-section);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s;
+}
+
+.action-card:hover {
+    border-color: #4f46e5;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px var(--shadow-color);
+}
+
+.action-card-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.action-card-desc {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: 0.75rem;
+}
+
+.action-card-hint {
+    font-size: 0.75rem;
+    color: #059669;
+    background: #ecfdf5;
+    padding: 0.375rem 0.625rem;
+    border-radius: 0.25rem;
+    display: inline-block;
+}
+
+[data-theme="dark"] .action-card-hint {
+    background: #064e3b;
+    color: #6ee7b7;
 }
 
 /* Button styles */
@@ -321,7 +458,7 @@ body {
 
 .modal-content {
     background: var(--card-bg);
-    border: 2px solid var(--border-strong);
+    border: 3px solid var(--border-section);
     border-radius: 0.75rem;
     padding: 1.5rem;
     max-width: 500px;

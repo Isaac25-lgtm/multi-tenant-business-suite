@@ -11,59 +11,98 @@
     <button onclick="showModal('add-loan-modal')" class="btn btn-primary">New Loan</button>
 </div>
 
+<!-- Quick Tip -->
+{% if clients|length == 0 %}
+<div class="quick-tip mb-6">
+    <div class="quick-tip-title">No Clients Found!</div>
+    You need to <a href="{{ url_for('finance.clients') }}" class="text-blue-600 underline font-medium">add a client first</a> before you can issue a loan.
+</div>
+{% else %}
+<div class="guideline mb-6">
+    <div class="guideline-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Quick Guide:
+    </div>
+    Click "New Loan" to issue a loan. Select an existing client, set the principal amount, interest rate, and duration. You'll preview the agreement before finalizing.
+</div>
+{% endif %}
+
 <!-- Loans Table -->
-<div class="bg-white rounded-lg shadow overflow-hidden">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Client</th>
-                <th class="text-right">Principal</th>
-                <th class="text-right">Interest</th>
-                <th class="text-right">Total</th>
-                <th class="text-right">Balance</th>
-                <th>Due Date</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for loan in loans %}
-            <tr>
-                <td class="font-medium">{{ loan.client.name }}</td>
-                <td class="text-right">{{ "{:,.0f}".format(loan.principal) }}</td>
-                <td class="text-right">{{ "{:.1f}".format(loan.interest_rate) }}%</td>
-                <td class="text-right">{{ "{:,.0f}".format(loan.total_amount) }}</td>
-                <td class="text-right {% if loan.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">{{ "{:,.0f}".format(loan.balance) }}</td>
-                <td>{{ loan.due_date.strftime('%Y-%m-%d') }}</td>
-                <td>
-                    {% if loan.status == 'paid' %}
-                    <span class="badge badge-success">Paid</span>
-                    {% elif loan.status == 'overdue' %}
-                    <span class="badge badge-danger">Overdue</span>
-                    {% else %}
-                    <span class="badge badge-info">Active</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="text-indigo-600 hover:underline text-sm">View</a>
-                    <form method="POST" action="{{ url_for('finance.delete_loan', id=loan.id) }}" class="inline" onsubmit="return confirm('Delete this loan?')">
-                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
-                    </form>
-                </td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="8" class="text-center text-gray-500 py-8">No loans found</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="section-card">
+    <div class="section-card-header">
+        <h2 class="section-card-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+            All Loans
+        </h2>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Client</th>
+                    <th class="text-right">Principal</th>
+                    <th class="text-right">Interest</th>
+                    <th class="text-right">Total</th>
+                    <th class="text-right">Balance</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for loan in loans %}
+                <tr>
+                    <td class="font-medium">{{ loan.client.name }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(loan.principal) }}</td>
+                    <td class="text-right">{{ "{:.1f}".format(loan.interest_rate) }}%</td>
+                    <td class="text-right">{{ "{:,.0f}".format(loan.total_amount) }}</td>
+                    <td class="text-right {% if loan.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">{{ "{:,.0f}".format(loan.balance) }}</td>
+                    <td>{{ loan.due_date.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        {% if loan.status == 'paid' %}
+                        <span class="badge badge-success">Paid</span>
+                        {% elif loan.status == 'overdue' %}
+                        <span class="badge badge-danger">Overdue</span>
+                        {% else %}
+                        <span class="badge badge-info">Active</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="text-indigo-600 hover:underline text-sm">View</a>
+                        {% if current_section == 'manager' %}
+                        <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="text-green-600 hover:underline text-sm ml-2">Edit</a>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('finance.delete_loan', id=loan.id) }}" class="inline" onsubmit="return confirm('Delete this loan?')">
+                            <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="8" class="text-center text-gray-500 py-8">
+                        No loans found. Click "New Loan" to create one.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <!-- Add Loan Modal -->
 <div id="add-loan-modal" class="modal">
     <div class="modal-content">
         <h3 class="text-lg font-semibold mb-4">New Loan</h3>
+        {% if clients|length == 0 %}
+        <div class="quick-tip mb-4">
+            <div class="quick-tip-title">No Clients Available</div>
+            <a href="{{ url_for('finance.clients') }}" class="text-blue-600 underline">Add a client first</a> before creating a loan.
+        </div>
+        <button type="button" onclick="hideModal('add-loan-modal')" class="btn btn-secondary w-full">Close</button>
+        {% else %}
+        <div class="guideline mb-4">
+            <strong>Required:</strong> Select a client, enter principal amount, interest rate, and loan duration.
+        </div>
         <form method="POST" action="{{ url_for('finance.preview_loan_agreement') }}">
             <div class="form-group">
                 <label class="form-label">Client *</label>
@@ -73,11 +112,12 @@
                     <option value="{{ client.id }}">{{ client.name }} ({{ client.phone }})</option>
                     {% endfor %}
                 </select>
+                <p class="text-xs text-gray-500 mt-1">Don't see your client? <a href="{{ url_for('finance.clients') }}" class="text-indigo-600">Add them first</a></p>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div class="form-group">
                     <label class="form-label">Principal Amount *</label>
-                    <input type="number" name="principal" min="1" step="0.01" required class="form-input">
+                    <input type="number" name="principal" min="1" step="0.01" required class="form-input" placeholder="e.g., 500000">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Interest Rate (%)</label>
@@ -87,7 +127,7 @@
             <div class="grid grid-cols-2 gap-4">
                 <div class="form-group">
                     <label class="form-label">Duration (weeks) *</label>
-                    <input type="number" name="duration_weeks" min="1" required class="form-input">
+                    <input type="number" name="duration_weeks" min="1" required class="form-input" placeholder="e.g., 4">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Issue Date</label>
@@ -99,6 +139,7 @@
                 <button type="submit" class="btn btn-primary">Preview Agreement</button>
             </div>
         </form>
+        {% endif %}
     </div>
 </div>
 

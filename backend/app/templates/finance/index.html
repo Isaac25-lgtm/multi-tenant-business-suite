@@ -8,46 +8,81 @@
     <p class="text-gray-600">Loan management and tracking</p>
 </div>
 
+<!-- Workflow Guide -->
+<div class="guideline mb-6">
+    <div class="guideline-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        How to issue a loan:
+    </div>
+    <ol class="list-decimal list-inside mt-2 space-y-1">
+        <li><strong>Step 1:</strong> Add a client in "Clients" section first</li>
+        <li><strong>Step 2:</strong> Go to "Individual Loans" or "Group Loans"</li>
+        <li><strong>Step 3:</strong> Click "New Loan" and select your client</li>
+        <li><strong>Step 4:</strong> Preview and print the loan agreement</li>
+    </ol>
+</div>
+
 <!-- Quick Stats -->
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    <div class="stat-card">
-        <div class="stat-card-value">{{ active_loans }}</div>
-        <div class="stat-card-label">Active Loans</div>
+<div class="section-card mb-6">
+    <div class="section-card-header">
+        <h2 class="section-card-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Finance Overview
+        </h2>
     </div>
-    <div class="stat-card">
-        <div class="stat-card-value">{{ active_groups }}</div>
-        <div class="stat-card-label">Active Groups</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-value {% if overdue_loans + overdue_groups > 0 %}text-red-600{% endif %}">{{ overdue_loans + overdue_groups }}</div>
-        <div class="stat-card-label">Overdue</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(total_outstanding) }}</div>
-        <div class="stat-card-label">Outstanding</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="stat-card">
+            <div class="stat-card-value">{{ active_loans }}</div>
+            <div class="stat-card-label">Active Loans</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value">{{ active_groups }}</div>
+            <div class="stat-card-label">Active Groups</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value {% if overdue_loans + overdue_groups > 0 %}text-red-600{% endif %}">{{ overdue_loans + overdue_groups }}</div>
+            <div class="stat-card-label">Overdue</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(total_outstanding) }}</div>
+            <div class="stat-card-label">Outstanding</div>
+        </div>
     </div>
 </div>
 
 <!-- Quick Actions -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-    <a href="{{ url_for('finance.clients') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-        <h3 class="font-semibold text-lg text-gray-800 mb-2">Clients</h3>
-        <p class="text-gray-600 text-sm">Manage loan clients</p>
-    </a>
+<div class="section-card">
+    <div class="section-card-header">
+        <h2 class="section-card-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+            Quick Actions
+        </h2>
+    </div>
+    <p class="text-sm text-gray-500 mb-4">Click on any card to access that section</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <a href="{{ url_for('finance.clients') }}" class="action-card">
+            <div class="action-card-title">Clients</div>
+            <div class="action-card-desc">Manage loan clients</div>
+            <div class="action-card-hint">Start here! Add clients before loans</div>
+        </a>
 
-    <a href="{{ url_for('finance.loans') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-        <h3 class="font-semibold text-lg text-gray-800 mb-2">Individual Loans</h3>
-        <p class="text-gray-600 text-sm">Manage individual loans</p>
-    </a>
+        <a href="{{ url_for('finance.loans') }}" class="action-card">
+            <div class="action-card-title">Individual Loans</div>
+            <div class="action-card-desc">Manage individual loans</div>
+            <div class="action-card-hint">Issue loans to single clients</div>
+        </a>
 
-    <a href="{{ url_for('finance.group_loans') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-        <h3 class="font-semibold text-lg text-gray-800 mb-2">Group Loans</h3>
-        <p class="text-gray-600 text-sm">Manage group loans</p>
-    </a>
+        <a href="{{ url_for('finance.group_loans') }}" class="action-card">
+            <div class="action-card-title">Group Loans</div>
+            <div class="action-card-desc">Manage group loans</div>
+            <div class="action-card-hint">Issue loans to savings groups</div>
+        </a>
 
-    <a href="{{ url_for('finance.payments') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-        <h3 class="font-semibold text-lg text-gray-800 mb-2">Payments</h3>
-        <p class="text-gray-600 text-sm">View payment history</p>
-    </a>
+        <a href="{{ url_for('finance.payments') }}" class="action-card">
+            <div class="action-card-title">Payments</div>
+            <div class="action-card-desc">View payment history</div>
+            <div class="action-card-hint">Track all loan repayments</div>
+        </a>
+    </div>
 </div>
 {% endblock %}

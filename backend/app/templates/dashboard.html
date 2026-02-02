@@ -4,127 +4,152 @@
 
 {% block content %}
 <div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">Dashboard</h1>
-    <p class="text-gray-600">{{ today.strftime('%A, %B %d, %Y') }}</p>
+    <h1 class="text-2xl font-bold text-gray-800">Manager Dashboard</h1>
+    <p class="text-gray-600">{{ today.strftime('%A, %B %d, %Y') }} - Overview of all business operations</p>
+</div>
+
+<!-- Quick Tip -->
+<div class="quick-tip mb-6">
+    <div class="quick-tip-title">Quick Tip</div>
+    Click on any section below to view detailed reports. Use the navigation menu to manage individual departments.
 </div>
 
 <!-- Main Stats Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <div class="stat-card">
-        <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(stats.today_revenue) }}</div>
-        <div class="stat-card-label">Today's Revenue</div>
-        <div class="text-xs text-gray-400 mt-1">Yesterday: UGX {{ "{:,.0f}".format(stats.yesterday_revenue) }}</div>
+<div class="section-card mb-6">
+    <div class="section-card-header">
+        <h2 class="section-card-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Today's Summary
+        </h2>
     </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="stat-card">
+            <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(stats.today_revenue) }}</div>
+            <div class="stat-card-label">Today's Revenue</div>
+            <div class="text-xs text-gray-400 mt-1">Yesterday: UGX {{ "{:,.0f}".format(stats.yesterday_revenue) }}</div>
+        </div>
 
-    <div class="stat-card">
-        <div class="stat-card-value text-orange-600">UGX {{ "{:,.0f}".format(stats.credits_outstanding) }}</div>
-        <div class="stat-card-label">Credits Outstanding</div>
-        <div class="text-xs text-gray-400 mt-1">Boutique + Hardware</div>
-    </div>
+        <div class="stat-card">
+            <div class="stat-card-value text-orange-600">UGX {{ "{:,.0f}".format(stats.credits_outstanding) }}</div>
+            <div class="stat-card-label">Credits Outstanding</div>
+            <div class="text-xs text-gray-400 mt-1">Boutique + Hardware combined</div>
+        </div>
 
-    <div class="stat-card">
-        <div class="stat-card-value text-blue-600">UGX {{ "{:,.0f}".format(stats.loans_outstanding) }}</div>
-        <div class="stat-card-label">Loans Outstanding</div>
-        {% if stats.overdue_loans > 0 %}
-        <div class="text-xs text-red-500 mt-1">{{ stats.overdue_loans }} overdue</div>
-        {% endif %}
-    </div>
+        <div class="stat-card">
+            <div class="stat-card-value text-blue-600">UGX {{ "{:,.0f}".format(stats.loans_outstanding) }}</div>
+            <div class="stat-card-label">Loans Outstanding</div>
+            {% if stats.overdue_loans > 0 %}
+            <div class="text-xs text-red-500 mt-1">{{ stats.overdue_loans }} overdue - needs attention!</div>
+            {% else %}
+            <div class="text-xs text-green-500 mt-1">All loans on track</div>
+            {% endif %}
+        </div>
 
-    <div class="stat-card">
-        <div class="stat-card-value {% if stats.low_stock_alerts > 0 %}text-red-600{% else %}text-gray-600{% endif %}">{{ stats.low_stock_alerts }}</div>
-        <div class="stat-card-label">Low Stock Alerts</div>
-        <div class="text-xs text-gray-400 mt-1">{{ stats.transactions_today }} transactions today</div>
+        <div class="stat-card">
+            <div class="stat-card-value {% if stats.low_stock_alerts > 0 %}text-red-600{% else %}text-gray-600{% endif %}">{{ stats.low_stock_alerts }}</div>
+            <div class="stat-card-label">Low Stock Alerts</div>
+            <div class="text-xs text-gray-400 mt-1">{{ stats.transactions_today }} transactions today</div>
+        </div>
     </div>
 </div>
 
 <!-- Business Breakdown -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-    <!-- Boutique -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-800">Boutique</h3>
-            <a href="{{ url_for('boutique.index') }}" class="text-sm text-indigo-600 hover:underline">View</a>
-        </div>
-        <div class="space-y-2 text-sm">
-            <div class="flex justify-between">
-                <span class="text-gray-600">Today's Sales</span>
-                <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.boutique.today) }}</span>
-            </div>
-            <div class="flex justify-between">
-                <span class="text-gray-600">Transactions</span>
-                <span class="font-medium">{{ by_business.boutique.transactions }}</span>
-            </div>
-            <div class="flex justify-between">
-                <span class="text-gray-600">Credits</span>
-                <span class="font-medium text-orange-600">UGX {{ "{:,.0f}".format(by_business.boutique.credits) }}</span>
-            </div>
-            {% if by_business.boutique.low_stock > 0 %}
-            <div class="flex justify-between">
-                <span class="text-gray-600">Low Stock</span>
-                <span class="font-medium text-red-600">{{ by_business.boutique.low_stock }} items</span>
-            </div>
-            {% endif %}
-        </div>
+<div class="section-card mb-6">
+    <div class="section-card-header">
+        <h2 class="section-card-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+            Business Units
+        </h2>
     </div>
+    <p class="text-sm text-gray-500 mb-4">Click on any unit to go to its management page</p>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <!-- Boutique -->
+        <a href="{{ url_for('boutique.index') }}" class="action-card">
+            <div class="action-card-title">Boutique</div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Today's Sales</span>
+                    <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.boutique.today) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Transactions</span>
+                    <span class="font-medium">{{ by_business.boutique.transactions }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Credits</span>
+                    <span class="font-medium text-orange-600">UGX {{ "{:,.0f}".format(by_business.boutique.credits) }}</span>
+                </div>
+                {% if by_business.boutique.low_stock > 0 %}
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Low Stock</span>
+                    <span class="font-medium text-red-600">{{ by_business.boutique.low_stock }} items</span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="action-card-hint mt-3">Click to manage boutique inventory & sales</div>
+        </a>
 
-    <!-- Hardware -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-800">Hardware</h3>
-            <a href="{{ url_for('hardware.index') }}" class="text-sm text-indigo-600 hover:underline">View</a>
-        </div>
-        <div class="space-y-2 text-sm">
-            <div class="flex justify-between">
-                <span class="text-gray-600">Today's Sales</span>
-                <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.hardware.today) }}</span>
+        <!-- Hardware -->
+        <a href="{{ url_for('hardware.index') }}" class="action-card">
+            <div class="action-card-title">Hardware</div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Today's Sales</span>
+                    <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.hardware.today) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Transactions</span>
+                    <span class="font-medium">{{ by_business.hardware.transactions }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Credits</span>
+                    <span class="font-medium text-orange-600">UGX {{ "{:,.0f}".format(by_business.hardware.credits) }}</span>
+                </div>
+                {% if by_business.hardware.low_stock > 0 %}
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Low Stock</span>
+                    <span class="font-medium text-red-600">{{ by_business.hardware.low_stock }} items</span>
+                </div>
+                {% endif %}
             </div>
-            <div class="flex justify-between">
-                <span class="text-gray-600">Transactions</span>
-                <span class="font-medium">{{ by_business.hardware.transactions }}</span>
-            </div>
-            <div class="flex justify-between">
-                <span class="text-gray-600">Credits</span>
-                <span class="font-medium text-orange-600">UGX {{ "{:,.0f}".format(by_business.hardware.credits) }}</span>
-            </div>
-            {% if by_business.hardware.low_stock > 0 %}
-            <div class="flex justify-between">
-                <span class="text-gray-600">Low Stock</span>
-                <span class="font-medium text-red-600">{{ by_business.hardware.low_stock }} items</span>
-            </div>
-            {% endif %}
-        </div>
-    </div>
+            <div class="action-card-hint mt-3">Click to manage hardware inventory & sales</div>
+        </a>
 
-    <!-- Finance -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="font-semibold text-gray-800">Finance</h3>
-            <a href="{{ url_for('finance.index') }}" class="text-sm text-indigo-600 hover:underline">View</a>
-        </div>
-        <div class="space-y-2 text-sm">
-            <div class="flex justify-between">
-                <span class="text-gray-600">Outstanding</span>
-                <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.finance.outstanding) }}</span>
+        <!-- Finance -->
+        <a href="{{ url_for('finance.index') }}" class="action-card">
+            <div class="action-card-title">Finance</div>
+            <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Outstanding</span>
+                    <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.finance.outstanding) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Today's Repayments</span>
+                    <span class="font-medium text-green-600">UGX {{ "{:,.0f}".format(by_business.finance.repayments_today) }}</span>
+                </div>
+                {% if by_business.finance.overdue_count > 0 %}
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Overdue</span>
+                    <span class="font-medium text-red-600">{{ by_business.finance.overdue_count }} loans</span>
+                </div>
+                {% endif %}
             </div>
-            <div class="flex justify-between">
-                <span class="text-gray-600">Today's Repayments</span>
-                <span class="font-medium text-green-600">UGX {{ "{:,.0f}".format(by_business.finance.repayments_today) }}</span>
-            </div>
-            {% if by_business.finance.overdue_count > 0 %}
-            <div class="flex justify-between">
-                <span class="text-gray-600">Overdue</span>
-                <span class="font-medium text-red-600">{{ by_business.finance.overdue_count }} loans</span>
-            </div>
-            {% endif %}
-        </div>
+            <div class="action-card-hint mt-3">Click to manage loans & payments</div>
+        </a>
     </div>
 </div>
 
 <!-- Sales Trend & Alerts -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <!-- 7-Day Trend -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <h3 class="font-semibold text-gray-800 mb-4">7-Day Revenue Trend</h3>
+    <div class="section-card">
+        <div class="section-card-header">
+            <h2 class="section-card-title">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+                7-Day Revenue Trend
+            </h2>
+        </div>
+        <p class="text-sm text-gray-500 mb-4">Revenue breakdown by department for the past week</p>
         <div class="overflow-x-auto">
             <table class="data-table">
                 <thead>
@@ -139,22 +164,37 @@
                 <tbody>
                     {% for day in sales_trend %}
                     <tr>
-                        <td>{{ day.date }}</td>
+                        <td class="font-medium">{{ day.date }}</td>
                         <td class="text-right">{{ "{:,.0f}".format(day.boutique) }}</td>
                         <td class="text-right">{{ "{:,.0f}".format(day.hardware) }}</td>
                         <td class="text-right">{{ "{:,.0f}".format(day.finance) }}</td>
-                        <td class="text-right font-medium">{{ "{:,.0f}".format(day.total) }}</td>
+                        <td class="text-right font-bold text-green-600">{{ "{:,.0f}".format(day.total) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot>
+                    <tr class="bg-gray-100">
+                        <td class="font-bold">Week Total</td>
+                        <td class="text-right font-bold">{{ "{:,.0f}".format(sales_trend|sum(attribute='boutique')) }}</td>
+                        <td class="text-right font-bold">{{ "{:,.0f}".format(sales_trend|sum(attribute='hardware')) }}</td>
+                        <td class="text-right font-bold">{{ "{:,.0f}".format(sales_trend|sum(attribute='finance')) }}</td>
+                        <td class="text-right font-bold text-green-600">{{ "{:,.0f}".format(sales_trend|sum(attribute='total')) }}</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
 
     <!-- Low Stock Alerts -->
-    <div class="bg-white rounded-lg shadow p-4">
-        <h3 class="font-semibold text-gray-800 mb-4">Low Stock Alerts</h3>
+    <div class="section-card">
+        <div class="section-card-header">
+            <h2 class="section-card-title">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                Low Stock Alerts
+            </h2>
+        </div>
         {% if low_stock_items %}
+        <p class="text-sm text-red-600 mb-4">These items need restocking soon!</p>
         <div class="space-y-2">
             {% for item in low_stock_items %}
             <div class="alert-low-stock">
@@ -168,8 +208,16 @@
             </div>
             {% endfor %}
         </div>
+        <div class="mt-4">
+            <a href="{{ url_for('boutique.stock') }}" class="text-indigo-600 hover:underline text-sm mr-4">View Boutique Stock</a>
+            <a href="{{ url_for('hardware.stock') }}" class="text-indigo-600 hover:underline text-sm">View Hardware Stock</a>
+        </div>
         {% else %}
-        <p class="text-gray-500 text-center py-8">No low stock alerts</p>
+        <div class="text-center py-8">
+            <svg class="w-12 h-12 mx-auto text-green-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <p class="text-gray-500">No low stock alerts</p>
+            <p class="text-sm text-gray-400">All inventory levels are healthy</p>
+        </div>
         {% endif %}
     </div>
 </div>

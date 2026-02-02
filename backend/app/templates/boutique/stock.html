@@ -11,18 +11,34 @@
     <button onclick="showModal('add-stock-modal')" class="btn btn-primary">Add Stock Item</button>
 </div>
 
+<!-- Quick Guide -->
+<div class="guideline mb-6">
+    <div class="guideline-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Stock Management:
+    </div>
+    <ul class="list-disc list-inside mt-2 space-y-1">
+        <li><strong>Add Stock:</strong> Click "Add Stock Item" to add new inventory</li>
+        <li><strong>Edit:</strong> Update prices, thresholds, or item details</li>
+        <li><strong>Deactivate:</strong> Hide out-of-stock items (can be reactivated later)</li>
+        {% if current_section == 'manager' %}
+        <li><strong>Delete:</strong> Permanently remove items (manager only)</li>
+        {% endif %}
+    </ul>
+</div>
+
 <!-- Filter -->
-<div class="bg-white rounded-lg shadow p-4 mb-4">
+<div class="section-card mb-4">
     <form method="GET" class="flex items-center gap-4">
         <label class="flex items-center">
-            <input type="checkbox" name="show_inactive" value="true" {% if show_inactive %}checked{% endif %} onchange="this.form.submit()" class="mr-2">
-            Show inactive items
+            <input type="checkbox" name="show_inactive" value="true" {% if show_inactive %}checked{% endif %} onchange="this.form.submit()" class="mr-2 w-4 h-4">
+            <span class="text-sm">Show inactive items</span>
         </label>
     </form>
 </div>
 
 <!-- Stock Table -->
-<div class="bg-white rounded-lg shadow overflow-hidden">
+<div class="section-card">
     <table class="data-table">
         <thead>
             <tr>

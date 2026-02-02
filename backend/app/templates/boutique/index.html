@@ -24,7 +24,7 @@
                     class="btn btn-outline btn-sm">
                 Switch Branch
             </button>
-            <div id="branch-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border">
+            <div id="branch-dropdown" class="hidden absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border-2 border-gray-800">
                 {% for code, name in branches.items() %}
                 <a href="{{ url_for('boutique.select_branch', branch=code) }}"
                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if current_branch == code %}bg-indigo-50{% endif %}">
@@ -32,7 +32,7 @@
                 </a>
                 {% endfor %}
                 {% if is_manager %}
-                <div class="border-t"></div>
+                <div class="border-t border-gray-300"></div>
                 <a href="{{ url_for('boutique.select_branch', branch='ALL') }}"
                    class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 {% if current_branch == 'ALL' %}bg-indigo-50{% endif %}">
                     View All Branches
@@ -45,46 +45,80 @@
     {% endif %}
 </div>
 
+<!-- Workflow Guide -->
+<div class="guideline mb-6">
+    <div class="guideline-icon">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        Quick Guide:
+    </div>
+    <ol class="list-decimal list-inside mt-2 space-y-1">
+        <li>Add stock items in "Stock Management"</li>
+        <li>Record sales in "New Sale" (full or credit)</li>
+        <li>Track pending credits in "Credits"</li>
+    </ol>
+</div>
+
 <!-- Quick Stats -->
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    <div class="stat-card">
-        <div class="stat-card-value">{{ stock_count }}</div>
-        <div class="stat-card-label">Stock Items</div>
+<div class="section-card mb-6">
+    <div class="section-card-header">
+        <h2 class="section-card-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            Today's Overview
+        </h2>
     </div>
-    <div class="stat-card">
-        <div class="stat-card-value {% if low_stock > 0 %}text-red-600{% endif %}">{{ low_stock }}</div>
-        <div class="stat-card-label">Low Stock</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-value text-orange-600">{{ pending_credits }}</div>
-        <div class="stat-card-label">Pending Credits</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card-value text-green-600">{{ today_sales }}</div>
-        <div class="stat-card-label">Today's Sales</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="stat-card">
+            <div class="stat-card-value">{{ stock_count }}</div>
+            <div class="stat-card-label">Stock Items</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value {% if low_stock > 0 %}text-red-600{% endif %}">{{ low_stock }}</div>
+            <div class="stat-card-label">Low Stock</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value text-orange-600">{{ pending_credits }}</div>
+            <div class="stat-card-label">Pending Credits</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-value text-green-600">{{ today_sales }}</div>
+            <div class="stat-card-label">Today's Sales</div>
+        </div>
     </div>
 </div>
 
 <!-- Quick Actions -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-    <a href="{{ url_for('boutique.stock') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-        <h3 class="font-semibold text-lg text-gray-800 mb-2">Stock Management</h3>
-        <p class="text-gray-600 text-sm">View and manage inventory items</p>
-    </a>
+<div class="section-card">
+    <div class="section-card-header">
+        <h2 class="section-card-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
+            Quick Actions
+        </h2>
+    </div>
+    <p class="text-sm text-gray-500 mb-4">Click on any card to access that section</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <a href="{{ url_for('boutique.stock') }}" class="action-card">
+            <div class="action-card-title">Stock Management</div>
+            <div class="action-card-desc">View and manage inventory items</div>
+            <div class="action-card-hint">Add new stock, update quantities</div>
+        </a>
 
-    <a href="{{ url_for('boutique.new_sale') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-        <h3 class="font-semibold text-lg text-gray-800 mb-2">New Sale</h3>
-        <p class="text-gray-600 text-sm">Record a new sale transaction</p>
-    </a>
+        <a href="{{ url_for('boutique.new_sale') }}" class="action-card">
+            <div class="action-card-title">New Sale</div>
+            <div class="action-card-desc">Record a new sale transaction</div>
+            <div class="action-card-hint">Full payment or credit sale</div>
+        </a>
 
-    <a href="{{ url_for('boutique.sales') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-        <h3 class="font-semibold text-lg text-gray-800 mb-2">Sales History</h3>
-        <p class="text-gray-600 text-sm">View past sales transactions</p>
-    </a>
+        <a href="{{ url_for('boutique.sales') }}" class="action-card">
+            <div class="action-card-title">Sales History</div>
+            <div class="action-card-desc">View past sales transactions</div>
+            <div class="action-card-hint">Search and filter sales records</div>
+        </a>
 
-    <a href="{{ url_for('boutique.credits') }}" class="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-        <h3 class="font-semibold text-lg text-gray-800 mb-2">Credits</h3>
-        <p class="text-gray-600 text-sm">Manage pending credit payments</p>
-    </a>
+        <a href="{{ url_for('boutique.credits') }}" class="action-card">
+            <div class="action-card-title">Credits</div>
+            <div class="action-card-desc">Manage pending credit payments</div>
+            <div class="action-card-hint">Record credit payments here</div>
+        </a>
+    </div>
 </div>
 {% endblock %}
