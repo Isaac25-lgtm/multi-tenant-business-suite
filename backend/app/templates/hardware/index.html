@@ -10,11 +10,8 @@
 
 <!-- Quick Guide -->
 <div class="guideline mb-6">
-    <div class="guideline-icon">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        Getting Started - Data Entry Flow
-    </div>
-    <ul class="list-disc list-inside mt-2 space-y-1">
+    <div class="font-semibold text-gray-700 mb-2">Getting Started - Data Entry Flow</div>
+    <ul class="list-disc list-inside space-y-1 text-sm">
         <li><strong>Step 1:</strong> Go to <strong>Stock Management</strong> to add your inventory items first</li>
         <li><strong>Step 2:</strong> When you have stock, go to <strong>New Sale</strong> to record sales</li>
         <li><strong>Step 3:</strong> For credit sales, customer info is automatically saved</li>
@@ -32,22 +29,26 @@
         </h2>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="stat-card">
+        <a href="{{ url_for('hardware.stock') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value">{{ stock_count }}</div>
             <div class="stat-card-label">Stock Items</div>
-        </div>
-        <div class="stat-card">
+            <div class="text-xs text-indigo-600 mt-1">View all stock &rarr;</div>
+        </a>
+        <a href="{{ url_for('hardware.stock') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value {% if low_stock > 0 %}text-red-600{% endif %}">{{ low_stock }}</div>
             <div class="stat-card-label">Low Stock</div>
-        </div>
-        <div class="stat-card">
+            <div class="text-xs text-indigo-600 mt-1">Check stock levels &rarr;</div>
+        </a>
+        <a href="{{ url_for('hardware.credits') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value text-orange-600">{{ pending_credits }}</div>
             <div class="stat-card-label">Pending Credits</div>
-        </div>
-        <div class="stat-card">
+            <div class="text-xs text-indigo-600 mt-1">Manage credits &rarr;</div>
+        </a>
+        <a href="{{ url_for('hardware.sales') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value text-green-600">{{ today_sales }}</div>
             <div class="stat-card-label">Today's Sales</div>
-        </div>
+            <div class="text-xs text-indigo-600 mt-1">View sales &rarr;</div>
+        </a>
     </div>
 </div>
 

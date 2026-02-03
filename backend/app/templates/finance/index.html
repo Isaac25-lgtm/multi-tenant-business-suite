@@ -10,11 +10,8 @@
 
 <!-- Quick Guide -->
 <div class="guideline mb-6">
-    <div class="guideline-icon">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        Getting Started - Loan Processing Flow
-    </div>
-    <ul class="list-disc list-inside mt-2 space-y-1">
+    <div class="font-semibold text-gray-700 mb-2">Getting Started - Loan Processing Flow</div>
+    <ul class="list-disc list-inside space-y-1 text-sm">
         <li><strong>For Individual Loans:</strong> First add the client in <strong>Clients</strong>, then create loan in <strong>Individual Loans</strong></li>
         <li><strong>For Group Loans:</strong> Go directly to <strong>Group Loans</strong> - enter group name, members, and loan details</li>
         <li><strong>Agreement Preview:</strong> Review all details before issuing - you can add member details and upload collateral</li>
@@ -32,22 +29,26 @@
         </h2>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="stat-card">
+        <a href="{{ url_for('finance.loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value">{{ active_loans }}</div>
             <div class="stat-card-label">Active Loans</div>
-        </div>
-        <div class="stat-card">
+            <div class="text-xs text-indigo-600 mt-1">View loans &rarr;</div>
+        </a>
+        <a href="{{ url_for('finance.group_loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value">{{ active_groups }}</div>
             <div class="stat-card-label">Active Groups</div>
-        </div>
-        <div class="stat-card">
+            <div class="text-xs text-indigo-600 mt-1">View groups &rarr;</div>
+        </a>
+        <a href="{{ url_for('finance.loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value {% if overdue_loans + overdue_groups > 0 %}text-red-600{% endif %}">{{ overdue_loans + overdue_groups }}</div>
             <div class="stat-card-label">Overdue</div>
-        </div>
-        <div class="stat-card">
+            <div class="text-xs text-indigo-600 mt-1">Check overdue &rarr;</div>
+        </a>
+        <a href="{{ url_for('finance.payments') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(total_outstanding) }}</div>
             <div class="stat-card-label">Outstanding</div>
-        </div>
+            <div class="text-xs text-indigo-600 mt-1">View payments &rarr;</div>
+        </a>
     </div>
 </div>
 
