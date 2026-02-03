@@ -42,11 +42,11 @@ def login_required(section):
                 flash('Please login to access this section', 'error')
                 return redirect(url_for('auth.login', section=section))
 
-            # Check if user has access to this section
-            user_section = session.get('section')
-            if user_section != 'manager' and user_section != section:
-                flash(f'You do not have access to the {section} section', 'error')
-                return redirect(url_for('auth.login', section=section))
+            # TESTING MODE: Allow any logged-in user to access any section
+            # user_section = session.get('section')
+            # if user_section != 'manager' and user_section != section:
+            #     flash(f'You do not have access to the {section} section', 'error')
+            #     return redirect(url_for('auth.login', section=section))
 
             return f(*args, **kwargs)
         return decorated_function
@@ -61,18 +61,17 @@ def manager_required(f):
             flash('Please login as manager', 'error')
             return redirect(url_for('auth.login', section='manager'))
 
-        if session.get('section') != 'manager':
-            flash('Manager access required', 'error')
-            # Redirect to their own section, not dashboard (to avoid loop)
-            user_section = session.get('section')
-            if user_section == 'boutique':
-                return redirect(url_for('boutique.index'))
-            elif user_section == 'hardware':
-                return redirect(url_for('hardware.index'))
-            elif user_section == 'finance':
-                return redirect(url_for('finance.index'))
-            # If unknown section, send to login
-            return redirect(url_for('auth.login', section='manager'))
+        # TESTING MODE: Allow any logged-in user to access manager features
+        # if session.get('section') != 'manager':
+        #     flash('Manager access required', 'error')
+        #     user_section = session.get('section')
+        #     if user_section == 'boutique':
+        #         return redirect(url_for('boutique.index'))
+        #     elif user_section == 'hardware':
+        #         return redirect(url_for('hardware.index'))
+        #     elif user_section == 'finance':
+        #         return redirect(url_for('finance.index'))
+        #     return redirect(url_for('auth.login', section='manager'))
 
         return f(*args, **kwargs)
     return decorated_function
@@ -85,43 +84,10 @@ def login(section='boutique'):
     if section not in ['manager', 'boutique', 'hardware', 'finance']:
         section = 'boutique'
 
-    # Get all active users for this section (allows login with any account)
-    existing_users = []
-    if section == 'manager':
-        # Show all manager accounts
-        existing_users = User.query.filter(
-            User.role == 'manager',
-            User.is_active == True
-        ).order_by(User.full_name).all()
-    else:
-        # Get all active users whose role matches or have access to this section
-        if section == 'boutique':
-            existing_users = User.query.filter(
-                User.is_active == True,
-                db.or_(
-                    User.role == 'boutique',
-                    User.role == 'manager',
-                    User.can_access_boutique == True
-                )
-            ).order_by(User.full_name).all()
-        elif section == 'hardware':
-            existing_users = User.query.filter(
-                User.is_active == True,
-                db.or_(
-                    User.role == 'hardware',
-                    User.role == 'manager',
-                    User.can_access_hardware == True
-                )
-            ).order_by(User.full_name).all()
-        elif section == 'finance':
-            existing_users = User.query.filter(
-                User.is_active == True,
-                db.or_(
-                    User.role == 'finance',
-                    User.role == 'manager',
-                    User.can_access_finance == True
-                )
-            ).order_by(User.full_name).all()
+    # TESTING MODE: Show all active users regardless of section
+    existing_users = User.query.filter(
+        User.is_active == True
+    ).order_by(User.full_name).all()
 
     return render_template('auth/login.html', section=section, existing_users=existing_users)
 
@@ -163,10 +129,10 @@ def do_login(section='boutique'):
             flash('Incorrect password', 'error')
             return redirect(url_for('auth.login', section=section))
 
-    # Check if user has access to this section
-    if not user.has_access_to(section):
-        flash(f'You do not have access to the {section} section', 'error')
-        return redirect(url_for('auth.login', section=section))
+    # TESTING MODE: Skip section access check - allow any account to access any section
+    # if not user.has_access_to(section):
+    #     flash(f'You do not have access to the {section} section', 'error')
+    #     return redirect(url_for('auth.login', section=section))
 
     user.last_login = get_local_now()
     db.session.commit()
