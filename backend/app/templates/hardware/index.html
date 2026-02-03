@@ -10,23 +10,38 @@
 
 <!-- Quick Guide -->
 <div class="guideline mb-6">
-    <div class="font-semibold text-gray-700 mb-2">Getting Started - Data Entry Flow</div>
+    <div class="font-semibold text-gray-700 mb-2">How This Page Works</div>
     <ul class="list-disc list-inside space-y-1 text-sm">
-        <li><strong>Step 1:</strong> Go to <strong>Stock Management</strong> to add your inventory items first</li>
-        <li><strong>Step 2:</strong> When you have stock, go to <strong>New Sale</strong> to record sales</li>
-        <li><strong>Step 3:</strong> For credit sales, customer info is automatically saved</li>
-        <li><strong>Step 4:</strong> Track credit payments in the <strong>Credits</strong> section</li>
-        <li><strong>Step 5:</strong> View all transactions in <strong>Sales History</strong></li>
+        <li><strong>Today's Overview:</strong> Monitor your daily stats at a glance - click any card to view details (display only)</li>
+        <li><strong>Quick Actions:</strong> Start all data entry here - add stock, record sales, manage credits</li>
     </ul>
+    <div class="mt-3 pt-3 border-t border-gray-200">
+        <div class="font-semibold text-gray-700 mb-2">Data Entry Flow</div>
+        <ul class="list-disc list-inside space-y-1 text-sm">
+            <li><strong>Step 1:</strong> Go to <strong>Stock Management</strong> to add your inventory items first</li>
+            <li><strong>Step 2:</strong> When you have stock, go to <strong>New Sale</strong> to record sales</li>
+            <li><strong>Step 3:</strong> For credit sales, customer info is automatically saved</li>
+            <li><strong>Step 4:</strong> Track credit payments in the <strong>Credits</strong> section</li>
+            <li><strong>Step 5:</strong> View all transactions in <strong>Sales History</strong></li>
+        </ul>
+    </div>
+    <div class="mt-3 pt-3 border-t border-gray-200">
+        <div class="font-semibold text-gray-700 mb-2">Access Permissions</div>
+        <ul class="list-disc list-inside space-y-1 text-sm">
+            <li><strong>Employees:</strong> Can only add/edit entries for <strong>today</strong> and <strong>yesterday</strong></li>
+            <li><strong>Managers:</strong> Can view and edit entries for the <strong>past 30 days</strong>, with date filtering</li>
+        </ul>
+    </div>
 </div>
 
-<!-- Quick Stats -->
+<!-- Today's Overview - Display Only -->
 <div class="section-card mb-6">
     <div class="section-card-header">
         <h2 class="section-card-title">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
             Today's Overview
         </h2>
+        <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">View Only - Click to see details</span>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <a href="{{ url_for('hardware.stock') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
@@ -52,15 +67,16 @@
     </div>
 </div>
 
-<!-- Quick Actions -->
+<!-- Quick Actions - Data Entry -->
 <div class="section-card">
     <div class="section-card-header">
         <h2 class="section-card-title">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
             Quick Actions
         </h2>
+        <span class="text-xs text-white bg-indigo-600 px-2 py-1 rounded">Data Entry Here</span>
     </div>
-    <p class="text-sm text-gray-500 mb-4">Click on any card to access that section</p>
+    <p class="text-sm text-gray-500 mb-4">Start all your data entry from these sections</p>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <a href="{{ url_for('hardware.stock') }}" class="action-card">
             <div class="action-card-title">Stock Management</div>
