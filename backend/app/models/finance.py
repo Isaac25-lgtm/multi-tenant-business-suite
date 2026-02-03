@@ -108,6 +108,7 @@ class GroupLoan(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     group_name = db.Column(db.String(100), nullable=False)
     member_count = db.Column(db.Integer, nullable=False)
+    members_json = db.Column(db.Text, nullable=True)  # JSON string storing member details
     principal = db.Column(db.Numeric(12, 2), nullable=False, default=0)
     interest_rate = db.Column(db.Numeric(5, 2), nullable=False, default=0)
     interest_amount = db.Column(db.Numeric(12, 2), nullable=False, default=0)
@@ -128,6 +129,17 @@ class GroupLoan(db.Model):
     payments = db.relationship('GroupLoanPayment', backref='group_loan', lazy='dynamic')
     documents = db.relationship('LoanDocument', backref='group_loan', lazy='dynamic',
                                primaryjoin='GroupLoan.id==LoanDocument.group_loan_id')
+
+    @property
+    def members(self):
+        """Return parsed members data"""
+        import json
+        if self.members_json:
+            try:
+                return json.loads(self.members_json)
+            except:
+                return []
+        return []
 
     def to_dict(self, include_payments=False, include_documents=False):
         data = {

@@ -107,13 +107,34 @@ def add_stock():
             flash('Item name and quantity required', 'error')
             return redirect(url_for('hardware.stock'))
 
+        # Handle category - either existing or new
+        category_id = request.form.get('category_id')
+        if category_id == 'new':
+            # Create new category
+            new_category_name = request.form.get('new_category', '').strip()
+            if new_category_name:
+                existing_cat = HardwareCategory.query.filter_by(name=new_category_name).first()
+                if existing_cat:
+                    category_id = existing_cat.id
+                else:
+                    new_category = HardwareCategory(name=new_category_name)
+                    db.session.add(new_category)
+                    db.session.flush()
+                    category_id = new_category.id
+                    log_action(session['username'], 'hardware', 'create', 'category', new_category.id,
+                               {'name': new_category_name, 'created_with_stock': item_name})
+            else:
+                category_id = None
+        else:
+            category_id = int(category_id) if category_id else None
+
         low_stock_threshold = request.form.get('low_stock_threshold', type=int)
         if low_stock_threshold is None:
             low_stock_threshold = max(1, int(quantity * 0.25))
 
         stock_item = HardwareStock(
             item_name=item_name,
-            category_id=request.form.get('category_id', type=int),
+            category_id=category_id,
             quantity=quantity,
             initial_quantity=quantity,
             unit=request.form.get('unit', 'pieces'),
@@ -126,7 +147,7 @@ def add_stock():
         db.session.commit()
 
         log_action(session['username'], 'hardware', 'create', 'stock', stock_item.id,
-                   {'item_name': item_name, 'quantity': quantity})
+                   {'item_name': item_name, 'quantity': quantity, 'cost_price': float(stock_item.cost_price)})
         flash(f'Stock item "{item_name}" added', 'success')
     except Exception as e:
         db.session.rollback()
@@ -141,7 +162,25 @@ def edit_stock(id):
     try:
         old_name = item.item_name
         item.item_name = request.form.get('item_name', item.item_name).strip()
-        item.category_id = request.form.get('category_id', type=int) or item.category_id
+
+        # Handle category - either existing or new
+        category_id = request.form.get('category_id')
+        if category_id == 'new':
+            new_category_name = request.form.get('new_category', '').strip()
+            if new_category_name:
+                existing_cat = HardwareCategory.query.filter_by(name=new_category_name).first()
+                if existing_cat:
+                    item.category_id = existing_cat.id
+                else:
+                    new_category = HardwareCategory(name=new_category_name)
+                    db.session.add(new_category)
+                    db.session.flush()
+                    item.category_id = new_category.id
+                    log_action(session['username'], 'hardware', 'create', 'category', new_category.id,
+                               {'name': new_category_name, 'created_with_stock_edit': item.item_name})
+        elif category_id:
+            item.category_id = int(category_id)
+
         item.unit = request.form.get('unit', item.unit)
         item.cost_price = safe_decimal(request.form.get('cost_price'), str(item.cost_price))
         item.min_selling_price = safe_decimal(request.form.get('min_selling_price'), str(item.min_selling_price))

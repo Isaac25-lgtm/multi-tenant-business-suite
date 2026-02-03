@@ -696,6 +696,16 @@ def preview_group_loan_agreement():
     period_days = PERIOD_DAYS.get(period_type, 30)
     due_date = issue_date + timedelta(days=period_days * total_periods)
 
+    # Pre-calculate payment schedule (first 6 periods)
+    payment_schedule = []
+    for i in range(1, min(total_periods + 1, 7)):
+        payment_date = issue_date + timedelta(days=period_days * i)
+        payment_schedule.append({
+            'period': i,
+            'due_date': payment_date,
+            'amount': float(amount_per_period)
+        })
+
     # Default agreement terms that can be edited
     default_terms = [
         "All members of the group are jointly and severally liable for the loan repayment.",
@@ -720,6 +730,7 @@ def preview_group_loan_agreement():
         amount_per_period=float(amount_per_period),
         issue_date=issue_date,
         due_date=due_date,
+        payment_schedule=payment_schedule,
         default_terms=default_terms,
         today=get_local_today()
     )
@@ -737,6 +748,7 @@ def create_group_loan_with_agreement():
         total_periods = request.form.get('total_periods', type=int)
         period_type = request.form.get('period_type', 'monthly')
         issue_date = date.fromisoformat(request.form.get('issue_date', str(get_local_today())))
+        members_data = request.form.get('members_data', '')
 
         # Check date permission
         user_section = session.get('section', '')
@@ -756,6 +768,7 @@ def create_group_loan_with_agreement():
 
         group = GroupLoan(
             group_name=group_name, member_count=member_count or 1,
+            members_json=members_data if members_data else None,
             principal=principal, interest_rate=interest_rate,
             interest_amount=interest_amount, total_amount=total_amount,
             amount_per_period=amount_per_period, total_periods=total_periods,
@@ -788,7 +801,8 @@ def create_group_loan_with_agreement():
 
         log_action(session['username'], 'finance', 'create', 'group_loan', group.id,
                    {'group_name': group_name, 'principal': float(principal),
-                    'total_amount': float(total_amount), 'member_count': member_count})
+                    'total_amount': float(total_amount), 'member_count': member_count,
+                    'has_members_data': bool(members_data)})
         flash('Group loan created successfully', 'success')
         return redirect(url_for('finance.view_group_loan', id=group.id))
     except Exception as e:

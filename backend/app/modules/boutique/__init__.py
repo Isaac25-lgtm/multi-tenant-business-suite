@@ -201,7 +201,6 @@ def add_stock():
     """Add a new stock item"""
     try:
         item_name = request.form.get('item_name', '').strip()
-        category_id = request.form.get('category_id', type=int)
         quantity = request.form.get('quantity', type=int)
         unit = request.form.get('unit', 'pieces')
         cost_price = safe_decimal(request.form.get('cost_price', '0'))
@@ -212,6 +211,27 @@ def add_stock():
         if not item_name or quantity is None or quantity < 0:
             flash('Item name and valid quantity are required', 'error')
             return redirect(url_for('boutique.stock'))
+
+        # Handle category - either existing or new
+        category_id = request.form.get('category_id')
+        if category_id == 'new':
+            # Create new category
+            new_category_name = request.form.get('new_category', '').strip()
+            if new_category_name:
+                existing_cat = BoutiqueCategory.query.filter_by(name=new_category_name).first()
+                if existing_cat:
+                    category_id = existing_cat.id
+                else:
+                    new_category = BoutiqueCategory(name=new_category_name)
+                    db.session.add(new_category)
+                    db.session.flush()
+                    category_id = new_category.id
+                    log_action(session['username'], 'boutique', 'create', 'category', new_category.id,
+                               {'name': new_category_name, 'created_with_stock': item_name})
+            else:
+                category_id = None
+        else:
+            category_id = int(category_id) if category_id else None
 
         # Auto-calculate threshold if not provided
         if low_stock_threshold is None:
@@ -232,7 +252,7 @@ def add_stock():
         db.session.commit()
 
         log_action(session['username'], 'boutique', 'create', 'stock', stock_item.id,
-                   {'item_name': item_name, 'quantity': quantity})
+                   {'item_name': item_name, 'quantity': quantity, 'cost_price': float(cost_price)})
         flash(f'Stock item "{item_name}" added successfully', 'success')
     except Exception as e:
         db.session.rollback()
@@ -250,7 +270,25 @@ def edit_stock(id):
     try:
         old_name = item.item_name
         item.item_name = request.form.get('item_name', item.item_name).strip()
-        item.category_id = request.form.get('category_id', type=int) or item.category_id
+
+        # Handle category - either existing or new
+        category_id = request.form.get('category_id')
+        if category_id == 'new':
+            new_category_name = request.form.get('new_category', '').strip()
+            if new_category_name:
+                existing_cat = BoutiqueCategory.query.filter_by(name=new_category_name).first()
+                if existing_cat:
+                    item.category_id = existing_cat.id
+                else:
+                    new_category = BoutiqueCategory(name=new_category_name)
+                    db.session.add(new_category)
+                    db.session.flush()
+                    item.category_id = new_category.id
+                    log_action(session['username'], 'boutique', 'create', 'category', new_category.id,
+                               {'name': new_category_name, 'created_with_stock_edit': item.item_name})
+        elif category_id:
+            item.category_id = int(category_id)
+
         item.unit = request.form.get('unit', item.unit)
         item.cost_price = safe_decimal(request.form.get('cost_price'), str(item.cost_price))
         item.min_selling_price = safe_decimal(request.form.get('min_selling_price'), str(item.min_selling_price))
