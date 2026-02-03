@@ -84,10 +84,8 @@ def login(section='boutique'):
     if section not in ['manager', 'boutique', 'hardware', 'finance']:
         section = 'boutique'
 
-    # TESTING MODE: Show all active users regardless of section
-    existing_users = User.query.filter(
-        User.is_active == True
-    ).order_by(User.full_name).all()
+    # TESTING MODE: Show ALL users (including deactivated) regardless of section
+    existing_users = User.query.order_by(User.full_name).all()
 
     return render_template('auth/login.html', section=section, existing_users=existing_users)
 
@@ -118,10 +116,10 @@ def do_login(section='boutique'):
             flash('Please select an account or enter a username', 'error')
             return redirect(url_for('auth.login', section=section))
 
-    # Check if user is active
-    if not user.is_active:
-        flash('This account has been deactivated. Contact your manager.', 'error')
-        return redirect(url_for('auth.login', section=section))
+    # TESTING MODE: Skip active check - allow deactivated accounts to login
+    # if not user.is_active:
+    #     flash('This account has been deactivated. Contact your manager.', 'error')
+    #     return redirect(url_for('auth.login', section=section))
 
     # Verify password if user has one set
     if user.password_hash:
