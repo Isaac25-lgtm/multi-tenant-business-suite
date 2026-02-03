@@ -15,83 +15,105 @@
     </script>
     {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-gray-100 min-h-screen">
+<body class="min-h-screen">
     <!-- Navigation -->
-    <nav class="bg-indigo-600 text-white shadow-lg">
+    <nav class="nav-main shadow-lg">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
                     {% if current_section == 'manager' %}
-                    <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-2">
+                    <a href="{{ url_for('dashboard.index') }}" class="flex items-center gap-3">
                         <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Denove APS" class="h-10 logo-img">
+                        <span class="text-white font-bold text-lg hidden sm:block">Denove APS</span>
                     </a>
                     {% elif current_section == 'boutique' %}
-                    <a href="{{ url_for('boutique.index') }}" class="flex items-center gap-2">
+                    <a href="{{ url_for('boutique.index') }}" class="flex items-center gap-3">
                         <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Denove APS" class="h-10 logo-img">
+                        <span class="text-white font-bold text-lg hidden sm:block">Denove APS</span>
                     </a>
                     {% elif current_section == 'hardware' %}
-                    <a href="{{ url_for('hardware.index') }}" class="flex items-center gap-2">
+                    <a href="{{ url_for('hardware.index') }}" class="flex items-center gap-3">
                         <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Denove APS" class="h-10 logo-img">
+                        <span class="text-white font-bold text-lg hidden sm:block">Denove APS</span>
                     </a>
                     {% elif current_section == 'finance' %}
-                    <a href="{{ url_for('finance.index') }}" class="flex items-center gap-2">
+                    <a href="{{ url_for('finance.index') }}" class="flex items-center gap-3">
                         <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Denove APS" class="h-10 logo-img">
+                        <span class="text-white font-bold text-lg hidden sm:block">Denove APS</span>
                     </a>
                     {% else %}
-                    <a href="{{ url_for('auth.login') }}" class="flex items-center gap-2">
+                    <a href="{{ url_for('auth.login') }}" class="flex items-center gap-3">
                         <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Denove APS" class="h-10 logo-img">
+                        <span class="text-white font-bold text-lg hidden sm:block">Denove APS</span>
                     </a>
                     {% endif %}
                 </div>
-                <div class="hidden md:flex items-center space-x-1">
+
+                <!-- Navigation Links with Borders -->
+                <div class="hidden md:flex items-center space-x-2">
                     {% if current_section == 'manager' %}
                     <!-- Manager sees all -->
-                    <a href="{{ url_for('dashboard.index') }}" class="hover:bg-indigo-700 px-3 py-2 rounded {% if request.endpoint and request.endpoint == 'dashboard.index' %}bg-indigo-700{% endif %}">Dashboard</a>
-                    <a href="{{ url_for('boutique.index') }}" class="hover:bg-indigo-700 px-3 py-2 rounded {% if request.endpoint and 'boutique' in request.endpoint %}bg-indigo-700{% endif %}">Boutique</a>
-                    <a href="{{ url_for('hardware.index') }}" class="hover:bg-indigo-700 px-3 py-2 rounded {% if request.endpoint and 'hardware' in request.endpoint %}bg-indigo-700{% endif %}">Hardware</a>
-                    <a href="{{ url_for('finance.index') }}" class="hover:bg-indigo-700 px-3 py-2 rounded {% if request.endpoint and 'finance' in request.endpoint %}bg-indigo-700{% endif %}">Finance</a>
-                    <a href="{{ url_for('customers.index') }}" class="hover:bg-indigo-700 px-3 py-2 rounded {% if request.endpoint and 'customers' in request.endpoint %}bg-indigo-700{% endif %}">Customers</a>
-                    <a href="{{ url_for('dashboard.users') }}" class="hover:bg-indigo-700 px-3 py-2 rounded {% if request.endpoint and 'users' in request.endpoint %}bg-indigo-700{% endif %}">Users</a>
-                    <a href="{{ url_for('dashboard.audit_trail') }}" class="hover:bg-indigo-700 px-3 py-2 rounded {% if request.endpoint and 'audit' in request.endpoint %}bg-indigo-700{% endif %}">Audit</a>
+                    <a href="{{ url_for('dashboard.index') }}" class="nav-link {% if request.endpoint and request.endpoint == 'dashboard.index' %}nav-link-active{% endif %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                        Dashboard
+                    </a>
+                    <a href="{{ url_for('boutique.index') }}" class="nav-link {% if request.endpoint and 'boutique' in request.endpoint %}nav-link-active{% endif %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>
+                        Boutique
+                    </a>
+                    <a href="{{ url_for('hardware.index') }}" class="nav-link {% if request.endpoint and 'hardware' in request.endpoint %}nav-link-active{% endif %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Hardware
+                    </a>
+                    <a href="{{ url_for('finance.index') }}" class="nav-link {% if request.endpoint and 'finance' in request.endpoint %}nav-link-active{% endif %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Finance
+                    </a>
+                    <a href="{{ url_for('customers.index') }}" class="nav-link {% if request.endpoint and 'customers' in request.endpoint %}nav-link-active{% endif %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        Customers
+                    </a>
+                    <a href="{{ url_for('dashboard.users') }}" class="nav-link {% if request.endpoint and 'users' in request.endpoint %}nav-link-active{% endif %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+                        Users
+                    </a>
+                    <a href="{{ url_for('dashboard.audit_trail') }}" class="nav-link {% if request.endpoint and 'audit' in request.endpoint %}nav-link-active{% endif %}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+                        Audit
+                    </a>
                     {% elif current_section == 'boutique' %}
-                    <a href="{{ url_for('boutique.index') }}" class="hover:bg-indigo-700 px-3 py-2 rounded bg-indigo-700">Boutique</a>
+                    <a href="{{ url_for('boutique.index') }}" class="nav-link nav-link-active">Boutique</a>
                     {% elif current_section == 'hardware' %}
-                    <a href="{{ url_for('hardware.index') }}" class="hover:bg-indigo-700 px-3 py-2 rounded bg-indigo-700">Hardware</a>
+                    <a href="{{ url_for('hardware.index') }}" class="nav-link nav-link-active">Hardware</a>
                     {% elif current_section == 'finance' %}
-                    <a href="{{ url_for('finance.index') }}" class="hover:bg-indigo-700 px-3 py-2 rounded bg-indigo-700">Finance</a>
+                    <a href="{{ url_for('finance.index') }}" class="nav-link nav-link-active">Finance</a>
                     {% else %}
                     <!-- Not logged in -->
-                    <a href="{{ url_for('auth.login', section='manager') }}" class="hover:bg-indigo-700 px-3 py-2 rounded">Manager Login</a>
-                    <a href="{{ url_for('auth.login', section='boutique') }}" class="hover:bg-indigo-700 px-3 py-2 rounded">Boutique Login</a>
-                    <a href="{{ url_for('auth.login', section='hardware') }}" class="hover:bg-indigo-700 px-3 py-2 rounded">Hardware Login</a>
-                    <a href="{{ url_for('auth.login', section='finance') }}" class="hover:bg-indigo-700 px-3 py-2 rounded">Finance Login</a>
+                    <a href="{{ url_for('auth.login', section='manager') }}" class="nav-link">Manager Login</a>
+                    <a href="{{ url_for('auth.login', section='boutique') }}" class="nav-link">Boutique Login</a>
+                    <a href="{{ url_for('auth.login', section='hardware') }}" class="nav-link">Hardware Login</a>
+                    <a href="{{ url_for('auth.login', section='finance') }}" class="nav-link">Finance Login</a>
                     {% endif %}
                 </div>
+
                 <!-- User info and logout -->
                 <div class="hidden md:flex items-center space-x-3">
-                    <!-- Dark Mode Toggle -->
-                    <div class="theme-toggle" onclick="toggleTheme()" title="Toggle Dark Mode">
-                        <span id="theme-icon">
-                            <svg id="sun-icon" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/>
-                            </svg>
-                            <svg id="moon-icon" class="w-5 h-5 hidden" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/>
-                            </svg>
-                        </span>
-                        <div class="theme-toggle-switch"></div>
-                    </div>
                     {% if current_user %}
-                    <span class="text-indigo-200 text-sm">
-                        {{ current_user }}
-                        <span class="text-xs bg-indigo-500 px-2 py-1 rounded">{{ current_section|title }}</span>
-                    </span>
-                    <a href="{{ url_for('auth.logout') }}" class="bg-indigo-700 hover:bg-indigo-800 px-3 py-1 rounded text-sm">Logout</a>
+                    <div class="user-info-badge">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                        <span>{{ current_user }}</span>
+                        <span class="user-role-tag">{{ current_section|title }}</span>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}" class="logout-btn">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        Logout
+                    </a>
                     {% endif %}
                 </div>
+
                 <!-- Mobile menu button -->
                 <div class="md:hidden flex items-center">
-                    <button id="mobile-menu-btn" class="hover:bg-indigo-700 p-2 rounded">
+                    <button id="mobile-menu-btn" class="mobile-menu-btn">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
                         </svg>
@@ -99,26 +121,28 @@
                 </div>
             </div>
         </div>
+
         <!-- Mobile menu -->
-        <div id="mobile-menu" class="hidden md:hidden bg-indigo-700">
+        <div id="mobile-menu" class="hidden md:hidden mobile-menu">
             {% if current_user %}
-            <div class="px-4 py-2 text-indigo-200 text-sm border-b border-indigo-600">
-                Logged in as: {{ current_user }} ({{ current_section|title }})
+            <div class="mobile-user-info">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                {{ current_user }} <span class="mobile-role-tag">{{ current_section|title }}</span>
             </div>
             {% endif %}
             {% if current_section == 'manager' %}
-            <a href="{{ url_for('dashboard.index') }}" class="block px-4 py-2 hover:bg-indigo-800">Dashboard</a>
-            <a href="{{ url_for('boutique.index') }}" class="block px-4 py-2 hover:bg-indigo-800">Boutique</a>
-            <a href="{{ url_for('hardware.index') }}" class="block px-4 py-2 hover:bg-indigo-800">Hardware</a>
-            <a href="{{ url_for('finance.index') }}" class="block px-4 py-2 hover:bg-indigo-800">Finance</a>
-            <a href="{{ url_for('customers.index') }}" class="block px-4 py-2 hover:bg-indigo-800">Customers</a>
-            <a href="{{ url_for('dashboard.users') }}" class="block px-4 py-2 hover:bg-indigo-800">Users</a>
-            <a href="{{ url_for('dashboard.audit_trail') }}" class="block px-4 py-2 hover:bg-indigo-800">Audit</a>
+            <a href="{{ url_for('dashboard.index') }}" class="mobile-nav-link">Dashboard</a>
+            <a href="{{ url_for('boutique.index') }}" class="mobile-nav-link">Boutique</a>
+            <a href="{{ url_for('hardware.index') }}" class="mobile-nav-link">Hardware</a>
+            <a href="{{ url_for('finance.index') }}" class="mobile-nav-link">Finance</a>
+            <a href="{{ url_for('customers.index') }}" class="mobile-nav-link">Customers</a>
+            <a href="{{ url_for('dashboard.users') }}" class="mobile-nav-link">Users</a>
+            <a href="{{ url_for('dashboard.audit_trail') }}" class="mobile-nav-link">Audit</a>
             {% elif current_section %}
-            <a href="{{ url_for(current_section + '.index') }}" class="block px-4 py-2 hover:bg-indigo-800">{{ current_section|title }}</a>
+            <a href="{{ url_for(current_section + '.index') }}" class="mobile-nav-link">{{ current_section|title }}</a>
             {% endif %}
             {% if current_user %}
-            <a href="{{ url_for('auth.logout') }}" class="block px-4 py-2 hover:bg-indigo-800 text-red-300">Logout</a>
+            <a href="{{ url_for('auth.logout') }}" class="mobile-nav-link mobile-logout">Logout</a>
             {% endif %}
         </div>
     </nav>
@@ -128,8 +152,15 @@
         {% if messages %}
             <div class="max-w-7xl mx-auto px-4 mt-4">
                 {% for category, message in messages %}
-                    <div class="p-4 rounded-md mb-2 {% if category == 'error' %}bg-red-100 text-red-700 border border-red-400{% elif category == 'success' %}bg-green-100 text-green-700 border border-green-400{% else %}bg-blue-100 text-blue-700 border border-blue-400{% endif %}">
-                        {{ message }}
+                    <div class="flash-message flash-{{ category }}">
+                        {% if category == 'error' %}
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        {% elif category == 'success' %}
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        {% else %}
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        {% endif %}
+                        <span>{{ message }}</span>
                     </div>
                 {% endfor %}
             </div>
@@ -137,14 +168,15 @@
     {% endwith %}
 
     <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 py-6">
+    <main class="main-content max-w-7xl mx-auto px-4 py-6">
         {% block content %}{% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-800 text-white py-4 mt-8">
-        <div class="max-w-7xl mx-auto px-4 text-center text-sm">
-            <p>Denove APS - Business Management System</p>
+    <footer class="footer-main">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-sm font-medium">Denove APS - Business Management System</p>
+            <p class="text-xs opacity-75 mt-1">Empowering your business operations</p>
         </div>
     </footer>
 

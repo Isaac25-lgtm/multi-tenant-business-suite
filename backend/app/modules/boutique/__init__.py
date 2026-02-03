@@ -16,8 +16,8 @@ boutique_bp = Blueprint('boutique', __name__)
 
 # Branch names
 BRANCHES = {
-    'K': 'Branch K (Kikuubo)',
-    'B': 'Branch B (Bugolobi)'
+    'K': 'Kapchorwa Branch',
+    'M': 'Mbale Branch'
 }
 
 

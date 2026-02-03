@@ -5,66 +5,334 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - {{ section|title }} - Denove APS</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .password-modal {
+            backdrop-filter: blur(4px);
+        }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex items-center justify-center">
-    <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md">
-        <div class="text-center mb-6">
-            <h1 class="text-2xl font-bold text-gray-800">Denove APS</h1>
-            <p class="text-gray-600 mt-2">
-                {% if section == 'manager' %}
-                <span class="inline-block bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-semibold">Manager Login</span>
-                {% elif section == 'boutique' %}
-                <span class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">Boutique Login</span>
-                {% elif section == 'hardware' %}
-                <span class="inline-block bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-semibold">Hardware Login</span>
-                {% elif section == 'finance' %}
-                <span class="inline-block bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">Finance Login</span>
+<body class="min-h-screen flex items-center justify-center p-4
+    {% if section == 'manager' %}bg-gradient-to-br from-purple-50 via-white to-purple-100
+    {% elif section == 'boutique' %}bg-gradient-to-br from-blue-50 via-white to-blue-100
+    {% elif section == 'hardware' %}bg-gradient-to-br from-orange-50 via-white to-amber-100
+    {% elif section == 'finance' %}bg-gradient-to-br from-green-50 via-white to-emerald-100
+    {% else %}bg-gradient-to-br from-gray-100 to-gray-200
+    {% endif %}">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border-t-4
+        {% if section == 'manager' %}border-purple-500
+        {% elif section == 'boutique' %}border-blue-500
+        {% elif section == 'hardware' %}border-orange-500
+        {% elif section == 'finance' %}border-green-500
+        {% else %}border-gray-300
+        {% endif %}">
+        <!-- Header -->
+        <div class="bg-gradient-to-r
+            {% if section == 'manager' %}from-purple-600 to-purple-800
+            {% elif section == 'boutique' %}from-blue-600 to-blue-800
+            {% elif section == 'hardware' %}from-orange-500 to-orange-700
+            {% elif section == 'finance' %}from-green-600 to-green-800
+            {% endif %} text-white p-5 text-center">
+            <h1 class="text-2xl font-bold">Denove APS</h1>
+            <p class="mt-1 opacity-90 text-sm">
+                {% if section == 'manager' %}Manager Portal
+                {% elif section == 'boutique' %}Boutique Section
+                {% elif section == 'hardware' %}Hardware Section
+                {% elif section == 'finance' %}Finance Section
                 {% endif %}
             </p>
         </div>
 
-        <!-- Flash Messages -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="p-3 rounded-md mb-4 {% if category == 'error' %}bg-red-100 text-red-700{% else %}bg-green-100 text-green-700{% endif %}">
-                        {{ message }}
+        <div class="p-5">
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="p-3 rounded-lg mb-4 text-sm {% if category == 'error' %}bg-red-100 text-red-700 border border-red-200{% else %}bg-green-100 text-green-700 border border-green-200{% endif %}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Login Form -->
+            <form method="POST" action="{{ url_for('auth.do_login', section=section) }}" id="login-form">
+                <input type="hidden" name="user_id" id="selected-user-id" value="">
+
+                {% if existing_users %}
+                <!-- Existing Accounts Section -->
+                <div class="mb-4">
+                    <label class="block text-gray-600 text-xs font-semibold mb-2 uppercase tracking-wide">
+                        Existing Accounts
+                    </label>
+                    <div class="relative">
+                        <select id="account-select" onchange="onAccountSelect(this)"
+                            class="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition bg-white cursor-pointer appearance-none text-sm">
+                            <option value="">-- Select account --</option>
+                            {% for user in existing_users %}
+                            <option value="{{ user.id }}"
+                                    data-username="{{ user.username }}"
+                                    data-fullname="{{ user.full_name or user.username }}"
+                                    data-has-password="{{ 'true' if user.password_hash else 'false' }}"
+                                    data-profile-picture="{{ user.profile_picture or '' }}">
+                                {{ user.full_name or user.username }}{% if user.password_hash %} 🔒{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                            <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                            </svg>
+                        </div>
                     </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+                </div>
 
-        <form method="POST" action="{{ url_for('auth.do_login', section=section) }}">
-            <div class="mb-4">
-                <label class="block text-gray-700 text-sm font-medium mb-2">Username</label>
-                <input type="text" name="username" required autofocus
-                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Enter your username">
-            </div>
+                <!-- Selected User Preview (shows after selection) -->
+                <div id="selected-user-preview" class="hidden mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div class="flex items-center gap-3">
+                        <div id="preview-avatar" class="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br
+                            {% if section == 'manager' %}from-purple-400 to-purple-600
+                            {% elif section == 'boutique' %}from-blue-400 to-blue-600
+                            {% elif section == 'hardware' %}from-orange-400 to-orange-600
+                            {% elif section == 'finance' %}from-green-400 to-green-600
+                            {% endif %} flex items-center justify-center flex-shrink-0">
+                            <span id="preview-avatar-letter" class="text-sm font-bold text-white"></span>
+                            <img id="preview-avatar-image" src="" alt="" class="w-full h-full object-cover hidden">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p id="preview-fullname" class="font-medium text-gray-800 text-sm truncate"></p>
+                            <p id="preview-username" class="text-xs text-gray-500 truncate"></p>
+                        </div>
+                        <span id="preview-badge" class="px-2 py-0.5 text-xs rounded-full flex-shrink-0"></span>
+                    </div>
+                </div>
 
-            <button type="submit"
-                class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition font-medium">
-                Login
-            </button>
-        </form>
+                <div class="relative my-4">
+                    <div class="absolute inset-0 flex items-center">
+                        <div class="w-full border-t border-gray-200"></div>
+                    </div>
+                    <div class="relative flex justify-center text-xs">
+                        <span class="px-3 bg-white text-gray-400">or enter manually</span>
+                    </div>
+                </div>
+                {% endif %}
 
-        <div class="mt-6 pt-6 border-t text-center">
-            <p class="text-gray-500 text-sm mb-3">Login to another section:</p>
-            <div class="flex flex-wrap justify-center gap-2">
-                {% if section != 'manager' %}
-                <a href="{{ url_for('auth.login', section='manager') }}" class="text-purple-600 hover:underline text-sm">Manager</a>
-                {% endif %}
-                {% if section != 'boutique' %}
-                <a href="{{ url_for('auth.login', section='boutique') }}" class="text-blue-600 hover:underline text-sm">Boutique</a>
-                {% endif %}
-                {% if section != 'hardware' %}
-                <a href="{{ url_for('auth.login', section='hardware') }}" class="text-orange-600 hover:underline text-sm">Hardware</a>
-                {% endif %}
-                {% if section != 'finance' %}
-                <a href="{{ url_for('auth.login', section='finance') }}" class="text-green-600 hover:underline text-sm">Finance</a>
-                {% endif %}
+                <!-- Username Field -->
+                <div class="mb-3">
+                    <label class="block text-gray-600 text-xs font-semibold mb-2 uppercase tracking-wide">Username</label>
+                    <input type="text" name="username" id="username-input"
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm"
+                        placeholder="Enter your username">
+                </div>
+
+                <!-- Password Field -->
+                <div class="mb-4" id="password-field" style="display: none;">
+                    <label class="block text-gray-600 text-xs font-semibold mb-2 uppercase tracking-wide">Password</label>
+                    <input type="password" name="password" id="password-input"
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm"
+                        placeholder="Enter your password">
+                </div>
+
+                <button type="submit" id="login-button"
+                    class="w-full py-2.5 px-4 rounded-lg font-medium transition text-sm
+                    {% if section == 'manager' %}bg-purple-600 hover:bg-purple-700
+                    {% elif section == 'boutique' %}bg-blue-600 hover:bg-blue-700
+                    {% elif section == 'hardware' %}bg-orange-500 hover:bg-orange-600
+                    {% elif section == 'finance' %}bg-green-600 hover:bg-green-700
+                    {% endif %} text-white">
+                    Login
+                </button>
+            </form>
+
+            <!-- Section Switcher -->
+            <div class="mt-5 pt-4 border-t text-center">
+                <p class="text-gray-400 text-xs mb-2">Switch section:</p>
+                <div class="flex flex-wrap justify-center gap-2">
+                    {% if section != 'manager' %}
+                    <a href="{{ url_for('auth.login', section='manager') }}"
+                       class="px-3 py-1 bg-purple-100 text-purple-700 rounded hover:bg-purple-200 transition text-xs font-medium">
+                        Manager
+                    </a>
+                    {% endif %}
+                    {% if section != 'boutique' %}
+                    <a href="{{ url_for('auth.login', section='boutique') }}"
+                       class="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition text-xs font-medium">
+                        Boutique
+                    </a>
+                    {% endif %}
+                    {% if section != 'hardware' %}
+                    <a href="{{ url_for('auth.login', section='hardware') }}"
+                       class="px-3 py-1 bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition text-xs font-medium">
+                        Hardware
+                    </a>
+                    {% endif %}
+                    {% if section != 'finance' %}
+                    <a href="{{ url_for('auth.login', section='finance') }}"
+                       class="px-3 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition text-xs font-medium">
+                        Finance
+                    </a>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- Password Modal -->
+    <div id="password-modal" class="fixed inset-0 bg-black bg-opacity-50 password-modal hidden items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-xs mx-4 overflow-hidden">
+            <div class="p-5">
+                <div class="text-center mb-4">
+                    <div id="modal-avatar" class="w-14 h-14 mx-auto mb-3 rounded-full overflow-hidden bg-gradient-to-br
+                        {% if section == 'manager' %}from-purple-400 to-purple-600
+                        {% elif section == 'boutique' %}from-blue-400 to-blue-600
+                        {% elif section == 'hardware' %}from-orange-400 to-orange-600
+                        {% elif section == 'finance' %}from-green-400 to-green-600
+                        {% endif %} flex items-center justify-center shadow">
+                        <span id="modal-avatar-letter" class="text-xl font-bold text-white"></span>
+                        <img id="modal-avatar-image" src="" alt="" class="w-full h-full object-cover hidden">
+                    </div>
+                    <h3 id="modal-fullname" class="text-base font-semibold text-gray-800"></h3>
+                    <p id="modal-username" class="text-gray-500 text-xs"></p>
+                </div>
+
+                <form method="POST" action="{{ url_for('auth.do_login', section=section) }}" id="modal-form">
+                    <input type="hidden" name="user_id" id="modal-user-id" value="">
+                    <input type="hidden" name="username" id="modal-username-input" value="">
+
+                    <div class="mb-4">
+                        <input type="password" name="password" id="modal-password-input" required
+                            class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-center tracking-widest text-sm"
+                            placeholder="Enter password">
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button type="button" onclick="closeModal()"
+                            class="flex-1 py-2 px-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium text-sm">
+                            Cancel
+                        </button>
+                        <button type="submit"
+                            class="flex-1 py-2 px-3 rounded-lg font-medium transition text-sm
+                            {% if section == 'manager' %}bg-purple-600 hover:bg-purple-700
+                            {% elif section == 'boutique' %}bg-blue-600 hover:bg-blue-700
+                            {% elif section == 'hardware' %}bg-orange-500 hover:bg-orange-600
+                            {% elif section == 'finance' %}bg-green-600 hover:bg-green-700
+                            {% endif %} text-white">
+                            Login
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function onAccountSelect(select) {
+            const option = select.options[select.selectedIndex];
+            const preview = document.getElementById('selected-user-preview');
+
+            if (!option.value) {
+                preview.classList.add('hidden');
+                document.getElementById('selected-user-id').value = '';
+                return;
+            }
+
+            const userId = option.value;
+            const username = option.dataset.username;
+            const fullname = option.dataset.fullname;
+            const hasPassword = option.dataset.hasPassword === 'true';
+            const profilePicture = option.dataset.profilePicture;
+
+            // Update preview
+            document.getElementById('preview-fullname').textContent = fullname;
+            document.getElementById('preview-username').textContent = '@' + username;
+
+            const avatarLetter = document.getElementById('preview-avatar-letter');
+            const avatarImage = document.getElementById('preview-avatar-image');
+            const badge = document.getElementById('preview-badge');
+
+            if (profilePicture) {
+                avatarImage.src = '/static/' + profilePicture;
+                avatarImage.classList.remove('hidden');
+                avatarLetter.classList.add('hidden');
+            } else {
+                avatarLetter.textContent = fullname.charAt(0).toUpperCase();
+                avatarLetter.classList.remove('hidden');
+                avatarImage.classList.add('hidden');
+            }
+
+            if (hasPassword) {
+                badge.textContent = '🔒';
+                badge.className = 'px-2 py-0.5 text-xs rounded-full bg-gray-200 text-gray-600 flex-shrink-0';
+            } else {
+                badge.textContent = '✓';
+                badge.className = 'px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-600 flex-shrink-0';
+            }
+
+            preview.classList.remove('hidden');
+            document.getElementById('selected-user-id').value = userId;
+            document.getElementById('username-input').value = username;
+
+            // If has password, show password modal
+            if (hasPassword) {
+                showPasswordModal(userId, username, fullname, profilePicture);
+            }
+        }
+
+        function showPasswordModal(userId, username, fullname, profilePicture) {
+            const modal = document.getElementById('password-modal');
+            const avatarLetter = document.getElementById('modal-avatar-letter');
+            const avatarImage = document.getElementById('modal-avatar-image');
+
+            document.getElementById('modal-user-id').value = userId;
+            document.getElementById('modal-username-input').value = username;
+            document.getElementById('modal-fullname').textContent = fullname;
+            document.getElementById('modal-username').textContent = '@' + username;
+
+            if (profilePicture) {
+                avatarImage.src = '/static/' + profilePicture;
+                avatarImage.classList.remove('hidden');
+                avatarLetter.classList.add('hidden');
+            } else {
+                avatarLetter.textContent = fullname.charAt(0).toUpperCase();
+                avatarLetter.classList.remove('hidden');
+                avatarImage.classList.add('hidden');
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => document.getElementById('modal-password-input').focus(), 100);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('password-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.getElementById('modal-password-input').value = '';
+            document.getElementById('account-select').value = '';
+            document.getElementById('selected-user-preview').classList.add('hidden');
+            document.getElementById('selected-user-id').value = '';
+        }
+
+        // Close modal on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('password-modal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+        // Show password field when username is entered manually
+        document.getElementById('username-input').addEventListener('input', function() {
+            const passwordField = document.getElementById('password-field');
+            if (this.value.trim()) {
+                passwordField.style.display = 'block';
+            }
+        });
+    </script>
 </body>
 </html>

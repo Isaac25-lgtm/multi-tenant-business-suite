@@ -2,6 +2,7 @@ from flask import Flask, render_template
 from app.extensions import db, migrate
 from app.config import Config
 import os
+import json
 
 
 def create_app(config_class=Config):
@@ -30,13 +31,26 @@ def create_app(config_class=Config):
     app.register_blueprint(customers_bp, url_prefix='/customers')
     app.register_blueprint(finance_bp, url_prefix='/finance')
 
-    # Make current user available in templates
+    # Register custom Jinja2 filters
+    @app.template_filter('from_json')
+    def from_json_filter(value):
+        """Parse JSON string to dict/list"""
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+    # Make current user and timezone utilities available in templates
     @app.context_processor
-    def inject_user():
+    def inject_utilities():
         from flask import session
+        from app.utils.timezone import convert_to_dual_timezone
         return {
             'current_user': session.get('username'),
-            'current_section': session.get('section')
+            'current_section': session.get('section'),
+            'convert_to_dual_timezone': convert_to_dual_timezone
         }
 
     # Error handlers

@@ -6,7 +6,23 @@
 <div class="flex justify-between items-center mb-6">
     <div>
         <h1 class="text-2xl font-bold text-gray-800">Audit Trail</h1>
-        <p class="text-gray-600">Monitor all system activity</p>
+        <p class="text-gray-600">Monitor all system activity - Dual timezone view (Uganda EAT / Germany CET)</p>
+    </div>
+</div>
+
+<!-- Timezone Legend -->
+<div class="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-4 mb-6 border border-blue-200">
+    <div class="flex flex-wrap gap-6 text-sm">
+        <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+            <span class="font-medium">Uganda (EAT)</span>
+            <span class="text-gray-500">UTC+3</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-green-500"></span>
+            <span class="font-medium">Germany (CET/CEST)</span>
+            <span class="text-gray-500">UTC+1/+2</span>
+        </div>
     </div>
 </div>
 
@@ -47,80 +63,170 @@
     </form>
 </div>
 
-<!-- Audit Log Table -->
-<div class="bg-white rounded-lg shadow overflow-hidden">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th>User</th>
-                <th>Section</th>
-                <th>Action</th>
-                <th>Entity</th>
-                <th>Details</th>
-                <th>IP Address</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for log in logs %}
-            <tr>
-                <td class="whitespace-nowrap text-sm">
-                    {{ log.created_at.strftime('%Y-%m-%d %H:%M') }}
-                </td>
-                <td class="font-medium">{{ log.username }}</td>
-                <td>
-                    <span class="px-2 py-1 text-xs rounded-full
-                        {% if log.section == 'manager' %}bg-purple-100 text-purple-800
-                        {% elif log.section == 'boutique' %}bg-pink-100 text-pink-800
-                        {% elif log.section == 'hardware' %}bg-orange-100 text-orange-800
-                        {% elif log.section == 'finance' %}bg-green-100 text-green-800
-                        {% else %}bg-gray-100 text-gray-800{% endif %}">
-                        {{ log.section|title }}
-                    </span>
-                </td>
-                <td>
-                    <span class="px-2 py-1 text-xs rounded-full
-                        {% if log.action == 'create' %}bg-green-100 text-green-800
-                        {% elif log.action == 'update' %}bg-blue-100 text-blue-800
-                        {% elif log.action == 'delete' %}bg-red-100 text-red-800
-                        {% elif log.action == 'login' %}bg-indigo-100 text-indigo-800
-                        {% elif log.action == 'logout' %}bg-gray-100 text-gray-800
-                        {% else %}bg-gray-100 text-gray-800{% endif %}">
-                        {{ log.action|title }}
-                    </span>
-                </td>
-                <td>
-                    {{ log.entity|title }}
-                    {% if log.entity_id %}
-                    <span class="text-gray-500">#{{ log.entity_id }}</span>
-                    {% endif %}
-                </td>
-                <td class="max-w-xs truncate text-sm text-gray-600" title="{{ log.details or '' }}">
-                    {% if log.details %}
-                    {{ log.details[:50] }}{% if log.details|length > 50 %}...{% endif %}
+<!-- Audit Log Cards -->
+<div class="space-y-4">
+    {% for log in logs %}
+    <div class="bg-white rounded-lg shadow p-4 border-l-4
+        {% if log.action == 'create' %}border-green-500
+        {% elif log.action == 'update' %}border-blue-500
+        {% elif log.action == 'delete' or log.action == 'permanent_delete' %}border-red-500
+        {% elif log.action == 'login' %}border-indigo-500
+        {% elif log.action == 'logout' %}border-gray-400
+        {% elif log.action == 'adjust' %}border-yellow-500
+        {% elif log.action == 'reactivate' %}border-teal-500
+        {% else %}border-gray-300{% endif %}">
+
+        <!-- Header Row -->
+        <div class="flex flex-wrap justify-between items-start gap-4 mb-3">
+            <div class="flex items-center gap-3">
+                <!-- User Avatar -->
+                <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold">
+                    {{ log.username[0]|upper }}
+                </div>
+                <div>
+                    <span class="font-semibold text-gray-800">{{ log.username }}</span>
+                    <div class="flex gap-2 mt-1">
+                        <span class="px-2 py-0.5 text-xs rounded-full
+                            {% if log.section == 'manager' %}bg-purple-100 text-purple-800
+                            {% elif log.section == 'boutique' %}bg-pink-100 text-pink-800
+                            {% elif log.section == 'hardware' %}bg-orange-100 text-orange-800
+                            {% elif log.section == 'finance' %}bg-green-100 text-green-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ log.section|title }}
+                        </span>
+                        <span class="px-2 py-0.5 text-xs rounded-full
+                            {% if log.action == 'create' %}bg-green-100 text-green-800
+                            {% elif log.action == 'update' %}bg-blue-100 text-blue-800
+                            {% elif log.action == 'delete' or log.action == 'permanent_delete' %}bg-red-100 text-red-800
+                            {% elif log.action == 'login' %}bg-indigo-100 text-indigo-800
+                            {% elif log.action == 'logout' %}bg-gray-100 text-gray-800
+                            {% elif log.action == 'adjust' %}bg-yellow-100 text-yellow-800
+                            {% elif log.action == 'reactivate' %}bg-teal-100 text-teal-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ log.action|replace('_', ' ')|title }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dual Timezone Display -->
+            <div class="text-right text-sm">
+                {% set tz_info = convert_to_dual_timezone(log.created_at) %}
+                <div class="flex items-center gap-2 text-blue-700">
+                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                    <span class="font-medium">{{ tz_info.uganda.formatted }}</span>
+                    <span class="text-blue-500 text-xs">(Uganda EAT)</span>
+                </div>
+                <div class="flex items-center gap-2 text-green-700 mt-1">
+                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                    <span class="font-medium">{{ tz_info.germany.formatted }}</span>
+                    <span class="text-green-500 text-xs">(Germany {{ tz_info.germany.timezone.split()[0] }})</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Description -->
+        <div class="bg-gray-50 rounded p-3 mb-3">
+            <div class="flex items-start gap-2">
+                <span class="text-gray-400 mt-0.5">
+                    {% if log.action == 'create' %}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                    {% elif log.action == 'update' %}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    {% elif log.action == 'delete' or log.action == 'permanent_delete' %}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    {% elif log.action == 'login' %}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+                    {% elif log.action == 'logout' %}
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                     {% else %}
-                    -
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     {% endif %}
-                </td>
-                <td class="text-sm text-gray-500">{{ log.ip_address or '-' }}</td>
-            </tr>
-            {% else %}
-            <tr>
-                <td colspan="7" class="text-center text-gray-500 py-8">No audit logs found</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                </span>
+                <div class="flex-1">
+                    <p class="text-gray-800">
+                        <strong>{{ log.username }}</strong>
+                        {% if log.action == 'login' %}
+                            logged into the <strong>{{ log.section }}</strong> section
+                        {% elif log.action == 'logout' %}
+                            logged out from the <strong>{{ log.section }}</strong> section
+                        {% elif log.action == 'create' %}
+                            created a new <strong>{{ log.entity }}</strong>
+                            {% if log.entity_id %} (ID: #{{ log.entity_id }}){% endif %}
+                        {% elif log.action == 'update' %}
+                            updated <strong>{{ log.entity }}</strong>
+                            {% if log.entity_id %} #{{ log.entity_id }}{% endif %}
+                        {% elif log.action == 'delete' %}
+                            deleted <strong>{{ log.entity }}</strong>
+                            {% if log.entity_id %} #{{ log.entity_id }}{% endif %}
+                        {% elif log.action == 'permanent_delete' %}
+                            permanently deleted <strong>{{ log.entity }}</strong>
+                            {% if log.entity_id %} #{{ log.entity_id }}{% endif %}
+                        {% elif log.action == 'adjust' %}
+                            adjusted <strong>{{ log.entity }}</strong>
+                            {% if log.entity_id %} #{{ log.entity_id }}{% endif %}
+                        {% elif log.action == 'reactivate' %}
+                            reactivated <strong>{{ log.entity }}</strong>
+                            {% if log.entity_id %} #{{ log.entity_id }}{% endif %}
+                        {% else %}
+                            performed <strong>{{ log.action }}</strong> on <strong>{{ log.entity }}</strong>
+                            {% if log.entity_id %} #{{ log.entity_id }}{% endif %}
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Changes -->
+        {% if log.details %}
+        {% set details = log.details|from_json %}
+        {% if details %}
+        <div class="border-t pt-3">
+            <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Details of Changes</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
+                {% for key, value in details.items() %}
+                <div class="bg-gray-100 rounded px-3 py-2">
+                    <span class="text-gray-500">{{ key|replace('_', ' ')|title }}:</span>
+                    <span class="font-medium text-gray-800 ml-1">
+                        {% if value is none %}
+                        <span class="text-gray-400 italic">None</span>
+                        {% elif value is mapping %}
+                        {{ value|tojson }}
+                        {% else %}
+                        {{ value }}
+                        {% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <!-- Footer -->
+        <div class="flex justify-between items-center mt-3 pt-3 border-t text-xs text-gray-500">
+            <span>IP Address: <span class="font-mono">{{ log.ip_address or 'Unknown' }}</span></span>
+            <span>Log ID: #{{ log.id }}</span>
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
+        <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        <p>No audit logs found</p>
+    </div>
+    {% endfor %}
 </div>
 
 <!-- Pagination -->
 {% if pagination.pages > 1 %}
-<div class="mt-4 flex justify-center gap-2">
+<div class="mt-6 flex justify-center gap-2">
     {% if pagination.has_prev %}
     <a href="{{ url_for('dashboard.audit_trail', page=pagination.prev_num, **filters) }}" class="btn btn-secondary">Previous</a>
     {% endif %}
 
-    <span class="px-4 py-2 text-gray-600">
+    <span class="px-4 py-2 text-gray-600 bg-white rounded-lg shadow">
         Page {{ pagination.page }} of {{ pagination.pages }}
     </span>
 
