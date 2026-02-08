@@ -9,18 +9,21 @@ auth_bp = Blueprint('auth', __name__)
 
 
 def log_action(username, section, action, entity, entity_id=None, details=None):
-    """Log an action to the audit trail"""
-    log = AuditLog(
-        username=username,
-        section=section,
-        action=action,
-        entity=entity,
-        entity_id=entity_id,
-        details=json.dumps(details) if details else None,
-        ip_address=request.remote_addr
-    )
-    db.session.add(log)
-    db.session.commit()
+    """Log an action to the audit trail. Never crashes the app."""
+    try:
+        log = AuditLog(
+            username=username,
+            section=section,
+            action=action,
+            entity=entity,
+            entity_id=entity_id,
+            details=json.dumps(details) if details else None,
+            ip_address=request.remote_addr
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def get_current_user():
