@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Order Requests — Denove APS{% endblock %}
+
+{% block page_header %}
+<h1 class="page-title">🛒 Order Requests</h1>
+<p class="page-subtitle">Orders submitted through your website</p>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('website.dashboard') }}" class="text-primary text-sm">← Back to Website Management</a>
+</div>
+
+<!-- Explanation Box -->
+<div class="card mb-6" style="background: #f0f9ff; border: 1px solid #0ea5e9;">
+    <div class="card-body">
+        <h3 style="color: #0369a1; margin-bottom: 8px;">📋 What Are These?</h3>
+        <p style="color: #64748b; font-size: 14px; line-height: 1.6;">
+            These are people who added products to their cart and submitted an order through your website.
+            <strong>This is NOT a completed sale</strong> — they are requesting to buy these items.
+        </p>
+        <div style="background: white; padding: 12px; border-radius: 8px; margin-top: 12px;">
+            <p style="font-weight: 600; margin-bottom: 8px;">What to do:</p>
+            <ol style="margin: 0; padding-left: 20px; color: #6b7280; font-size: 13px;">
+                <li style="margin-bottom: 4px;">Click <strong>"View"</strong> to see what items they want</li>
+                <li style="margin-bottom: 4px;">Call or WhatsApp them to confirm the order and arrange pickup/delivery
+                </li>
+                <li style="margin-bottom: 4px;">Update the status to "Contacted" or "Fulfilled"</li>
+                <li>Create the actual sale in the <strong>Boutique or Hardware POS</strong></li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<!-- Status Filter -->
+<div class="card mb-6">
+    <div class="card-body">
+        <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;"><strong>Filter by status:</strong></p>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ url_for('website.order_requests', status='all') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'all' else 'btn-secondary' }}">
+                All ({{ status_counts.new + status_counts.contacted + status_counts.fulfilled + status_counts.cancelled
+                }})
+            </a>
+            <a href="{{ url_for('website.order_requests', status='new') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'new' else 'btn-secondary' }}"
+                style="{{ 'background: #f59e0b; border-color: #f59e0b;' if status_filter == 'new' else '' }}">
+                🆕 New ({{ status_counts.new }})
+            </a>
+            <a href="{{ url_for('website.order_requests', status='contacted') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'contacted' else 'btn-secondary' }}">
+                📞 Contacted ({{ status_counts.contacted }})
+            </a>
+            <a href="{{ url_for('website.order_requests', status='fulfilled') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'fulfilled' else 'btn-secondary' }}"
+                style="{{ 'background: #16a34a; border-color: #16a34a;' if status_filter == 'fulfilled' else '' }}">
+                ✅ Fulfilled ({{ status_counts.fulfilled }})
+            </a>
+            <a href="{{ url_for('website.order_requests', status='cancelled') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'cancelled' else 'btn-secondary' }}"
+                style="{{ 'background: #dc2626; border-color: #dc2626;' if status_filter == 'cancelled' else '' }}">
+                ❌ Cancelled ({{ status_counts.cancelled }})
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Orders Table -->
+<div class="card">
+    <div class="card-header">
+        <h3>
+            {% if status_filter == 'new' %}🆕 New Orders — Need Your Attention
+            {% elif status_filter == 'contacted' %}📞 Contacted — Awaiting Fulfillment
+            {% elif status_filter == 'fulfilled' %}✅ Fulfilled Orders
+            {% elif status_filter == 'cancelled' %}❌ Cancelled Orders
+            {% else %}All Order Requests
+            {% endif %}
+        </h3>
+    </div>
+    <div class="card-body p-0">
+        {% if orders %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Phone</th>
+                    <th>Items</th>
+                    <th>Total Value</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr style="{{ 'background: #fef3c7;' if order.status == 'new' else '' }}">
+                    <td class="font-medium">{{ order.customer_name }}</td>
+                    <td>{{ order.customer_phone }}</td>
+                    <td>{{ order.item_count }} item(s)</td>
+                    <td class="font-medium">UGX {{ "{:,.0f}".format(order.total_amount) }}</td>
+                    <td>
+                        <span
+                            class="badge badge-{{ 'success' if order.status == 'fulfilled' else 'danger' if order.status == 'cancelled' else 'warning' if order.status == 'new' else 'secondary' }}">
+                            {{ order.status|title }}
+                        </span>
+                    </td>
+                    <td class="text-sm text-gray-500">{{ order.submitted_at.strftime('%b %d, %Y') }}</td>
+                    <td>
+                        <a href="{{ url_for('website.view_order_request', id=order.id) }}"
+                            class="btn btn-sm {{ 'btn-primary' if order.status == 'new' else 'btn-secondary' }}">
+                            {{ 'Process Now' if order.status == 'new' else 'View' }}
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding: 60px; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+            <p style="font-weight: 600; margin-bottom: 8px;">No Order Requests Found</p>
+            <p style="color: #6b7280;">
+                {% if status_filter == 'all' %}
+                When customers submit orders through your website, they will appear here.
+                {% else %}
+                No orders with status "{{ status_filter }}"
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

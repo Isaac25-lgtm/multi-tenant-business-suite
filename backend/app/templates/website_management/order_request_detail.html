@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Order Request Details — Denove APS{% endblock %}
+
+{% block page_header %}
+<h1 class="page-title">Order Request #{{ order.id }}</h1>
+<p class="page-subtitle">Submitted {{ order.submitted_at.strftime('%B %d, %Y at %H:%M') }}</p>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('website.order_requests') }}" class="text-primary text-sm">← Back to Order Requests</a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Order Details -->
+    <div class="lg:col-span-2">
+        <div class="card">
+            <div class="card-header">
+                <h3>Customer Information</h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-sm text-gray-500">Customer Name</label>
+                        <p class="font-medium text-lg">{{ order.customer_name }}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Phone Number</label>
+                        <p class="font-medium text-lg">
+                            <a href="tel:{{ order.customer_phone }}" class="text-primary">{{ order.customer_phone }}</a>
+                        </p>
+                    </div>
+                    {% if order.customer_email %}
+                    <div>
+                        <label class="text-sm text-gray-500">Email Address</label>
+                        <p class="font-medium text-lg">
+                            <a href="mailto:{{ order.customer_email }}" class="text-primary">{{ order.customer_email
+                                }}</a>
+                        </p>
+                    </div>
+                    {% endif %}
+                    {% if order.preferred_branch %}
+                    <div>
+                        <label class="text-sm text-gray-500">Preferred Branch</label>
+                        <p class="font-medium text-lg">{{ order.preferred_branch|title }}</p>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <label class="text-sm text-gray-500">Current Status</label>
+                        <p>
+                            <span
+                                class="badge badge-{{ 'success' if order.status == 'fulfilled' else 'danger' if order.status == 'cancelled' else 'warning' if order.status == 'new' else 'secondary' }}">
+                                {{ order.status|title }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ordered Items -->
+        <div class="card mt-6">
+            <div class="card-header">
+                <h3>Requested Items</h3>
+            </div>
+            <div class="card-body p-0">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>Type</th>
+                            <th>Quantity</th>
+                            <th>Price</th>
+                            <th>Subtotal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order.items %}
+                        <tr>
+                            <td class="font-medium">{{ item.name }}</td>
+                            <td><span class="badge badge-secondary">{{ item.product_type|title }}</span></td>
+                            <td>{{ item.quantity }}</td>
+                            <td>UGX {{ "{:,.0f}".format(item.price) }}</td>
+                            <td>UGX {{ "{:,.0f}".format(item.price * item.quantity) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr class="bg-gray-50">
+                            <td colspan="4" class="text-right font-medium">Total:</td>
+                            <td class="font-bold text-lg">UGX {{ "{:,.0f}".format(order.total_amount) }}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions Panel -->
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h3>Update Status</h3>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('website.update_order_status', id=order.id) }}" method="POST">
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-input">
+                            <option value="new" {{ 'selected' if order.status=='new' }}>New</option>
+                            <option value="contacted" {{ 'selected' if order.status=='contacted' }}>Contacted</option>
+                            <option value="fulfilled" {{ 'selected' if order.status=='fulfilled' }}>Fulfilled</option>
+                            <option value="cancelled" {{ 'selected' if order.status=='cancelled' }}>Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-input" rows="4"
+                            placeholder="Add notes about this order...">{{ order.notes or '' }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-full">Update Status</button>
+                </form>
+            </div>
+        </div>
+
+        {% if order.reviewed_by %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>Processing History</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-sm text-gray-500">Processed by {{ order.reviewer.full_name if order.reviewer else
+                    'Unknown' }}</p>
+                {% if order.fulfilled_at %}
+                <p class="text-sm text-gray-500">Fulfilled: {{ order.fulfilled_at.strftime('%b %d, %Y at %H:%M') }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>Quick Actions</h3>
+            </div>
+            <div class="card-body space-y-2">
+                <a href="tel:{{ order.customer_phone }}" class="btn btn-secondary w-full">📞 Call Customer</a>
+                {% if order.customer_email %}
+                <a href="mailto:{{ order.customer_email }}" class="btn btn-secondary w-full">📧 Email Customer</a>
+                {% endif %}
+                <a href="https://wa.me/{{ order.customer_phone|replace(' ', '')|replace('+', '') }}" target="_blank"
+                    class="btn btn-secondary w-full">💬 WhatsApp</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

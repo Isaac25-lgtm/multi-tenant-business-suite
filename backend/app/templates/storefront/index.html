@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Denove — Fashion · Hardware · Finance | Kapchorwa & Mbale</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Manrope:wght@300;400;500;600;700;800&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/storefront.css') }}">
+</head>
+
+<body>
+
+  <!-- ANNOUNCEMENT -->
+  <div class="ann">
+    <div class="ann__track">
+      <span class="ann__i"><span class="ann__dot"></span>Nationwide delivery across Uganda</span>
+      <span class="ann__i"><span class="ann__dot"></span>New Arrivals: Ladies Collection 2026</span>
+      <span class="ann__i"><span class="ann__dot"></span>Microfinance loans from UGX 200,000 — Apply Today</span>
+      <span class="ann__i"><span class="ann__dot"></span>Hardware: Cement, Iron Sheets & Plumbing at best prices</span>
+      <span class="ann__i"><span class="ann__dot"></span>Free delivery within Kapchorwa Town</span>
+      <span class="ann__i"><span class="ann__dot"></span>New Arrivals: Ladies Collection 2026</span>
+      <span class="ann__i"><span class="ann__dot"></span>Microfinance loans from UGX 200,000 — Apply Today</span>
+      <span class="ann__i"><span class="ann__dot"></span>Hardware: Cement, Iron Sheets & Plumbing at best prices</span>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <nav class="nav" id="navbar">
+    <div class="nav__inner container">
+      <a href="{{ url_for('storefront.home') }}" class="nav__brand">
+        <div class="nav__mark">D</div>
+        <div class="nav__name">Denove</div>
+      </a>
+      <div class="nav__links">
+        <a href="#boutique" class="nav__link active">Boutique</a>
+        <a href="#hardware" class="nav__link">Hardware</a>
+        <a href="#loans" class="nav__link">Loans</a>
+        <a href="#about" class="nav__link">About</a>
+      </div>
+      <div class="nav__right">
+        <a href="{{ url_for('auth.login') }}" class="nav__staff"><svg viewBox="0 0 24 24" fill="none"
+            stroke="currentColor">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>Staff</a>
+        <a href="#" class="nav__cart" id="cart-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="9" cy="21" r="1" />
+            <circle cx="20" cy="21" r="1" />
+            <path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6" />
+          </svg>Cart (<span id="cart-count">0</span>)</a>
+        <a href="tel:+256775466111" class="nav__call">Call Us</a>
+      </div>
+      <button class="nav__burger"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg></button>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero__bg"><img src="https://picsum.photos/id/1029/1400/900" alt="African marketplace"></div>
+    <div class="hero__grad"></div>
+    <div class="container hero__content">
+      <div class="hero__tag"><span class="hero__tag-dot"></span> Serving All of Uganda</div>
+      <h1 class="hero__title">Fashion, hardware<br>& <em>financial</em> freedom</h1>
+      <p class="hero__desc">Quality clothing, building materials, and accessible microfinance — everything your
+        household and business needs, from one trusted local partner.</p>
+      <div class="hero__btns">
+        <a href="#boutique" class="hero__btn hero__btn--pri">Shop Now <svg viewBox="0 0 24 24" fill="none"
+            stroke="currentColor">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12,5 19,12 12,19" />
+          </svg></a>
+        <a href="#loans" class="hero__btn hero__btn--gho">Apply for a Loan</a>
+      </div>
+    </div>
+    <div class="hero__floats">
+      <div class="hero__float">
+        <div class="hero__float-ic t"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg></div>
+        <div>
+          <div class="hero__float-txt">500+ Happy Customers</div>
+          <div class="hero__float-sub">Kapchorwa & Mbale</div>
+        </div>
+      </div>
+      <div class="hero__float">
+        <div class="hero__float-ic g"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path
+              d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+          </svg></div>
+        <div>
+          <div class="hero__float-txt">Licensed & Trusted</div>
+          <div class="hero__float-sub">Registered microfinance</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CATEGORIES -->
+  <section class="sec" style="padding-top:0">
+    <div class="container">
+      <div class="cats">
+        <a href="#boutique" class="cat cat--boutique reveal">
+          <img class="cat__photo"
+            src="https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=600&auto=format&fit=crop"
+            alt="Boutique clothing">
+          <div class="cat__ov">
+            <div class="cat__ic b"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg></div>
+            <div class="cat__name">Boutique</div>
+            <div class="cat__sub">{{ boutique_products|length }}+ fashion items · 2 branches</div>
+          </div>
+          <div class="cat__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="7" y1="17" x2="17" y2="7" />
+              <polyline points="7,7 17,7 17,17" />
+            </svg></div>
+        </a>
+        <a href="#hardware" class="cat cat--hardware reveal">
+          <img class="cat__photo"
+            src="https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=600&auto=format&fit=crop"
+            alt="Hardware & tools">
+          <div class="cat__ov">
+            <div class="cat__ic h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path
+                  d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z" />
+              </svg></div>
+            <div class="cat__name">Hardware</div>
+            <div class="cat__sub">Building materials & tools</div>
+          </div>
+          <div class="cat__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="7" y1="17" x2="17" y2="7" />
+              <polyline points="7,7 17,7 17,17" />
+            </svg></div>
+        </a>
+        <a href="#loans" class="cat cat--finance reveal">
+          <img class="cat__photo"
+            src="https://images.unsplash.com/photo-1554224155-6726b3ff858f?q=80&w=600&auto=format&fit=crop"
+            alt="Finance & loans">
+          <div class="cat__ov">
+            <div class="cat__ic f"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <line x1="12" y1="1" x2="12" y2="23" />
+                <path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
+              </svg></div>
+            <div class="cat__name">Microfinance</div>
+            <div class="cat__sub">Individual & group loans</div>
+          </div>
+          <div class="cat__arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <line x1="7" y1="17" x2="17" y2="7" />
+              <polyline points="7,7 17,7 17,17" />
+            </svg></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- BOUTIQUE PRODUCTS -->
+  <section class="sec sec--warm" id="boutique">
+    <div class="container">
+      <div class="sec__header reveal">
+        <div class="sec__tag">Boutique Collection</div>
+        <h2 class="sec__title">Style that speaks for itself</h2>
+        <p class="sec__desc">Curated fashion for men and women — everyday essentials to statement pieces at our
+          Kapchorwa and Mbale branches.</p>
+      </div>
+      <div class="products">
+        {% for product in boutique_products %}
+        <div class="prod reveal" data-product-id="{{ product.id }}" data-product-type="boutique">
+          <div class="prod__img">
+            {% if product.image_url %}
+            <img src="{{ product.image_url }}" alt="{{ product.name }}">
+            {% else %}
+            <span class="img-label">{{ product.name[:20] }}</span>
+            {% endif %}
+            {% if product.in_stock %}
+            <span class="prod__badge prod__badge--new">Available</span>
+            {% else %}
+            <span class="prod__badge prod__badge--sale">Out of Stock</span>
+            {% endif %}
+            <button class="prod__wish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path
+                  d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+              </svg></button>
+          </div>
+          <div class="prod__info">
+            <div class="prod__cat">{{ product.category }}</div>
+            <div class="prod__name">{{ product.name }}</div>
+            <div class="prod__price"><span class="prod__now">UGX {{ "{:,.0f}".format(product.price) }}</span></div>
+            <div class="prod__btns">
+              <button class="prod__btn prod__btn--cart"
+                onclick="addToCart('{{ product.id }}', 'boutique', '{{ product.name }}', {{ product.price }})">Add to
+                Cart</button>
+              <button class="prod__btn prod__btn--view" onclick="contactWhatsApp('{{ product.name }}')">Inquire</button>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="no-products">No boutique products available at the moment.</p>
+        {% endfor %}
+      </div>
+      <div style="text-align:center"><a href="{{ url_for('storefront.shop') }}" class="view-all">View all boutique items
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12,5 19,12 12,19" />
+          </svg></a></div>
+    </div>
+  </section>
+
+  <!-- HARDWARE PRODUCTS -->
+  <section class="sec" id="hardware">
+    <div class="container">
+      <div class="sec__header reveal">
+        <div class="sec__tag">Hardware Store</div>
+        <h2 class="sec__title">Build something <em>remarkable</em></h2>
+        <p class="sec__desc">Quality building materials, tools, plumbing, and roofing supplies at competitive Kapchorwa
+          prices.</p>
+      </div>
+      <div class="products">
+        {% for product in hardware_products %}
+        <div class="prod reveal" data-product-id="{{ product.id }}" data-product-type="hardware">
+          <div class="prod__img prod__img--hw">
+            <span class="img-label">{{ product.name[:20] }}</span>
+            {% if product.in_stock %}
+            <span class="prod__badge prod__badge--hot">In Stock</span>
+            {% else %}
+            <span class="prod__badge prod__badge--sale">Out of Stock</span>
+            {% endif %}
+            <button class="prod__wish"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path
+                  d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+              </svg></button>
+          </div>
+          <div class="prod__info">
+            <div class="prod__cat" style="color:var(--gold)">{{ product.category }}</div>
+            <div class="prod__name">{{ product.name }}</div>
+            <div class="prod__price"><span class="prod__now">UGX {{ "{:,.0f}".format(product.price) }}</span><span
+                class="prod__unit">/{{ product.unit }}</span></div>
+            <div class="prod__btns">
+              <button class="prod__btn prod__btn--cart"
+                onclick="addToCart('{{ product.id }}', 'hardware', '{{ product.name }}', {{ product.price }})">Add to
+                Cart</button>
+              <button class="prod__btn prod__btn--view" onclick="contactWhatsApp('{{ product.name }}')">Inquire</button>
+            </div>
+          </div>
+        </div>
+        {% else %}
+        <p class="no-products">No hardware products available at the moment.</p>
+        {% endfor %}
+      </div>
+      <div style="text-align:center"><a href="{{ url_for('storefront.shop') }}" class="view-all">View all hardware items
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <line x1="5" y1="12" x2="19" y2="12" />
+            <polyline points="12,5 19,12 12,19" />
+          </svg></a></div>
+
+      <!-- TRUST BADGES -->
+      <div class="trust reveal">
+        <div class="trust__i">
+          <div class="trust__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="1" y="3" width="15" height="13" />
+              <polygon points="16,8 22,12 22,3 16,8" />
+            </svg></div>
+          <div class="trust__label">Affordable Delivery</div>
+          <div class="trust__desc">Within Kapchorwa town</div>
+        </div>
+        <div class="trust__i">
+          <div class="trust__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path
+                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg></div>
+          <div class="trust__label">Quality Guaranteed</div>
+          <div class="trust__desc">Genuine products only</div>
+        </div>
+        <div class="trust__i">
+          <div class="trust__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path
+                d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" />
+            </svg></div>
+          <div class="trust__label">WhatsApp Orders</div>
+          <div class="trust__desc">Message us anytime</div>
+        </div>
+        <div class="trust__i">
+          <div class="trust__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="1" y="4" width="22" height="16" rx="2" />
+              <line x1="1" y1="10" x2="23" y2="10" />
+            </svg></div>
+          <div class="trust__label">Credit Available</div>
+          <div class="trust__desc">Pay in installments</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOANS SECTION -->
+  <section class="sec sec--linen" id="loans">
+    <div class="container">
+      <div class="loan">
+        <div class="loan__vis reveal">
+          <div class="loan__img"><img src="https://picsum.photos/id/1068/700/600" alt="Business growth"></div>
+          <div class="loan__float">
+            <div class="loan__float-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <polyline points="23,6 13.5,15.5 8.5,10.5 1,18" />
+                <polyline points="17,6 23,6 23,12" />
+              </svg></div>
+            <div>
+              <div class="loan__float-val">95%</div>
+              <div class="loan__float-lbl">Approval rate for qualifying applicants</div>
+            </div>
+          </div>
+        </div>
+        <div class="loan__info reveal">
+          <div class="sec__tag">Denove Microfinance</div>
+          <h2 class="sec__title" style="font-size:clamp(26px,3.2vw,40px);text-align:left">Get the capital you need to
+            grow</h2>
+          <p class="sec__desc" style="text-align:left;margin-top:8px">Quick, affordable loans for individuals and
+            savings groups. No hidden fees, flexible repayment, and fast approval.</p>
+          <ul class="loan__perks">
+            <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="20,6 9,17 4,12" />
+                </svg></span>Loans from UGX 200,000 to UGX 5,000,000</li>
+            <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="20,6 9,17 4,12" />
+                </svg></span>Competitive 10% interest rate</li>
+            <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="20,6 9,17 4,12" />
+                </svg></span>Flexible weekly or monthly repayment</li>
+            <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="20,6 9,17 4,12" />
+                </svg></span>Individual and VSLA group loans</li>
+            <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <polyline points="20,6 9,17 4,12" />
+                </svg></span>Approval within 48 hours</li>
+          </ul>
+          <div class="loan-form">
+            <div class="lf__title">Apply for a Loan</div>
+            <div class="lf__sub">Fill in your details and we'll contact you within 24 hours</div>
+            <div class="lf__row">
+              <div class="lf__group"><label class="lf__label">Full Name</label><input type="text" class="lf__input"
+                  placeholder="e.g. Okello Patrick" id="loan-name"></div>
+              <div class="lf__group"><label class="lf__label">Phone Number</label><input type="tel" class="lf__input"
+                  placeholder="e.g. 0770 123 456" id="loan-phone"></div>
+            </div>
+            <div class="lf__row">
+              <div class="lf__group"><label class="lf__label">Email Address</label><input type="email" class="lf__input"
+                  placeholder="e.g. name@email.com" id="loan-email"></div>
+            </div>
+            <div class="lf__row">
+              <div class="lf__group"><label class="lf__label">Loan Amount (UGX)</label><select class="lf__input"
+                  id="loan-amount">
+                  <option value="">Select amount</option>
+                  <option>200,000 – 500,000</option>
+                  <option>500,000 – 1,000,000</option>
+                  <option>1,000,000 – 2,000,000</option>
+                  <option>2,000,000 – 5,000,000</option>
+                </select></div>
+              <div class="lf__group"><label class="lf__label">Loan Type</label><select class="lf__input" id="loan-type">
+                  <option value="">Select type</option>
+                  <option value="individual">Individual Loan</option>
+                  <option value="group">Group / VSLA Loan</option>
+                </select></div>
+            </div>
+            <button class="lf__submit" type="button" onclick="submitLoanInquiry()">Submit Loan Inquiry</button>
+            <div class="lf__note">Submit your loan inquiry through this form. Our team will review your request and
+              contact you using the details provided.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TESTIMONIALS -->
+  <section class="sec sec--warm" id="about">
+    <div class="container">
+      <div class="sec__header reveal">
+        <div class="sec__tag">What People Say</div>
+        <h2 class="sec__title">Trusted by our community</h2>
+        <p class="sec__desc">Real stories from real customers across Uganda.</p>
+      </div>
+      <div class="testi">
+        <div class="test reveal">
+          <div class="test__stars">★★★★★</div>
+          <div class="test__text">"I got a loan from Denove to expand my produce stall. The process was simple and the
+            repayment plan very manageable. Now my business has doubled."</div>
+          <div class="test__author">
+            <div class="test__av test__av--1"></div>
+            <div>
+              <div class="test__name">Achieng Martha</div>
+              <div class="test__role">Market vendor, Kapchorwa</div>
+            </div>
+          </div>
+        </div>
+        <div class="test reveal">
+          <div class="test__stars">★★★★★</div>
+          <div class="test__text">"Best hardware prices in Kapchorwa. I built my entire house with materials from
+            Denove. They even delivered to my site for free. Highly recommended."</div>
+          <div class="test__author">
+            <div class="test__av test__av--2"></div>
+            <div>
+              <div class="test__name">Wanyama Joseph</div>
+              <div class="test__role">Contractor, Mbale</div>
+            </div>
+          </div>
+        </div>
+        <div class="test reveal">
+          <div class="test__stars">★★★★★</div>
+          <div class="test__text">"The boutique always has the latest styles. My daughters love shopping there. And the
+            credit option helps when money is tight — very flexible!"</div>
+          <div class="test__author">
+            <div class="test__av test__av--3"></div>
+            <div>
+              <div class="test__name">Nambi Rose</div>
+              <div class="test__role">Teacher, Kapchorwa</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="sec">
+    <div class="container">
+      <div class="cta reveal">
+        <div class="cta__bg"><img src="https://picsum.photos/id/1031/1200/600" alt=""></div>
+        <div class="cta__grad"></div>
+        <div class="cta__content">
+          <h2 class="cta__title">Ready to shop or need a loan?</h2>
+          <p class="cta__desc">Visit our stores in Kapchorwa or Mbale, order via WhatsApp, or apply for a loan right
+            here online.</p>
+          <div class="cta__btns"><a href="#boutique" class="hero__btn hero__btn--pri">Browse Products</a><a
+              href="#loans" class="hero__btn hero__btn--gho">Apply for Loan</a></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer__grid">
+        <div class="footer__brand">
+          <div class="footer__brand-top">
+            <div class="footer__brand-mk">D</div>
+            <div class="footer__brand-nm">Denove</div>
+          </div>
+          <p>Your one-stop shop for fashion, building materials, and financial services in Eastern Uganda. Quality
+            products, fair prices, trusted service.</p>
+        </div>
+        <div>
+          <div class="footer__col-t">Shop</div>
+          <a href="#boutique" class="footer__link">Ladies Wear</a>
+          <a href="#boutique" class="footer__link">Men's Wear</a>
+          <a href="#hardware" class="footer__link">Building Materials</a>
+          <a href="#hardware" class="footer__link">Plumbing & Roofing</a>
+        </div>
+        <div>
+          <div class="footer__col-t">Finance</div>
+          <a href="#loans" class="footer__link">Individual Loans</a>
+          <a href="#loans" class="footer__link">Group / VSLA Loans</a>
+          <a href="#loans" class="footer__link">Loan Application</a>
+        </div>
+        <div>
+          <div class="footer__col-t">Contact</div>
+          <a href="#" class="footer__link">📍 Headquarters: Kapchorwa</a>
+          <a href="#" class="footer__link">📍 Serving all of Uganda</a>
+          <a href="tel:+256775466111" class="footer__link">📞 +256 775 466 111</a>
+          <a href="https://wa.me/256775466111" class="footer__link">💬 WhatsApp Us</a>
+        </div>
+      </div>
+      <div class="footer__bottom">
+        <div class="footer__copy">© 2026 Denove APS. All rights reserved.</div>
+        <a href="{{ url_for('auth.login') }}" class="footer__staff"><svg viewBox="0 0 24 24" fill="none"
+            stroke="currentColor">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>Staff Portal</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- CLIENT-SIDE CART (No Server Mutations) -->
+  <div id="cart-modal" class="modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeCartModal()">×</button>
+      <h3>Your Cart</h3>
+      <div id="cart-items"></div>
+      <div id="cart-total"></div>
+
+      <!-- Order Form -->
+      <div id="order-form" style="margin-top:20px;display:none;">
+        <div style="border-top:1px solid #e5e7eb;padding-top:16px;">
+          <p style="font-weight:600;margin-bottom:12px;">Your Contact Details</p>
+          <div class="lf__row">
+            <div class="lf__group"><label class="lf__label">Full Name *</label><input type="text" class="lf__input"
+                id="order-name" placeholder="Your name"></div>
+            <div class="lf__group"><label class="lf__label">Phone Number *</label><input type="tel" class="lf__input"
+                id="order-phone" placeholder="e.g. 0770 123 456"></div>
+          </div>
+          <div class="lf__row">
+            <div class="lf__group"><label class="lf__label">Email (optional)</label><input type="email"
+                class="lf__input" id="order-email" placeholder="Your email"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cart-actions">
+        <button onclick="submitOrderRequest()" class="hero__btn hero__btn--pri">Submit Order Request</button>
+        <a href="https://wa.me/256775466111" target="_blank" class="hero__btn hero__btn--gho">WhatsApp Us</a>
+      </div>
+      <p class="cart-note">Orders are processed by our staff. Cart is saved locally in your browser.</p>
+    </div>
+  </div>
+
+  <script>
+    // CLIENT-SIDE CART - No server mutations
+    let cart = JSON.parse(localStorage.getItem('denove_cart') || '[]');
+
+    function updateCartDisplay() {
+      document.getElementById('cart-count').textContent = cart.length;
+    }
+
+    function addToCart(id, type, name, price) {
+      cart.push({ id, type, name, price, qty: 1 });
+      localStorage.setItem('denove_cart', JSON.stringify(cart));
+      updateCartDisplay();
+      alert('Added to cart: ' + name);
+    }
+
+    function showCart() {
+      const modal = document.getElementById('cart-modal');
+      const itemsDiv = document.getElementById('cart-items');
+      const totalDiv = document.getElementById('cart-total');
+
+      if (cart.length === 0) {
+        itemsDiv.innerHTML = '<p>Your cart is empty</p>';
+        totalDiv.innerHTML = '';
+      } else {
+        let html = '<ul>';
+        let total = 0;
+        cart.forEach((item, i) => {
+          html += `<li>${item.name} - UGX ${item.price.toLocaleString()} <button onclick="removeFromCart(${i})">Remove</button></li>`;
+          total += item.price;
+        });
+        html += '</ul>';
+        itemsDiv.innerHTML = html;
+        totalDiv.innerHTML = `<strong>Total: UGX ${total.toLocaleString()}</strong>`;
+        document.getElementById('order-form').style.display = 'block';
+      }
+      modal.classList.add('open');
+    }
+
+    function closeCartModal() {
+      document.getElementById('cart-modal').classList.remove('open');
+    }
+
+    function removeFromCart(index) {
+      cart.splice(index, 1);
+      localStorage.setItem('denove_cart', JSON.stringify(cart));
+      updateCartDisplay();
+      showCart();
+    }
+
+    function submitOrderRequest() {
+      if (cart.length === 0) { alert('Cart is empty'); return; }
+
+      const name = document.getElementById('order-name').value;
+      const phone = document.getElementById('order-phone').value;
+      const email = document.getElementById('order-email').value;
+
+      if (!name || !phone) { alert('Please fill in your name and phone number'); return; }
+
+      // Prepare cart items for API
+      const items = cart.map(item => ({
+        product_id: item.id,
+        product_type: item.type,
+        name: item.name,
+        price: item.price,
+        quantity: item.qty || 1
+      }));
+
+      // Submit to database via API
+      fetch('/api/order-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: name,
+          customer_phone: phone,
+          customer_email: email || null,
+          items: items
+        })
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert('Thank you! Your order request has been submitted. Our team will contact you to confirm.');
+            // Clear cart
+            cart = [];
+            localStorage.setItem('denove_cart', JSON.stringify(cart));
+            updateCartDisplay();
+            closeCartModal();
+          } else {
+            alert('Error: ' + (data.error || 'Failed to submit order'));
+          }
+        })
+        .catch(err => {
+          alert('Failed to submit order. Please try WhatsApp or call us directly.');
+        });
+    }
+
+    function checkoutWhatsApp() {
+      if (cart.length === 0) { alert('Cart is empty'); return; }
+      let msg = 'Hello Denove! I would like to order:\n\n';
+      let total = 0;
+      cart.forEach(item => {
+        msg += `• ${item.name} - UGX ${item.price.toLocaleString()}\n`;
+        total += item.price;
+      });
+      msg += `\nTotal: UGX ${total.toLocaleString()}`;
+      window.open('https://wa.me/256775466111?text=' + encodeURIComponent(msg), '_blank');
+    }
+
+    function contactWhatsApp(productName) {
+      const msg = `Hello Denove! I'm interested in: ${productName}. Please provide more details.`;
+      window.open('https://wa.me/256775466111?text=' + encodeURIComponent(msg), '_blank');
+    }
+
+    function submitLoanInquiry() {
+      const name = document.getElementById('loan-name').value;
+      const phone = document.getElementById('loan-phone').value;
+      const email = document.getElementById('loan-email').value;
+      const amount = document.getElementById('loan-amount').value;
+      const type = document.getElementById('loan-type').value;
+
+      if (!name || !phone || !email) { alert('Please fill in your name, phone number, and email'); return; }
+
+      // Submit to database via API
+      fetch('/api/loan-inquiry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          full_name: name,
+          phone: phone,
+          email: email,
+          requested_amount: amount,
+          loan_type: type || 'individual'
+        })
+      })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            alert('Thank you! Your loan inquiry has been submitted. Our team will contact you soon.');
+            document.getElementById('loan-name').value = '';
+            document.getElementById('loan-phone').value = '';
+            document.getElementById('loan-email').value = '';
+            document.getElementById('loan-amount').value = '';
+            document.getElementById('loan-type').value = '';
+          } else {
+            alert('Error: ' + (data.error || 'Failed to submit inquiry'));
+          }
+        })
+        .catch(err => {
+          alert('Failed to submit inquiry. Please try again or call us directly.');
+        });
+    }
+
+    // Initialize
+    updateCartDisplay();
+    document.getElementById('cart-btn').addEventListener('click', function (e) { e.preventDefault(); showCart(); });
+
+    // Scroll reveal
+    const obs = new IntersectionObserver(e => { e.forEach(x => { if (x.isIntersecting) { x.target.classList.add('vis'); obs.unobserve(x.target) } }) }, { threshold: .08 });
+    document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+    // Nav shadow on scroll
+    addEventListener('scroll', () => document.getElementById('navbar').classList.toggle('scrolled', scrollY > 10));
+  </script>
+
+  <!-- FLOATING WHATSAPP BUTTON -->
+  <a href="https://wa.me/256775466111" target="_blank" class="whatsapp-float" title="Chat on WhatsApp">
+    <svg viewBox="0 0 24 24" fill="currentColor">
+      <path
+        d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+    </svg>
+  </a>
+</body>
+
+</html>

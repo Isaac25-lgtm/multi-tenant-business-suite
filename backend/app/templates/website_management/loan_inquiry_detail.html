@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Loan Inquiry Details — Denove APS{% endblock %}
+
+{% block page_header %}
+<h1 class="page-title">Loan Inquiry #{{ inquiry.id }}</h1>
+<p class="page-subtitle">Submitted {{ inquiry.submitted_at.strftime('%B %d, %Y at %H:%M') }}</p>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('website.loan_inquiries') }}" class="text-primary text-sm">← Back to Loan Inquiries</a>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Applicant Details -->
+    <div class="lg:col-span-2">
+        <div class="card">
+            <div class="card-header">
+                <h3>Applicant Information</h3>
+            </div>
+            <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="text-sm text-gray-500">Full Name</label>
+                        <p class="font-medium text-lg">{{ inquiry.full_name }}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Phone Number</label>
+                        <p class="font-medium text-lg">
+                            <a href="tel:{{ inquiry.phone }}" class="text-primary">{{ inquiry.phone }}</a>
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Email Address</label>
+                        <p class="font-medium text-lg">
+                            <a href="mailto:{{ inquiry.email }}" class="text-primary">{{ inquiry.email }}</a>
+                        </p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Requested Amount</label>
+                        <p class="font-medium text-lg">{{ inquiry.requested_amount }}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Loan Type</label>
+                        <p class="font-medium text-lg">{{ inquiry.loan_type|title }}</p>
+                    </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Current Status</label>
+                        <p>
+                            <span
+                                class="badge badge-{{ 'success' if inquiry.status == 'approved' else 'danger' if inquiry.status == 'rejected' else 'warning' if inquiry.status == 'new' else 'secondary' }}">
+                                {{ inquiry.status|title }}
+                            </span>
+                        </p>
+                    </div>
+                </div>
+
+                {% if inquiry.message %}
+                <div class="mt-6 pt-6 border-t">
+                    <label class="text-sm text-gray-500">Additional Message</label>
+                    <p class="mt-2 bg-gray-50 p-4 rounded-lg">{{ inquiry.message }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions Panel -->
+    <div>
+        <div class="card">
+            <div class="card-header">
+                <h3>Update Status</h3>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('website.update_inquiry_status', id=inquiry.id) }}" method="POST">
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-input">
+                            <option value="new" {{ 'selected' if inquiry.status=='new' }}>New</option>
+                            <option value="reviewed" {{ 'selected' if inquiry.status=='reviewed' }}>Reviewed</option>
+                            <option value="approved" {{ 'selected' if inquiry.status=='approved' }}>Approved</option>
+                            <option value="rejected" {{ 'selected' if inquiry.status=='rejected' }}>Rejected</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Notes</label>
+                        <textarea name="notes" class="form-input" rows="4"
+                            placeholder="Add notes about this inquiry...">{{ inquiry.notes or '' }}</textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-full">Update Status</button>
+                </form>
+            </div>
+        </div>
+
+        {% if inquiry.reviewed_by %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>Review History</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-sm text-gray-500">Reviewed by {{ inquiry.reviewer.full_name if inquiry.reviewer else
+                    'Unknown' }}</p>
+                <p class="text-sm text-gray-500">{{ inquiry.reviewed_at.strftime('%b %d, %Y at %H:%M') if
+                    inquiry.reviewed_at else '' }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>Quick Actions</h3>
+            </div>
+            <div class="card-body space-y-2">
+                <a href="tel:{{ inquiry.phone }}" class="btn btn-secondary w-full">📞 Call Applicant</a>
+                <a href="mailto:{{ inquiry.email }}" class="btn btn-secondary w-full">📧 Email Applicant</a>
+                <a href="https://wa.me/{{ inquiry.phone|replace(' ', '')|replace('+', '') }}" target="_blank"
+                    class="btn btn-secondary w-full">💬 WhatsApp</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

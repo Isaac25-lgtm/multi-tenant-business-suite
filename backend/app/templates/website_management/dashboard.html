@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block title %}Website Management — Denove APS{% endblock %}
+
+{% block page_header %}
+<h1 class="page-title">🌐 Website Management</h1>
+<p class="page-subtitle">Control your public website from here</p>
+{% endblock %}
+
+{% block content %}
+
+<!-- View Website Link -->
+<div class="card mb-6" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); border: none;">
+    <div class="card-body"
+        style="padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <div style="color: white;">
+            <p style="font-weight: 600; font-size: 16px;">🌍 Your Public Website</p>
+            <p style="font-size: 13px; opacity: 0.9;">See how your customers view your online store</p>
+        </div>
+        <a href="{{ url_for('storefront.index') }}" target="_blank" class="btn"
+            style="background: white; color: #16a34a; font-weight: 600; padding: 10px 20px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+            <span>View Your Website</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+        </a>
+    </div>
+</div>
+
+
+<!-- Welcome Guide -->
+<div class="card mb-8"
+    style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border: none; color: white;">
+    <div class="card-body" style="padding: 24px;">
+        <h2 style="font-size: 20px; margin-bottom: 16px;">👋 Welcome to Website Management</h2>
+        <p style="opacity: 0.9; margin-bottom: 20px; line-height: 1.6;">
+            This is your <strong>control center</strong> for the public Denove website. From here, you can:
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+            <div style="background: rgba(255,255,255,0.1); padding: 14px; border-radius: 8px;">
+                <span style="font-size: 20px;">📦</span>
+                <p style="font-weight: 600; margin-top: 8px;">Publish Products</p>
+                <p style="font-size: 12px; opacity: 0.8;">Choose which inventory items appear on your website</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 14px; border-radius: 8px;">
+                <span style="font-size: 20px;">💼</span>
+                <p style="font-weight: 600; margin-top: 8px;">Loan Inquiries</p>
+                <p style="font-size: 12px; opacity: 0.8;">See customers interested in loans from your website</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 14px; border-radius: 8px;">
+                <span style="font-size: 20px;">🛒</span>
+                <p style="font-weight: 600; margin-top: 8px;">Order Requests</p>
+                <p style="font-size: 12px; opacity: 0.8;">View orders customers submitted through the website</p>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); padding: 14px; border-radius: 8px;">
+                <span style="font-size: 20px;">🖼️</span>
+                <p style="font-weight: 600; margin-top: 8px;">Website Images</p>
+                <p style="font-size: 12px; opacity: 0.8;">Upload photos for products and banners</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <a href="{{ url_for('website.products') }}" class="card"
+        style="text-decoration: none; transition: transform 0.2s; border: 2px solid transparent;"
+        onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='#0ea5e9'"
+        onmouseout="this.style.transform=''; this.style.borderColor='transparent'">
+        <div class="card-body text-center">
+            <div style="font-size: 32px; color: #16a34a;">📦</div>
+            <div style="font-size: 28px; font-weight: 700; color: #16a34a;">{{ published_count }}</div>
+            <p style="color: #6b7280; font-size: 13px;">Products on Website</p>
+        </div>
+    </a>
+    <a href="{{ url_for('website.loan_inquiries', status='new') }}" class="card"
+        style="text-decoration: none; transition: transform 0.2s; border: 2px solid transparent;"
+        onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='#f59e0b'"
+        onmouseout="this.style.transform=''; this.style.borderColor='transparent'">
+        <div class="card-body text-center">
+            <div style="font-size: 32px; color: #f59e0b;">💼</div>
+            <div style="font-size: 28px; font-weight: 700; color: #f59e0b;">{{ pending_inquiries }}</div>
+            <p style="color: #6b7280; font-size: 13px;">New Loan Inquiries</p>
+            {% if pending_inquiries > 0 %}
+            <span
+                style="background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-top: 8px; display: inline-block;">Action
+                needed</span>
+            {% endif %}
+        </div>
+    </a>
+    <a href="{{ url_for('website.order_requests', status='new') }}" class="card"
+        style="text-decoration: none; transition: transform 0.2s; border: 2px solid transparent;"
+        onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='#8b5cf6'"
+        onmouseout="this.style.transform=''; this.style.borderColor='transparent'">
+        <div class="card-body text-center">
+            <div style="font-size: 32px; color: #8b5cf6;">🛒</div>
+            <div style="font-size: 28px; font-weight: 700; color: #8b5cf6;">{{ pending_orders }}</div>
+            <p style="color: #6b7280; font-size: 13px;">New Order Requests</p>
+            {% if pending_orders > 0 %}
+            <span
+                style="background: #ede9fe; color: #6d28d9; padding: 4px 8px; border-radius: 4px; font-size: 11px; margin-top: 8px; display: inline-block;">Action
+                needed</span>
+            {% endif %}
+        </div>
+    </a>
+    <a href="{{ url_for('website.images') }}" class="card"
+        style="text-decoration: none; transition: transform 0.2s; border: 2px solid transparent;"
+        onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='#06b6d4'"
+        onmouseout="this.style.transform=''; this.style.borderColor='transparent'">
+        <div class="card-body text-center">
+            <div style="font-size: 32px; color: #06b6d4;">🖼️</div>
+            <div style="font-size: 28px; font-weight: 700; color: #64748b;">Images</div>
+            <p style="color: #6b7280; font-size: 13px;">Manage Photos</p>
+        </div>
+    </a>
+</div>
+
+<!-- Quick Actions Guide -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+
+    <!-- What to do first -->
+    <div class="card">
+        <div class="card-header" style="background: #f0fdf4; border-bottom: 1px solid #86efac;">
+            <h3 style="color: #166534;">🚀 Getting Started — What to Do First</h3>
+        </div>
+        <div class="card-body">
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div
+                    style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: #f9fafb; border-radius: 8px;">
+                    <span
+                        style="background: #16a34a; color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; flex-shrink: 0;">1</span>
+                    <div>
+                        <p style="font-weight: 600; margin-bottom: 4px;">Publish Your Products</p>
+                        <p style="font-size: 13px; color: #6b7280;">Go to "Publish Products" and select items from your
+                            inventory to appear on the website. Upload images for each product.</p>
+                        <a href="{{ url_for('website.products') }}" class="btn btn-sm btn-primary"
+                            style="margin-top: 8px;">→ Publish Products</a>
+                    </div>
+                </div>
+                <div
+                    style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: #f9fafb; border-radius: 8px;">
+                    <span
+                        style="background: #16a34a; color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; flex-shrink: 0;">2</span>
+                    <div>
+                        <p style="font-weight: 600; margin-bottom: 4px;">Check Daily for Inquiries</p>
+                        <p style="font-size: 13px; color: #6b7280;">Customers who are interested in loans or want to
+                            order products will appear in your inbox. Contact them to complete the sale.</p>
+                    </div>
+                </div>
+                <div
+                    style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; background: #f9fafb; border-radius: 8px;">
+                    <span
+                        style="background: #16a34a; color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; flex-shrink: 0;">3</span>
+                    <div>
+                        <p style="font-weight: 600; margin-bottom: 4px;">Update Status After Contact</p>
+                        <p style="font-size: 13px; color: #6b7280;">After you call or message a customer, update the
+                            status so you know who you've already contacted.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How the website works -->
+    <div class="card">
+        <div class="card-header" style="background: #eff6ff; border-bottom: 1px solid #93c5fd;">
+            <h3 style="color: #1e40af;">💡 How Your Website Works</h3>
+        </div>
+        <div class="card-body">
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+                <div>
+                    <p style="font-weight: 600; margin-bottom: 6px;">📦 Products</p>
+                    <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                        Only products you <strong>publish</strong> appear on the public website. Your full inventory
+                        stays private. You can set a different public price.
+                    </p>
+                </div>
+                <div style="border-top: 1px solid #e5e7eb; padding-top: 16px;">
+                    <p style="font-weight: 600; margin-bottom: 6px;">💼 Loan Inquiries</p>
+                    <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                        When someone fills out the loan form on your website, it appears here. <strong>This does NOT
+                            create a loan</strong> — you contact them first, then create the loan in the Finance
+                        section.
+                    </p>
+                </div>
+                <div style="border-top: 1px solid #e5e7eb; padding-top: 16px;">
+                    <p style="font-weight: 600; margin-bottom: 6px;">🛒 Order Requests</p>
+                    <p style="font-size: 13px; color: #6b7280; line-height: 1.5;">
+                        When someone adds items to cart and submits, it appears here. <strong>This does NOT create a
+                            sale</strong> — you contact them first, then create the sale in the POS.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- Recent Loan Inquiries -->
+    <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>💼 Recent Loan Inquiries</h3>
+            <a href="{{ url_for('website.loan_inquiries') }}" class="btn btn-sm btn-secondary">View All</a>
+        </div>
+        <div class="card-body p-0">
+            {% if recent_inquiries %}
+            <table class="table">
+                <tbody>
+                    {% for inquiry in recent_inquiries %}
+                    <tr>
+                        <td>
+                            <p class="font-medium">{{ inquiry.full_name }}</p>
+                            <p style="font-size: 12px; color: #6b7280;">{{ inquiry.phone }}</p>
+                        </td>
+                        <td>{{ inquiry.requested_amount }}</td>
+                        <td>
+                            <span
+                                class="badge badge-{{ 'success' if inquiry.status == 'approved' else 'danger' if inquiry.status == 'rejected' else 'warning' if inquiry.status == 'new' else 'secondary' }}">
+                                {{ inquiry.status|title }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('website.view_loan_inquiry', id=inquiry.id) }}"
+                                class="btn btn-sm btn-secondary">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="p-6 text-gray-500 text-center">No loan inquiries yet. They will appear here when customers fill
+                out the loan form on your website.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Recent Order Requests -->
+    <div class="card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <h3>🛒 Recent Order Requests</h3>
+            <a href="{{ url_for('website.order_requests') }}" class="btn btn-sm btn-secondary">View All</a>
+        </div>
+        <div class="card-body p-0">
+            {% if recent_orders %}
+            <table class="table">
+                <tbody>
+                    {% for order in recent_orders %}
+                    <tr>
+                        <td>
+                            <p class="font-medium">{{ order.customer_name }}</p>
+                            <p style="font-size: 12px; color: #6b7280;">{{ order.customer_phone }}</p>
+                        </td>
+                        <td>{{ order.item_count }} items</td>
+                        <td>
+                            <span
+                                class="badge badge-{{ 'success' if order.status == 'fulfilled' else 'danger' if order.status == 'cancelled' else 'warning' if order.status == 'new' else 'secondary' }}">
+                                {{ order.status|title }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('website.view_order_request', id=order.id) }}"
+                                class="btn btn-sm btn-secondary">View</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="p-6 text-gray-500 text-center">No order requests yet. They will appear here when customers submit
+                orders through your website.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Loan Inquiries — Denove APS{% endblock %}
+
+{% block page_header %}
+<h1 class="page-title">💼 Loan Inquiries</h1>
+<p class="page-subtitle">People interested in loans from your website</p>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('website.dashboard') }}" class="text-primary text-sm">← Back to Website Management</a>
+</div>
+
+<!-- Explanation Box -->
+<div class="card mb-6" style="background: #fffbeb; border: 1px solid #f59e0b;">
+    <div class="card-body">
+        <h3 style="color: #92400e; margin-bottom: 8px;">📋 What Are These?</h3>
+        <p style="color: #78716c; font-size: 14px; line-height: 1.6;">
+            These are people who filled out the <strong>loan inquiry form</strong> on your public website.
+            They are <strong>interested in a loan</strong> but have NOT received one yet.
+        </p>
+        <div style="background: white; padding: 12px; border-radius: 8px; margin-top: 12px;">
+            <p style="font-weight: 600; margin-bottom: 8px;">What to do:</p>
+            <ol style="margin: 0; padding-left: 20px; color: #6b7280; font-size: 13px;">
+                <li style="margin-bottom: 4px;">Click <strong>"View"</strong> to see their details</li>
+                <li style="margin-bottom: 4px;">Call or WhatsApp them to discuss their loan needs</li>
+                <li style="margin-bottom: 4px;">Update the status to "Reviewed" or "Approved/Rejected"</li>
+                <li>If approved, create the actual loan in the <strong>Finance section</strong></li>
+            </ol>
+        </div>
+    </div>
+</div>
+
+<!-- Status Filter -->
+<div class="card mb-6">
+    <div class="card-body">
+        <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;"><strong>Filter by status:</strong></p>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ url_for('website.loan_inquiries', status='all') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'all' else 'btn-secondary' }}">
+                All ({{ status_counts.new + status_counts.reviewed + status_counts.approved + status_counts.rejected }})
+            </a>
+            <a href="{{ url_for('website.loan_inquiries', status='new') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'new' else 'btn-secondary' }}"
+                style="{{ 'background: #f59e0b; border-color: #f59e0b;' if status_filter == 'new' else '' }}">
+                🆕 New ({{ status_counts.new }})
+            </a>
+            <a href="{{ url_for('website.loan_inquiries', status='reviewed') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'reviewed' else 'btn-secondary' }}">
+                👀 Reviewed ({{ status_counts.reviewed }})
+            </a>
+            <a href="{{ url_for('website.loan_inquiries', status='approved') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'approved' else 'btn-secondary' }}"
+                style="{{ 'background: #16a34a; border-color: #16a34a;' if status_filter == 'approved' else '' }}">
+                ✅ Approved ({{ status_counts.approved }})
+            </a>
+            <a href="{{ url_for('website.loan_inquiries', status='rejected') }}"
+                class="btn btn-sm {{ 'btn-primary' if status_filter == 'rejected' else 'btn-secondary' }}"
+                style="{{ 'background: #dc2626; border-color: #dc2626;' if status_filter == 'rejected' else '' }}">
+                ❌ Rejected ({{ status_counts.rejected }})
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Inquiries Table -->
+<div class="card">
+    <div class="card-header">
+        <h3>
+            {% if status_filter == 'new' %}🆕 New Inquiries — Need Your Attention
+            {% elif status_filter == 'reviewed' %}👀 Reviewed Inquiries
+            {% elif status_filter == 'approved' %}✅ Approved Inquiries
+            {% elif status_filter == 'rejected' %}❌ Rejected Inquiries
+            {% else %}All Loan Inquiries
+            {% endif %}
+        </h3>
+    </div>
+    <div class="card-body p-0">
+        {% if inquiries %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Customer</th>
+                    <th>Contact</th>
+                    <th>Loan Amount</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Submitted</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for inquiry in inquiries %}
+                <tr style="{{ 'background: #fef3c7;' if inquiry.status == 'new' else '' }}">
+                    <td class="font-medium">{{ inquiry.full_name }}</td>
+                    <td>
+                        <p>{{ inquiry.phone }}</p>
+                        <p style="font-size: 12px; color: #6b7280;">{{ inquiry.email }}</p>
+                    </td>
+                    <td>{{ inquiry.requested_amount }}</td>
+                    <td>{{ inquiry.loan_type|title }}</td>
+                    <td>
+                        <span
+                            class="badge badge-{{ 'success' if inquiry.status == 'approved' else 'danger' if inquiry.status == 'rejected' else 'warning' if inquiry.status == 'new' else 'secondary' }}">
+                            {{ inquiry.status|title }}
+                        </span>
+                    </td>
+                    <td class="text-sm text-gray-500">{{ inquiry.submitted_at.strftime('%b %d, %Y') }}</td>
+                    <td>
+                        <a href="{{ url_for('website.view_loan_inquiry', id=inquiry.id) }}"
+                            class="btn btn-sm {{ 'btn-primary' if inquiry.status == 'new' else 'btn-secondary' }}">
+                            {{ 'Review Now' if inquiry.status == 'new' else 'View' }}
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div style="padding: 60px; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+            <p style="font-weight: 600; margin-bottom: 8px;">No Loan Inquiries Found</p>
+            <p style="color: #6b7280;">
+                {% if status_filter == 'all' %}
+                When customers fill out the loan form on your website, they will appear here.
+                {% else %}
+                No inquiries with status "{{ status_filter }}"
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

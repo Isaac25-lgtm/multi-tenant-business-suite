@@ -13,10 +13,16 @@ from app.models.finance import (
     LoanClient, Loan, LoanPayment,
     GroupLoan, GroupLoanPayment, LoanDocument
 )
+from app.models.website import (
+    WebsiteLoanInquiry, WebsiteOrderRequest,
+    PublishedProduct, WebsiteImage
+)
 
 __all__ = [
     'Customer', 'User', 'AuditLog',
     'BoutiqueCategory', 'BoutiqueStock', 'BoutiqueSale', 'BoutiqueSaleItem', 'BoutiqueCreditPayment',
     'HardwareCategory', 'HardwareStock', 'HardwareSale', 'HardwareSaleItem', 'HardwareCreditPayment',
-    'LoanClient', 'Loan', 'LoanPayment', 'GroupLoan', 'GroupLoanPayment', 'LoanDocument'
+    'LoanClient', 'Loan', 'LoanPayment', 'GroupLoan', 'GroupLoanPayment', 'LoanDocument',
+    'WebsiteLoanInquiry', 'WebsiteOrderRequest', 'PublishedProduct', 'WebsiteImage'
 ]
+

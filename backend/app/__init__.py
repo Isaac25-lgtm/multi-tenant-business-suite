@@ -23,6 +23,8 @@ def create_app(config_class=Config):
     from app.modules.customers import customers_bp
     from app.modules.dashboard import dashboard_bp
     from app.modules.finance import finance_bp
+    from app.modules.storefront import storefront_bp
+    from app.modules.website_management import website_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -30,14 +32,10 @@ def create_app(config_class=Config):
     app.register_blueprint(hardware_bp, url_prefix='/hardware')
     app.register_blueprint(customers_bp, url_prefix='/customers')
     app.register_blueprint(finance_bp, url_prefix='/finance')
-
-    # Root URL redirects to login page
-    @app.route('/')
-    def root():
-        from flask import session, redirect, url_for
-        if 'username' in session:
-            return redirect(url_for('dashboard.index'))
-        return redirect(url_for('auth.login'))
+    app.register_blueprint(website_bp, url_prefix='/website')
+    
+    # Public storefront at root - no authentication required
+    app.register_blueprint(storefront_bp)
 
     # Register custom Jinja2 filters
     @app.template_filter('from_json')

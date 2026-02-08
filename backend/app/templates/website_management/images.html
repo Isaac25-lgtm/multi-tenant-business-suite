@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Website Images — Denove APS{% endblock %}
+
+{% block page_header %}
+<h1 class="page-title">🖼️ Website Images</h1>
+<p class="page-subtitle">Manage product photos and banners for your website</p>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('website.dashboard') }}" class="text-primary text-sm">← Back to Website Management</a>
+</div>
+
+<!-- Explanation Box -->
+<div class="card mb-6" style="background: #f0f9ff; border: 1px solid #0ea5e9;">
+    <div class="card-body">
+        <h3 style="color: #0369a1; margin-bottom: 8px;">📋 About Website Images</h3>
+        <p style="color: #64748b; font-size: 14px; line-height: 1.6;">
+            Images uploaded here are stored in your image library. <strong>Product images are automatically saved
+                here</strong> when you upload them during product publishing.
+        </p>
+        <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin-top: 8px;">
+            You can also upload banners and other images for your website here.
+        </p>
+    </div>
+</div>
+
+<!-- Upload Form -->
+<div class="card mb-8">
+    <div class="card-header" style="background: #f0fdf4; border-bottom: 1px solid #86efac;">
+        <h3 style="color: #166534;">📤 Upload New Image</h3>
+    </div>
+    <div class="card-body">
+        <form action="{{ url_for('website.upload_image') }}" method="POST" enctype="multipart/form-data">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="form-group">
+                    <label class="form-label">Image Type</label>
+                    <select name="image_type" class="form-input">
+                        <option value="product">Product Photo</option>
+                        <option value="banner">Website Banner</option>
+                        <option value="promo">Promotional Image</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">This helps you organize your images</p>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Display Order (optional)</label>
+                    <input type="number" name="display_order" class="form-input" value="0" min="0" max="999">
+                    <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Lower numbers appear first</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Alt Text / Description</label>
+                <input type="text" name="alt_text" class="form-input" placeholder="e.g. Red leather handbag">
+                <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Description of the image (helps with search
+                    engines)</p>
+            </div>
+            <div class="form-group"
+                style="background: #fffbeb; padding: 16px; border-radius: 8px; border: 1px solid #fcd34d;">
+                <label class="form-label" style="color: #92400e;">📸 Select Image File</label>
+                <input type="file" name="image" class="form-input" accept="image/*" required style="margin-top: 8px;">
+                <p style="font-size: 12px; color: #78716c; margin-top: 8px;">Accepted formats: JPG, PNG, GIF, WebP. Max
+                    recommended size: 2MB</p>
+            </div>
+            <button type="submit" class="btn btn-primary" style="background: #16a34a;">📤 Upload Image</button>
+        </form>
+    </div>
+</div>
+
+<!-- Image Library -->
+<div class="card">
+    <div class="card-header">
+        <h3>📁 Image Library ({{ images|length }} images)</h3>
+    </div>
+    <div class="card-body">
+        {% if images %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px;">
+            {% for image in images %}
+            <div
+                style="border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; {{ 'opacity: 0.5;' if not image.is_active else '' }}">
+                <div style="aspect-ratio: 1; overflow: hidden; background: #f3f4f6;">
+                    <img src="{{ image.file_path }}" alt="{{ image.alt_text }}"
+                        style="width: 100%; height: 100%; object-fit: cover;">
+                </div>
+                <div style="padding: 12px;">
+                    <p style="font-size: 11px; color: #6b7280; text-transform: uppercase;">{{ image.image_type }}</p>
+                    <p
+                        style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        {{ image.alt_text or 'No description' }}</p>
+                    <div style="margin-top: 8px;">
+                        <form action="{{ url_for('website.toggle_image', id=image.id) }}" method="POST"
+                            style="display: inline;">
+                            <button type="submit"
+                                class="btn btn-sm {{ 'btn-danger' if image.is_active else 'btn-success' }}">
+                                {{ '🚫 Disable' if image.is_active else '✅ Enable' }}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div style="padding: 60px; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+            <p style="font-weight: 600; margin-bottom: 8px;">No Images Yet</p>
+            <p style="color: #6b7280;">Upload your first image using the form above, or upload images when publishing
+                products.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

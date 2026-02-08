@@ -93,6 +93,22 @@ A lightweight, server-rendered application that provides real-time business inte
 - **Manager overview**: View all branches or filter by specific branch
 - **Branch switching**: Easy navigation between branches for managers
 
+### 🌐 Public E-Commerce Storefront
+- **Beautiful responsive website** showcasing published products
+- **Published products only** — managers control what appears publicly
+- **Loan inquiry form** captures customer interest (saves to database)
+- **Shopping cart** with order request submission
+- **Hardware and Boutique sections** with category browsing
+- **No inventory mutations** — public site is read-only for core data
+
+### 🛠️ Website Management (Manager Control Plane)
+- **Product publishing** — select inventory items to appear on public website
+- **Image upload** — add product photos when publishing
+- **Loan inquiries inbox** — review and process website loan interest
+- **Order requests inbox** — view and fulfill website cart submissions
+- **Status tracking** — mark inquiries as reviewed/approved/rejected
+- **Website images library** — manage banners and product photos
+
 ### 🔐 Enterprise Features
 - **Complete audit trail** for all transactions
 - **PDF receipt generation** with company logo header
@@ -352,6 +368,10 @@ gunicorn -w 4 -b 0.0.0.0:8000 "app:create_app()"
 - [x] Loan date editing for managers
 - [x] Stock reactivation/deletion controls
 - [x] Dark mode support
+- [x] Public e-commerce storefront
+- [x] Website Management control plane
+- [x] Product publishing with image upload
+- [x] Loan inquiries & order requests capture
 
 ### In Progress 🚧
 - [ ] Mobile-responsive PWA optimization
