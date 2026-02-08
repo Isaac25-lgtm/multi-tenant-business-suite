@@ -2,18 +2,28 @@
 
 {% block title %}Loan Agreement Preview - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Loan Agreement Preview</h2>
+<p>Review and edit the agreement before issuing the loan</p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">Loan Agreement Preview</h1>
-    <p class="text-gray-600">Review and edit the agreement before issuing the loan</p>
-</div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Agreement Preview -->
     <div class="lg:col-span-2">
         <div class="agreement-preview section-card">
-            <h1>DENOVE APS</h1>
-            <h2>INDIVIDUAL LOAN AGREEMENT</h2>
+            <div class="agreement-header">
+                <div class="brand-lockup brand-lockup--center">
+                    <img src="{{ url_for('static', filename='images/denovo.png') }}" alt="Denove" class="brand-logo">
+                    <div class="brand-stack">
+                        <h1 class="brand-name">Denove</h1>
+                        <span class="brand-tag">Premium</span>
+                    </div>
+                </div>
+                <h2 class="agreement-title">Individual Loan Agreement</h2>
+                <div class="agreement-accent"></div>
+            </div>
 
             <div class="section-title">BORROWER INFORMATION</div>
             <table class="w-full mb-4">
@@ -77,7 +87,7 @@
                 </div>
                 {% endfor %}
             </div>
-            <button type="button" onclick="addTerm()" class="text-indigo-600 hover:underline text-sm">+ Add Term</button>
+            <button type="button" onclick="addTerm()" style="color:var(--terra-600);" class=" hover:underline text-sm">+ Add Term</button>
 
             <div class="section-title mt-6">SIGNATURES</div>
             <div class="grid grid-cols-2 gap-8 mt-4">

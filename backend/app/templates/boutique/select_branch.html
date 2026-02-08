@@ -2,22 +2,22 @@
 
 {% block title %}Select Branch - Boutique - Denove APS{% endblock %}
 
-{% block content %}
-<div class="max-w-2xl mx-auto py-12">
-    <div class="text-center mb-8">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">Boutique</h1>
-        <p class="text-gray-600">Select the branch you want to work with</p>
-    </div>
+{% block page_header %}
+<h2>Boutique</h2>
+<p>Select the branch you want to work with</p>
+{% endblock %}
 
+{% block content %}
+<div class="max-w-2xl mx-auto py-8">
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         {% for code, name in branches.items() %}
         <a href="{{ url_for('boutique.select_branch', branch=code) }}"
-           class="section-card hover:border-indigo-500 hover:shadow-lg transition-all group">
+           class="section-card hover:shadow-lg transition-all group" style="border:2px solid transparent;" onmouseover="this.style.borderColor='var(--terra-400)'" onmouseout="this.style.borderColor='transparent'">
             <div class="text-center py-8">
-                <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-indigo-100 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-                    <span class="text-4xl font-bold text-indigo-600">{{ code }}</span>
+                <div style="width:80px;height:80px;margin:0 auto 16px;border-radius:50%;background:var(--terra-50);display:flex;align-items:center;justify-content:center;">
+                    <span style="font-size:32px;font-weight:700;color:var(--terra-600);">{{ code }}</span>
                 </div>
-                <h2 class="text-xl font-semibold text-gray-800">{{ name }}</h2>
+                <h2 class="text-xl font-semibold" style="color:var(--navy-800);">{{ name }}</h2>
                 <p class="text-gray-500 mt-2">Click to enter</p>
             </div>
         </a>

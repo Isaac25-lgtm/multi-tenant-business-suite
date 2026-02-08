@@ -2,11 +2,12 @@
 
 {% block title %}Edit Group Loan - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Edit Group Loan - {{ group.group_name }}</h2>
+<p><a href="{{ url_for('finance.view_group_loan', id=group.id) }}" style="color:var(--terra-600);" class="hover:underline">&larr; Back to Group Loan</a></p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" class="text-indigo-600 hover:underline">&larr; Back to Group Loan</a>
-    <h1 class="text-2xl font-bold text-gray-800 mt-2">Edit Group Loan - {{ group.group_name }}</h1>
-</div>
 
 <div class="max-w-2xl">
     <form method="POST" action="{{ url_for('finance.edit_group_loan', id=group.id) }}" class="section-card">
@@ -16,11 +17,11 @@
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div class="form-group">
                 <label class="form-label">Group Name</label>
-                <input type="text" value="{{ group.group_name }}" readonly class="form-input bg-gray-100">
+                <input type="text" value="{{ group.group_name }}" readonly class="form-input bg-navy-50">
             </div>
             <div class="form-group">
                 <label class="form-label">Member Count</label>
-                <input type="text" value="{{ group.member_count }}" readonly class="form-input bg-gray-100">
+                <input type="text" value="{{ group.member_count }}" readonly class="form-input bg-navy-50">
             </div>
         </div>
 
@@ -28,26 +29,26 @@
         <div class="grid grid-cols-2 gap-4 mb-6">
             <div class="form-group">
                 <label class="form-label">Principal</label>
-                <input type="text" value="UGX {{ '{:,.0f}'.format(group.principal) }}" readonly class="form-input bg-gray-100">
+                <input type="text" value="UGX {{ '{:,.0f}'.format(group.principal) }}" readonly class="form-input bg-navy-50">
             </div>
             <div class="form-group">
                 <label class="form-label">Total Amount</label>
-                <input type="text" value="UGX {{ '{:,.0f}'.format(group.total_amount) }}" readonly class="form-input bg-gray-100">
+                <input type="text" value="UGX {{ '{:,.0f}'.format(group.total_amount) }}" readonly class="form-input bg-navy-50">
             </div>
         </div>
 
         <div class="grid grid-cols-3 gap-4 mb-6">
             <div class="form-group">
                 <label class="form-label">Interest Rate</label>
-                <input type="text" value="{{ '{:.1f}'.format(group.interest_rate) }}%" readonly class="form-input bg-gray-100">
+                <input type="text" value="{{ '{:.1f}'.format(group.interest_rate) }}%" readonly class="form-input bg-navy-50">
             </div>
             <div class="form-group">
                 <label class="form-label">Period Type</label>
-                <input type="text" value="{{ group.period_type|title }}" readonly class="form-input bg-gray-100">
+                <input type="text" value="{{ group.period_type|title }}" readonly class="form-input bg-navy-50">
             </div>
             <div class="form-group">
                 <label class="form-label">Total Periods</label>
-                <input type="text" value="{{ group.total_periods }}" readonly class="form-input bg-gray-100">
+                <input type="text" value="{{ group.total_periods }}" readonly class="form-input bg-navy-50">
             </div>
         </div>
 
@@ -69,7 +70,7 @@
             </div>
         </div>
 
-        <div class="flex gap-2 pt-4 border-t">
+        <div class="flex gap-2 pt-4" style="border-top:1px solid var(--border)">
             <button type="submit" class="btn btn-primary">Save Changes</button>
             <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" class="btn btn-secondary">Cancel</a>
         </div>
@@ -78,7 +79,7 @@
             <p class="text-gray-600">Only managers can edit loan dates.</p>
         </div>
 
-        <div class="flex gap-2 pt-4 border-t">
+        <div class="flex gap-2 pt-4" style="border-top:1px solid var(--border)">
             <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" class="btn btn-secondary">Back</a>
         </div>
         {% endif %}

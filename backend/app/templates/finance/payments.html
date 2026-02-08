@@ -2,15 +2,16 @@
 
 {% block title %}Payment History - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Payment History</h2>
+<p>Recent loan payments</p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">Payment History</h1>
-    <p class="text-gray-600">Recent loan payments</p>
-</div>
 
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
     <!-- Individual Loan Payments -->
-    <div class="bg-white rounded-lg shadow p-6">
+    <div class="section-card">
         <h2 class="font-semibold text-lg mb-4">Individual Loan Payments</h2>
         {% if loan_payments %}
         <div class="space-y-3">
@@ -38,7 +39,7 @@
     </div>
 
     <!-- Group Loan Payments -->
-    <div class="bg-white rounded-lg shadow p-6">
+    <div class="section-card">
         <h2 class="font-semibold text-lg mb-4">Group Loan Payments</h2>
         {% if group_payments %}
         <div class="space-y-3">

@@ -2,16 +2,17 @@
 
 {% block title %}Loan - {{ loan.client.name }} - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Loan for {{ loan.client.name }}</h2>
+<p><a href="{{ url_for('finance.loans') }}" style="color:var(--terra-600);" class="hover:underline">&larr; Back to Loans</a></p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <a href="{{ url_for('finance.loans') }}" class="text-indigo-600 hover:underline">&larr; Back to Loans</a>
-    <h1 class="text-2xl font-bold text-gray-800 mt-2">Loan for {{ loan.client.name }}</h1>
-</div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Loan Details -->
     <div class="lg:col-span-2">
-        <div class="bg-white rounded-lg shadow p-6">
+        <div class="section-card">
             <h2 class="font-semibold text-lg mb-4">Loan Details</h2>
 
             <div class="grid grid-cols-2 gap-4 mb-6">
@@ -84,7 +85,7 @@
         </div>
 
         <!-- Collateral Documents -->
-        <div class="bg-white rounded-lg shadow p-6 mt-4 section-card">
+        <div class="section-card mt-4">
             <h2 class="font-semibold text-lg mb-4">Collateral Documents</h2>
 
             {% set documents = loan.documents.filter_by(is_deleted=False).all() if loan.documents else [] %}
@@ -97,7 +98,7 @@
                         <p class="font-medium text-sm">{{ doc.filename }}</p>
                         <p class="text-xs text-gray-500">Uploaded {{ doc.created_at.strftime('%Y-%m-%d') if doc.created_at else '-' }}</p>
                     </div>
-                    <a href="{{ url_for('finance.download_document', id=doc.id) }}" class="text-indigo-600 hover:underline text-sm mr-2">Download</a>
+                    <a href="{{ url_for('finance.download_document', id=doc.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm mr-2">Download</a>
                     <form method="POST" action="{{ url_for('finance.delete_document', id=doc.id) }}" class="inline" onsubmit="return confirm('Delete this document?')">
                         <button type="submit" class="text-red-600 hover:underline text-sm">Delete</button>
                     </form>
@@ -124,7 +125,7 @@
 
     <!-- Payment Summary -->
     <div>
-        <div class="bg-white rounded-lg shadow p-6">
+        <div class="section-card">
             <h2 class="font-semibold text-lg mb-4">Payment Summary</h2>
 
             <div class="space-y-3">
@@ -136,7 +137,7 @@
                     <span class="text-gray-500">Amount Paid:</span>
                     <span class="font-medium text-green-600">UGX {{ "{:,.0f}".format(loan.amount_paid) }}</span>
                 </div>
-                <div class="flex justify-between border-t pt-3">
+                <div class="flex justify-between pt-3" style="border-top:1px solid var(--border)">
                     <span class="text-gray-500">Balance:</span>
                     <span class="font-bold text-xl {% if loan.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">
                         UGX {{ "{:,.0f}".format(loan.balance) }}
@@ -145,7 +146,7 @@
             </div>
 
             {% if loan.balance > 0 %}
-            <form method="POST" action="{{ url_for('finance.pay_loan', id=loan.id) }}" class="mt-6 pt-4 border-t">
+            <form method="POST" action="{{ url_for('finance.pay_loan', id=loan.id) }}" class="mt-6 pt-4" style="border-top:1px solid var(--border)">
                 <h3 class="font-semibold mb-3">Record Payment</h3>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
@@ -165,7 +166,7 @@
         </div>
 
         {% if payments %}
-        <div class="bg-white rounded-lg shadow p-6 mt-4">
+        <div class="section-card mt-4">
             <h2 class="font-semibold text-lg mb-4">Payment History</h2>
             <div class="space-y-2">
                 {% for payment in payments %}

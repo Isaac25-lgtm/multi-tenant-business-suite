@@ -1,11 +1,12 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
-from app.models.boutique import BoutiqueSale, BoutiqueStock
-from app.models.hardware import HardwareSale, HardwareStock
+from app.models.boutique import BoutiqueSale, BoutiqueStock, BoutiqueSaleItem
+from app.models.hardware import HardwareSale, HardwareStock, HardwareSaleItem
 from app.models.finance import Loan, GroupLoan, LoanPayment, GroupLoanPayment
 from app.models.user import User, AuditLog
 from app.modules.auth import manager_required, log_action
 from app.extensions import db
-from datetime import date, timedelta
+from datetime import timedelta
+from app.utils.timezone import get_local_today
 from sqlalchemy import func
 from werkzeug.utils import secure_filename
 import os
@@ -24,7 +25,7 @@ def allowed_image(filename):
 @manager_required
 def index():
     """Unified dashboard view"""
-    today = date.today()
+    today = get_local_today()
     yesterday = today - timedelta(days=1)
 
     # ============ BOUTIQUE STATS ============
@@ -120,6 +121,52 @@ def index():
         GroupLoan.status == 'overdue'
     ).count()
 
+    # ============ INVENTORY VALUE (COST) ============
+    boutique_inventory_value = float(db.session.query(
+        func.sum(BoutiqueStock.cost_price * BoutiqueStock.quantity)
+    ).filter(
+        BoutiqueStock.is_active == True
+    ).scalar() or 0)
+
+    hardware_inventory_value = float(db.session.query(
+        func.sum(HardwareStock.cost_price * HardwareStock.quantity)
+    ).filter(
+        HardwareStock.is_active == True
+    ).scalar() or 0)
+
+    total_inventory_value = boutique_inventory_value + hardware_inventory_value
+
+    # ============ PROFIT (TODAY) ============
+    boutique_profit_today = float(db.session.query(
+        func.sum(
+            (BoutiqueSaleItem.unit_price - func.coalesce(BoutiqueStock.cost_price, 0)) *
+            BoutiqueSaleItem.quantity
+        )
+    ).join(
+        BoutiqueSale, BoutiqueSaleItem.sale_id == BoutiqueSale.id
+    ).outerjoin(
+        BoutiqueStock, BoutiqueSaleItem.stock_id == BoutiqueStock.id
+    ).filter(
+        BoutiqueSale.sale_date == today,
+        BoutiqueSale.is_deleted == False
+    ).scalar() or 0)
+
+    hardware_profit_today = float(db.session.query(
+        func.sum(
+            (HardwareSaleItem.unit_price - func.coalesce(HardwareStock.cost_price, 0)) *
+            HardwareSaleItem.quantity
+        )
+    ).join(
+        HardwareSale, HardwareSaleItem.sale_id == HardwareSale.id
+    ).outerjoin(
+        HardwareStock, HardwareSaleItem.stock_id == HardwareStock.id
+    ).filter(
+        HardwareSale.sale_date == today,
+        HardwareSale.is_deleted == False
+    ).scalar() or 0)
+
+    total_profit_today = boutique_profit_today + hardware_profit_today
+
     # ============ TOTALS ============
     total_today = boutique_today + hardware_today + today_repayments + today_group_repayments
     total_yesterday = boutique_yesterday + hardware_yesterday
@@ -205,7 +252,9 @@ def index():
             'loans_outstanding': total_outstanding_loans,
             'low_stock_alerts': total_low_stock,
             'transactions_today': total_transactions,
-            'overdue_loans': overdue_loans_count + overdue_groups_count
+            'overdue_loans': overdue_loans_count + overdue_groups_count,
+            'inventory_value': total_inventory_value,
+            'profit_today': total_profit_today
         },
         by_business={
             'boutique': {
@@ -213,14 +262,18 @@ def index():
                 'yesterday': boutique_yesterday,
                 'credits': boutique_credits,
                 'transactions': boutique_today_count,
-                'low_stock': boutique_low_stock
+                'low_stock': boutique_low_stock,
+                'inventory_value': boutique_inventory_value,
+                'profit_today': boutique_profit_today
             },
             'hardware': {
                 'today': hardware_today,
                 'yesterday': hardware_yesterday,
                 'credits': hardware_credits,
                 'transactions': hardware_today_count,
-                'low_stock': hardware_low_stock
+                'low_stock': hardware_low_stock,
+                'inventory_value': hardware_inventory_value,
+                'profit_today': hardware_profit_today
             },
             'finance': {
                 'outstanding': total_outstanding_loans,

@@ -2,10 +2,14 @@
 
 {% block title %}Add Employee - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Add New Employee</h2>
+<p>Create a new user account</p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <a href="{{ url_for('dashboard.users') }}" class="text-indigo-600 hover:underline">&larr; Back to Users</a>
-    <h1 class="text-2xl font-bold text-gray-800 mt-2">Add New Employee</h1>
+<div class="mb-4">
+    <a href="{{ url_for('dashboard.users') }}" style="color:var(--terra-600);" class="hover:underline text-sm">&larr; Back to Users</a>
 </div>
 
 <div class="max-w-2xl">
@@ -14,8 +18,8 @@
         <div class="form-group mb-6">
             <label class="form-label">Profile Picture</label>
             <div class="flex items-center gap-4">
-                <div id="preview-container" class="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-gray-300">
-                    <span id="preview-placeholder" class="text-4xl text-gray-400">?</span>
+                <div id="preview-container" style="width:96px;height:96px;border-radius:50%;background:var(--navy-200);display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid var(--border);">
+                    <span id="preview-placeholder" style="font-size:36px;color:var(--navy-400);">?</span>
                     <img id="preview-image" src="" alt="Preview" class="w-full h-full object-cover hidden">
                 </div>
                 <div>
@@ -29,13 +33,10 @@
         </div>
 
         <div class="grid grid-cols-2 gap-4">
-            <!-- Username -->
             <div class="form-group">
                 <label class="form-label">Username *</label>
                 <input type="text" name="username" required class="form-input" placeholder="john_doe">
             </div>
-
-            <!-- Full Name -->
             <div class="form-group">
                 <label class="form-label">Full Name</label>
                 <input type="text" name="full_name" class="form-input" placeholder="John Doe">
@@ -43,13 +44,10 @@
         </div>
 
         <div class="grid grid-cols-2 gap-4">
-            <!-- Email -->
             <div class="form-group">
                 <label class="form-label">Email</label>
                 <input type="email" name="email" class="form-input" placeholder="john@example.com">
             </div>
-
-            <!-- Phone -->
             <div class="form-group">
                 <label class="form-label">Phone</label>
                 <input type="text" name="phone" class="form-input" placeholder="+256 700 000000">
@@ -57,7 +55,6 @@
         </div>
 
         <div class="grid grid-cols-2 gap-4">
-            <!-- Role -->
             <div class="form-group">
                 <label class="form-label">Primary Role *</label>
                 <select name="role" required class="form-select" id="role-select" onchange="toggleBranchField()">
@@ -67,8 +64,6 @@
                     <option value="manager">Manager</option>
                 </select>
             </div>
-
-            <!-- Boutique Branch -->
             <div class="form-group" id="branch-group">
                 <label class="form-label">Boutique Branch</label>
                 <select name="boutique_branch" class="form-select">
@@ -79,14 +74,12 @@
             </div>
         </div>
 
-        <!-- Password -->
         <div class="form-group">
             <label class="form-label">Password (Optional)</label>
             <input type="password" name="password" class="form-input" placeholder="Leave empty for open access">
             <p class="text-xs text-gray-500 mt-1">If left empty, the employee can log in without a password (open access mode).</p>
         </div>
 
-        <!-- Additional Access Permissions -->
         <div class="form-group">
             <label class="form-label">Additional Access Permissions</label>
             <p class="text-xs text-gray-500 mb-2">Grant access to sections beyond the primary role:</p>
@@ -110,7 +103,7 @@
             </div>
         </div>
 
-        <div class="flex gap-2 pt-4 border-t">
+        <div class="flex gap-2 pt-4" style="border-top:1px solid var(--border);">
             <button type="submit" class="btn btn-primary">Create Employee</button>
             <a href="{{ url_for('dashboard.users') }}" class="btn btn-secondary">Cancel</a>
         </div>
@@ -143,7 +136,6 @@ function toggleBranchField() {
     }
 }
 
-// Initial toggle
 document.addEventListener('DOMContentLoaded', toggleBranchField);
 </script>
 {% endblock %}

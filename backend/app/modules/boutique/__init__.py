@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, Response
 from app.models.boutique import (
     BoutiqueCategory, BoutiqueStock, BoutiqueSale,
     BoutiqueSaleItem, BoutiqueCreditPayment
@@ -9,6 +9,8 @@ from app.modules.auth import login_required, log_action
 from app.extensions import db
 from app.utils.timezone import get_local_today
 from app.utils.utils import generate_reference_number
+from app.utils.image_fetch import fetch_product_image_async, fetch_product_image
+from app.utils.pdf_generator import generate_receipt_pdf
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -19,6 +21,8 @@ BRANCHES = {
     'K': 'Kapchorwa Branch',
     'M': 'Mbale Branch'
 }
+
+AUTO_IMAGE_FETCH_SESSION_KEY = 'boutique_auto_image_fetch_date'
 
 
 def get_current_branch():
@@ -44,6 +48,53 @@ def safe_decimal(value, default='0'):
         return Decimal(str(value).strip())
     except (InvalidOperation, ValueError):
         return Decimal(default)
+
+
+def auto_fetch_missing_images():
+    """Auto-fetch images for items missing an image URL."""
+    items = BoutiqueStock.query.filter(
+        BoutiqueStock.is_active == True,
+        db.or_(BoutiqueStock.image_url == None, BoutiqueStock.image_url == '')
+    ).all()
+
+    for item in items:
+        category_name = item.category.name if item.category else None
+        fetch_product_image_async(item.id, item.item_name, category_name)
+
+    return len(items)
+
+
+def parse_receipt_items(form):
+    """Parse receipt item rows from a form submission."""
+    names = form.getlist('item_name[]')
+    quantities = form.getlist('quantity[]')
+    prices = form.getlist('price[]')
+    items = []
+
+    for i, name in enumerate(names):
+        name = (name or '').strip()
+        if not name:
+            continue
+
+        qty_raw = quantities[i] if i < len(quantities) else '0'
+        price_raw = prices[i] if i < len(prices) else '0'
+        qty = safe_decimal(qty_raw, '0')
+        price = safe_decimal(price_raw, '0')
+
+        if qty <= 0 or price <= 0:
+            continue
+
+        subtotal = qty * price
+        qty_value = int(qty) if qty == qty.to_integral() else float(qty)
+
+        items.append({
+            'item_name': name,
+            'quantity': qty_value,
+            'unit_price': float(price),
+            'subtotal': float(subtotal)
+        })
+
+    return items
 
 
 def check_date_permission(entry_date, user_section):
@@ -81,6 +132,12 @@ def index():
         return render_template('boutique/select_branch.html', branches=BRANCHES, is_manager=True)
 
     today = get_local_today()
+
+    # Auto-fetch missing images once per day per session
+    today_str = str(today)
+    if session.get(AUTO_IMAGE_FETCH_SESSION_KEY) != today_str:
+        auto_fetch_missing_images()
+        session[AUTO_IMAGE_FETCH_SESSION_KEY] = today_str
 
     # Build queries with branch filter
     stock_query = BoutiqueStock.query.filter_by(is_active=True)
@@ -182,6 +239,12 @@ def add_category():
 @login_required('boutique')
 def stock():
     """List all stock items"""
+    # Auto-fetch missing images once per day per session
+    today_str = str(get_local_today())
+    if session.get(AUTO_IMAGE_FETCH_SESSION_KEY) != today_str:
+        auto_fetch_missing_images()
+        session[AUTO_IMAGE_FETCH_SESSION_KEY] = today_str
+
     show_inactive = request.args.get('show_inactive', 'false').lower() == 'true'
     query = BoutiqueStock.query
     if not show_inactive:
@@ -250,6 +313,14 @@ def add_stock():
         )
         db.session.add(stock_item)
         db.session.commit()
+
+        # Auto-fetch product image in the background
+        category_name = None
+        if category_id:
+            cat = BoutiqueCategory.query.get(category_id)
+            if cat:
+                category_name = cat.name
+        fetch_product_image_async(stock_item.id, item_name, category_name)
 
         log_action(session['username'], 'boutique', 'create', 'stock', stock_item.id,
                    {'item_name': item_name, 'quantity': quantity, 'cost_price': float(cost_price)})
@@ -358,6 +429,41 @@ def reactivate_stock(id):
     log_action(session['username'], 'boutique', 'reactivate', 'stock', item.id,
                {'item_name': item.item_name})
     flash(f'Stock item "{item.item_name}" reactivated', 'success')
+    return redirect(url_for('boutique.stock'))
+
+
+@boutique_bp.route('/stock/<int:id>/refresh-image', methods=['POST'])
+@login_required('boutique')
+def refresh_image(id):
+    """Re-fetch the product image for a stock item"""
+    item = BoutiqueStock.query.get_or_404(id)
+    category_name = item.category.name if item.category else None
+    image_url = fetch_product_image(item.item_name, category_name)
+    if image_url:
+        item.image_url = image_url
+        db.session.commit()
+        flash(f'Image updated for "{item.item_name}"', 'success')
+    else:
+        flash(f'No image found for "{item.item_name}"', 'warning')
+    return redirect(url_for('boutique.stock'))
+
+
+@boutique_bp.route('/stock/fetch-all-images', methods=['POST'])
+@login_required('boutique')
+def fetch_all_images():
+    """Fetch images for all stock items that don't have one yet"""
+    items = BoutiqueStock.query.filter(
+        BoutiqueStock.is_active == True,
+        db.or_(BoutiqueStock.image_url == None, BoutiqueStock.image_url == '')
+    ).all()
+
+    count = 0
+    for item in items:
+        category_name = item.category.name if item.category else None
+        fetch_product_image_async(item.id, item.item_name, category_name)
+        count += 1
+
+    flash(f'Fetching images for {count} items in the background...', 'success')
     return redirect(url_for('boutique.stock'))
 
 
@@ -538,6 +644,87 @@ def view_sale(id):
     items = sale.items.all()
     payments = BoutiqueCreditPayment.query.filter_by(sale_id=id).order_by(BoutiqueCreditPayment.payment_date.desc()).all()
     return render_template('boutique/sale_detail.html', sale=sale, items=items, payments=payments)
+
+
+@boutique_bp.route('/sales/<int:id>/receipt/preview')
+@login_required('boutique')
+def receipt_preview(id):
+    """Preview receipt with editable items before download"""
+    sale = BoutiqueSale.query.get_or_404(id)
+    items = sale.items.all()
+    branch_label = BRANCHES.get(sale.branch) if sale.branch else None
+    business_name = f"BOUTIQUE - {branch_label}" if branch_label else "BOUTIQUE"
+    return render_template('boutique/receipt_preview.html',
+        sale=sale,
+        items=items,
+        business_name=business_name,
+        is_full_payment=(sale.payment_type == 'full')
+    )
+
+
+@boutique_bp.route('/sales/<int:id>/receipt', methods=['GET', 'POST'])
+@login_required('boutique')
+def download_receipt(id):
+    """Download sale receipt as PDF"""
+    sale = BoutiqueSale.query.get_or_404(id)
+    branch_label = BRANCHES.get(sale.branch) if sale.branch else None
+    business_name = f"BOUTIQUE - {branch_label}" if branch_label else "BOUTIQUE"
+    items_override = None
+    totals_override = None
+    meta_override = None
+    served_by_override = session.get('username')
+    business_name_override = business_name
+
+    if request.method == 'POST':
+        business_name_input = request.form.get('receipt_business_name', '').strip()
+        if business_name_input:
+            business_name_override = business_name_input
+        served_by_input = request.form.get('receipt_served_by', '').strip()
+        if served_by_input:
+            served_by_override = served_by_input
+
+        meta_override = {
+            'sale_date': request.form.get('receipt_date', '').strip() or None,
+            'customer_name': request.form.get('receipt_customer', '').strip() or None,
+            'phone': request.form.get('receipt_phone', '').strip() or None,
+            'address': request.form.get('receipt_address', '').strip() or None
+        }
+
+        items_override = parse_receipt_items(request.form)
+        if not items_override:
+            flash('Please add at least one valid item before downloading the receipt.', 'error')
+            return redirect(url_for('boutique.receipt_preview', id=id))
+
+        total_amount = sum(item['subtotal'] for item in items_override)
+        amount_paid = safe_decimal(request.form.get('amount_paid', str(sale.amount_paid)), str(sale.amount_paid))
+        amount_paid_value = float(amount_paid)
+        if amount_paid_value > total_amount:
+            flash('Amount paid cannot exceed the total amount.', 'error')
+            return redirect(url_for('boutique.receipt_preview', id=id))
+
+        balance_value = max(total_amount - amount_paid_value, 0)
+        payment_type = 'full' if balance_value <= 0 else 'part'
+        totals_override = {
+            'total_amount': total_amount,
+            'amount_paid': amount_paid_value,
+            'balance': balance_value,
+            'payment_type': payment_type
+        }
+
+    buffer = generate_receipt_pdf(
+        sale,
+        business_name_override,
+        served_by=served_by_override,
+        items_override=items_override,
+        totals_override=totals_override,
+        meta_override=meta_override
+    )
+    filename = f"receipt_{sale.reference_number}.pdf"
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
 
 
 @boutique_bp.route('/sales/<int:id>/delete', methods=['POST'])

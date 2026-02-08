@@ -2,12 +2,13 @@
 
 {% block title %}Hardware Stock - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Hardware Stock</h2>
+<p>{{ stock|length }} items in inventory</p>
+{% endblock %}
+
 {% block content %}
-<div class="flex justify-between items-center mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-800">Hardware Stock</h1>
-        <p class="text-gray-600">{{ stock|length }} items</p>
-    </div>
+<div class="flex justify-end mb-6">
     <button onclick="showModal('add-stock-modal')" class="btn btn-primary">Add Stock Item</button>
 </div>
 
@@ -76,7 +77,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    <button onclick="editStock({{ item.id }}, '{{ item.item_name }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" class="text-indigo-600 hover:underline text-sm">Edit</button>
+                    <button onclick="editStock({{ item.id }}, '{{ item.item_name }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
                     {% if item.is_active %}
                     <form method="POST" action="{{ url_for('hardware.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
                         <button type="submit" class="text-orange-600 hover:underline text-sm ml-2">Deactivate</button>
@@ -142,12 +143,12 @@
             </div>
 
             <!-- Cost Price Per Item with Total Calculation -->
-            <div class="bg-blue-50 p-4 rounded-lg mb-4">
-                <label class="form-label text-blue-800">Cost Price (Per Item) *</label>
+            <div style="background:var(--terra-50);padding:16px;border-radius:var(--radius-lg);margin-bottom:16px;">
+                <label class="form-label" style="color:var(--terra-800);">Cost Price (Per Item) *</label>
                 <input type="number" name="cost_price" id="add-cost-per-item" min="0" step="0.01" class="form-input" placeholder="Cost of ONE item" oninput="calculateTotalCost('add')">
-                <div class="mt-2 p-2 bg-white rounded border border-blue-200">
+                <div class="mt-2 p-2 bg-white rounded" style="border:1px solid var(--terra-200);">
                     <span class="text-sm text-gray-600">Total Purchase Cost:</span>
-                    <span id="add-total-cost" class="text-lg font-bold text-blue-700 ml-2">UGX 0</span>
+                    <span id="add-total-cost" class="text-lg font-bold ml-2" style="color:var(--terra-700);">UGX 0</span>
                 </div>
             </div>
 

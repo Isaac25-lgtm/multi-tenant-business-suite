@@ -1,51 +1,32 @@
-// Main JavaScript for Denove APS
+// ============ DENOVE APS - MAIN JS ============
 
-// ============ DARK MODE ============
-function toggleTheme() {
-    const html = document.documentElement;
-    const currentTheme = html.getAttribute('data-theme');
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-
-    html.setAttribute('data-theme', newTheme);
-    localStorage.setItem('theme', newTheme);
-    updateThemeIcon(newTheme);
-}
-
-function updateThemeIcon(theme) {
-    const sunIcon = document.getElementById('sun-icon');
-    const moonIcon = document.getElementById('moon-icon');
-
-    if (sunIcon && moonIcon) {
-        if (theme === 'dark') {
-            sunIcon.classList.add('hidden');
-            moonIcon.classList.remove('hidden');
-        } else {
-            sunIcon.classList.remove('hidden');
-            moonIcon.classList.add('hidden');
-        }
+// ============ SIDEBAR TOGGLE (MOBILE) ============
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) {
+        sidebar.classList.toggle('open');
+    }
+    if (overlay) {
+        overlay.classList.toggle('active');
     }
 }
 
-// Initialize theme on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const savedTheme = localStorage.getItem('theme') || 'light';
-    document.documentElement.setAttribute('data-theme', savedTheme);
-    updateThemeIcon(savedTheme);
-});
+function closeSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (sidebar) sidebar.classList.remove('open');
+    if (overlay) overlay.classList.remove('active');
+}
 
-// Mobile menu toggle
-document.addEventListener('DOMContentLoaded', function() {
-    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-    const mobileMenu = document.getElementById('mobile-menu');
-
-    if (mobileMenuBtn && mobileMenu) {
-        mobileMenuBtn.addEventListener('click', function() {
-            mobileMenu.classList.toggle('hidden');
-        });
+// Close sidebar on ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeSidebar();
     }
 });
 
-// Format currency
+// ============ FORMAT CURRENCY ============
 function formatCurrency(amount) {
     return 'UGX ' + Number(amount).toLocaleString('en-US', {
         minimumFractionDigits: 0,
@@ -53,12 +34,12 @@ function formatCurrency(amount) {
     });
 }
 
-// Confirm delete action
+// ============ CONFIRM DELETE ============
 function confirmDelete(message) {
     return confirm(message || 'Are you sure you want to delete this item?');
 }
 
-// Show/hide modal
+// ============ MODALS ============
 function showModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
@@ -80,12 +61,14 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// Auto-hide flash messages after 5 seconds
+// ============ FLASH MESSAGES AUTO-HIDE ============
 document.addEventListener('DOMContentLoaded', function() {
     const flashMessages = document.querySelectorAll('.flash-message');
     flashMessages.forEach(function(message) {
         setTimeout(function() {
+            message.style.transition = 'opacity 0.3s, transform 0.3s';
             message.style.opacity = '0';
+            message.style.transform = 'translateY(-10px)';
             setTimeout(function() {
                 message.remove();
             }, 300);
@@ -93,7 +76,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Form validation helper
+// ============ FORM VALIDATION ============
 function validateForm(formId) {
     const form = document.getElementById(formId);
     if (!form) return true;
@@ -103,17 +86,17 @@ function validateForm(formId) {
 
     requiredFields.forEach(function(field) {
         if (!field.value.trim()) {
-            field.classList.add('border-red-500');
+            field.style.borderColor = '#ef4444';
             isValid = false;
         } else {
-            field.classList.remove('border-red-500');
+            field.style.borderColor = '';
         }
     });
 
     return isValid;
 }
 
-// Calculate totals for sales forms
+// ============ CALCULATE TOTALS FOR SALES ============
 function calculateTotal() {
     const items = document.querySelectorAll('.sale-item');
     let total = 0;
@@ -139,7 +122,7 @@ function calculateTotal() {
     return total;
 }
 
-// Print receipt
+// ============ PRINT RECEIPT ============
 function printReceipt() {
     window.print();
 }
@@ -156,18 +139,17 @@ function initDateRestrictions(isManager) {
 
     dateInputs.forEach(input => {
         if (!isManager) {
-            // Employees can only select today or yesterday
             input.setAttribute('min', yesterdayStr);
             input.setAttribute('max', todayStr);
 
             input.addEventListener('change', function() {
                 const selectedDate = this.value;
                 if (selectedDate < yesterdayStr || selectedDate > todayStr) {
-                    this.classList.add('border-red-500');
+                    this.style.borderColor = '#ef4444';
                     alert('You can only enter data for today or yesterday. Contact a manager for older entries.');
                     this.value = todayStr;
                 } else {
-                    this.classList.remove('border-red-500');
+                    this.style.borderColor = '';
                 }
             });
         }
@@ -179,13 +161,11 @@ function previewLoanAgreement(loanType, loanData) {
     const modal = document.getElementById('agreement-preview-modal');
     if (!modal) return;
 
-    // Populate the agreement preview
     populateAgreementPreview(loanType, loanData);
     modal.classList.add('active');
 }
 
 function populateAgreementPreview(loanType, data) {
-    // Update editable fields in the agreement preview
     const fields = {
         'agreement-company-name': 'DENOVE APS',
         'agreement-client-name': data.clientName || data.groupName || '',
@@ -210,14 +190,11 @@ function populateAgreementPreview(loanType, data) {
 }
 
 function downloadAgreement(format) {
-    // Collect all editable field values
     const agreementData = collectAgreementData();
 
     if (format === 'pdf') {
-        // Submit form to generate PDF
         const form = document.getElementById('agreement-download-form');
         if (form) {
-            // Update hidden fields with current values
             for (const [key, value] of Object.entries(agreementData)) {
                 let input = form.querySelector(`input[name="${key}"]`);
                 if (!input) {
@@ -281,7 +258,7 @@ function initCollateralUpload() {
 
 function handleCollateralFile(file) {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf'];
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    const maxSize = 10 * 1024 * 1024;
 
     if (!allowedTypes.includes(file.type)) {
         alert('Invalid file type. Please upload an image (JPG, PNG, GIF) or PDF.');
@@ -303,13 +280,14 @@ function displayUploadedFile(file) {
     const fileExt = file.name.split('.').pop().toUpperCase();
     const fileDiv = document.createElement('div');
     fileDiv.className = 'uploaded-file';
+    fileDiv.style.cssText = 'display:flex;align-items:center;gap:12px;padding:10px;background:var(--navy-50);border-radius:10px;margin-top:8px;';
     fileDiv.innerHTML = `
-        <div class="file-icon">${fileExt}</div>
-        <div class="flex-1">
-            <p class="font-medium text-sm">${file.name}</p>
-            <p class="text-xs text-gray-500">${(file.size / 1024).toFixed(1)} KB</p>
+        <div style="width:36px;height:36px;background:var(--terra-50);color:var(--terra-600);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;">${fileExt}</div>
+        <div style="flex:1;min-width:0;">
+            <p style="font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${file.name}</p>
+            <p style="font-size:11px;color:var(--navy-400);">${(file.size / 1024).toFixed(1)} KB</p>
         </div>
-        <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:underline text-sm">Remove</button>
+        <button type="button" onclick="this.parentElement.remove()" style="color:#ef4444;font-size:12px;font-weight:600;cursor:pointer;">Remove</button>
     `;
     container.appendChild(fileDiv);
 }

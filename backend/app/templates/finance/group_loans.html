@@ -2,12 +2,13 @@
 
 {% block title %}Group Loans - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Group Loans</h2>
+<p>{{ groups|length }} group loans</p>
+{% endblock %}
+
 {% block content %}
-<div class="flex justify-between items-center mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-800">Group Loans</h1>
-        <p class="text-gray-600">{{ groups|length }} group loans</p>
-    </div>
+<div class="flex justify-end mb-6">
     <button onclick="showModal('add-group-modal')" class="btn btn-primary">New Group Loan</button>
 </div>
 
@@ -25,7 +26,7 @@
 </div>
 
 <!-- Group Loans Table -->
-<div class="bg-white rounded-lg shadow overflow-hidden">
+<div class="section-card" style="padding:0;overflow:hidden;">
     <table class="data-table">
         <thead>
             <tr>
@@ -60,7 +61,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" class="text-indigo-600 hover:underline text-sm">View</a>
+                    <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
                     <form method="POST" action="{{ url_for('finance.delete_group_loan', id=group.id) }}" class="inline" onsubmit="return confirm('Delete this group loan?')">
                         <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
                     </form>

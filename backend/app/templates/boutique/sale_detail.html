@@ -2,16 +2,21 @@
 
 {% block title %}Sale {{ sale.reference_number }} - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Sale {{ sale.reference_number }}</h2>
+<p>Sale details and payment history</p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <a href="{{ url_for('boutique.sales') }}" class="text-indigo-600 hover:underline">&larr; Back to Sales</a>
-    <h1 class="text-2xl font-bold text-gray-800 mt-2">Sale {{ sale.reference_number }}</h1>
+<div class="flex justify-between items-center mb-4">
+    <a href="{{ url_for('boutique.sales') }}" style="color:var(--terra-600);" class="hover:underline text-sm">&larr; Back to Sales</a>
+    <a href="{{ url_for('boutique.receipt_preview', id=sale.id) }}" class="btn btn-secondary text-sm">Preview Receipt</a>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <!-- Sale Details -->
     <div class="lg:col-span-2">
-        <div class="bg-white rounded-lg shadow p-6">
+        <div class="section-card">
             <h2 class="font-semibold text-lg mb-4">Sale Details</h2>
 
             <div class="grid grid-cols-2 gap-4 mb-6">
@@ -72,7 +77,7 @@
 
     <!-- Payment Summary -->
     <div>
-        <div class="bg-white rounded-lg shadow p-6">
+        <div class="section-card">
             <h2 class="font-semibold text-lg mb-4">Payment Summary</h2>
 
             <div class="space-y-3">
@@ -84,7 +89,7 @@
                     <span class="text-gray-500">Amount Paid:</span>
                     <span class="font-medium text-green-600">UGX {{ "{:,.0f}".format(sale.amount_paid) }}</span>
                 </div>
-                <div class="flex justify-between border-t pt-3">
+                <div class="flex justify-between pt-3" style="border-top:1px solid var(--border);">
                     <span class="text-gray-500">Balance:</span>
                     <span class="font-bold text-xl {% if sale.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">
                         UGX {{ "{:,.0f}".format(sale.balance) }}
@@ -93,7 +98,7 @@
             </div>
 
             {% if sale.payment_type == 'part' and not sale.is_credit_cleared %}
-            <form method="POST" action="{{ url_for('boutique.pay_credit', id=sale.id) }}" class="mt-6 pt-4 border-t">
+            <form method="POST" action="{{ url_for('boutique.pay_credit', id=sale.id) }}" class="mt-6 pt-4" style="border-top:1px solid var(--border);">
                 <h3 class="font-semibold mb-3">Record Payment</h3>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
@@ -109,7 +114,7 @@
         </div>
 
         {% if payments %}
-        <div class="bg-white rounded-lg shadow p-6 mt-4">
+        <div class="section-card mt-4">
             <h2 class="font-semibold text-lg mb-4">Payment History</h2>
             <div class="space-y-2">
                 {% for payment in payments %}

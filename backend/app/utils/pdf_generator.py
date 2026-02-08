@@ -4,8 +4,14 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph
 from reportlab.lib.colors import HexColor
-from datetime import datetime
+from reportlab.lib.utils import ImageReader
+from datetime import datetime, date
 import io
+import os
+
+LOGO_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', 'static', 'images', 'denovo.png')
+)
 
 
 def format_currency(amount):
@@ -13,59 +19,56 @@ def format_currency(amount):
     return f"UGX {amount:,.0f}"
 
 
+def _format_receipt_date(value, fallback):
+    if isinstance(value, date):
+        return value.strftime('%B %d, %Y')
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = date.fromisoformat(value.strip())
+            return parsed.strftime('%B %d, %Y')
+        except ValueError:
+            return value.strip()
+    if isinstance(fallback, date):
+        return fallback.strftime('%B %d, %Y')
+    return 'N/A'
+
+
+def _draw_logo_image(c, x, y, size):
+    if not os.path.exists(LOGO_PATH):
+        return False
+    try:
+        logo = ImageReader(LOGO_PATH)
+        iw, ih = logo.getSize()
+        if not iw or not ih:
+            return False
+        scale = size / max(iw, ih)
+        draw_w = iw * scale
+        draw_h = ih * scale
+        c.drawImage(logo, x, y + (size - draw_h) / 2, width=draw_w, height=draw_h, mask='auto')
+        return True
+    except Exception:
+        return False
+
+
 def draw_logo_header(c, width, y):
-    """Draw the Denove APS logo header on PDF"""
-    # Draw logo box (indigo background)
-    logo_color = HexColor('#4f46e5')
-    gold_color = HexColor('#fbbf24')
+    """Draw the Denove logo header on PDF"""
+    logo_size = 72
+    start_x = (width - logo_size) / 2
+    logo_y = y - logo_size
 
-    # Logo box
-    box_x = width/2 - 100
-    box_y = y - 30
-    c.setFillColor(logo_color)
-    c.roundRect(box_x, box_y, 45, 40, 8, fill=1, stroke=0)
-
-    # Letter D in the box
-    c.setFillColor(HexColor('#ffffff'))
-    c.setFont("Helvetica-Bold", 24)
-    c.drawString(box_x + 12, box_y + 10, "D")
-
-    # Gold coin circle
-    c.setFillColor(gold_color)
-    c.circle(box_x + 30, box_y + 20, 8, fill=1, stroke=0)
-    c.setFillColor(logo_color)
-    c.setFont("Helvetica-Bold", 8)
-    c.drawCentredString(box_x + 30, box_y + 17, "$")
-
-    # Company name
-    c.setFillColor(HexColor('#1f2937'))
-    c.setFont("Helvetica-Bold", 22)
-    c.drawString(box_x + 55, box_y + 18, "DENOVE")
-
-    c.setFillColor(HexColor('#6b7280'))
-    c.setFont("Helvetica", 14)
-    c.drawString(box_x + 55, box_y + 2, "APS")
-
-    # Underline
-    c.setStrokeColor(logo_color)
-    c.setLineWidth(2)
-    c.line(box_x + 55, box_y - 2, box_x + 115, box_y - 2)
-
-    # Reset colors
-    c.setStrokeColor(HexColor('#000000'))
-    c.setFillColor(HexColor('#000000'))
-    c.setLineWidth(1)
-
-    return y - 50
+    _draw_logo_image(c, start_x, logo_y, logo_size)
+    return y - logo_size - 16
 
 
-def generate_receipt_pdf(sale, business_name):
+def generate_receipt_pdf(sale, business_name, served_by=None, items_override=None, totals_override=None, meta_override=None):
     """Generate PDF receipt for a sale"""
     buffer = io.BytesIO()
 
     # Create PDF
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
+
+    meta_override = meta_override or {}
 
     # Header with logo
     y = height - 20
@@ -78,104 +81,166 @@ def generate_receipt_pdf(sale, business_name):
     y -= 30
     c.line(50, y, width-50, y)
     
-    # Business details (placeholders)
+    # Business details
     y -= 20
     c.setFont("Helvetica", 10)
-    c.drawCentredString(width/2, y, "Phone: [To be configured]")
+    phone_text = f"Phone: {meta_override.get('phone')}" if meta_override.get('phone') else "Phone: -"
+    address_text = f"Address: {meta_override.get('address')}" if meta_override.get('address') else "Address: -"
+    c.drawCentredString(width/2, y, phone_text)
     y -= 15
-    c.drawCentredString(width/2, y, "Address: [To be configured]")
+    c.drawCentredString(width/2, y, address_text)
     
     y -= 20
     c.line(50, y, width-50, y)
     
     # Receipt title
-    y -= 30
-    c.setFont("Helvetica-Bold", 14)
+    y -= 24
+    c.setFont("Helvetica-Bold", 13)
+    c.setFillColor(HexColor('#c24b28'))
     c.drawCentredString(width/2, y, "RECEIPT")
-    
+    c.setFillColor(HexColor('#0f172a'))
+
     # Receipt details
-    y -= 30
+    y -= 24
     c.setFont("Helvetica", 10)
-    c.drawString(50, y, f"Reference: {sale.reference_number}")
-    y -= 15
-    c.drawString(50, y, f"Date: {sale.sale_date.strftime('%B %d, %Y')}")
-    y -= 15
-    c.drawString(50, y, f"Time: {sale.created_at.strftime('%I:%M %p')}")
-    y -= 15
-    c.drawString(50, y, f"Served by: {sale.creator.name if sale.creator else 'N/A'}")
-    
-    y -= 30
+    customer_name = meta_override.get('customer_name') or (sale.customer.name if sale.customer else None)
+    customer_phone = sale.customer.phone if sale.customer else None
+    receipt_date = _format_receipt_date(meta_override.get('sale_date'), sale.sale_date)
+
+    detail_rows = [
+        ("Reference", sale.reference_number),
+        ("Date", receipt_date),
+        ("Time", sale.created_at.strftime('%I:%M %p') if getattr(sale, 'created_at', None) else 'N/A'),
+        ("Served by", served_by or 'N/A')
+    ]
+    if customer_name:
+        detail_rows.append(("Customer", customer_name))
+
+    left_x = 50
+    right_x = width / 2 + 10
+    row_height = 16
+    for idx, (label, value) in enumerate(detail_rows):
+        col_x = left_x if idx % 2 == 0 else right_x
+        row_y = y - (idx // 2) * row_height
+        c.setFillColor(HexColor('#64748b'))
+        c.setFont("Helvetica", 9)
+        c.drawString(col_x, row_y, f"{label}:")
+        c.setFillColor(HexColor('#0f172a'))
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(col_x + 60, row_y, str(value))
+
+    rows_count = (len(detail_rows) + 1) // 2
+    y = y - rows_count * row_height - 10
+    c.setStrokeColor(HexColor('#e2e8f0'))
     c.line(50, y, width-50, y)
-    
+
     # Items header
     y -= 20
     c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(HexColor('#0f172a'))
     c.drawString(50, y, "ITEMS")
-    
-    y -= 20
-    c.line(50, y, width-50, y)
-    
-    y -= 20
-    c.drawString(50, y, "Description")
-    c.drawString(250, y, "Qty")
-    c.drawString(320, y, "Price")
-    c.drawString(420, y, "Amount")
-    
-    y -= 5
-    c.line(50, y, width-50, y)
-    
+
+    def draw_items_header(header_y):
+        table_left = 50
+        table_right = width - 50
+        c.setFillColor(HexColor('#c24b28'))
+        c.rect(table_left, header_y - 18, table_right - table_left, 20, fill=1, stroke=0)
+        c.setFillColor(HexColor('#ffffff'))
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(table_left + 8, header_y - 14, "ITEM")
+        c.drawRightString(table_left + 330, header_y - 14, "QTY")
+        c.drawRightString(table_left + 420, header_y - 14, "PRICE")
+        c.drawRightString(table_right - 10, header_y - 14, "AMOUNT")
+        c.setFillColor(HexColor('#0f172a'))
+        return header_y - 24
+
+    y = draw_items_header(y - 6)
+
     # Items
-    y -= 20
-    c.setFont("Helvetica", 10)
-    
-    for item in sale.items:
-        if y < 100:  # Check if we need a new page
+    items = items_override
+    if items is None:
+        items = sale.items.all() if hasattr(sale.items, 'all') else sale.items
+
+    row_height = 18
+    table_left = 50
+    table_right = width - 50
+    for row_index, item in enumerate(items):
+        if y < 120:
             c.showPage()
             y = height - 40
-            c.setFont("Helvetica", 10)
-        
-        c.drawString(50, y, item.item_name[:30])  # Truncate long names
-        c.drawString(250, y, str(item.quantity))
-        c.drawString(320, y, format_currency(float(item.unit_price)))
-        c.drawString(420, y, format_currency(float(item.subtotal)))
-        y -= 20
-    
-    y -= 10
+            y = draw_items_header(y)
+
+        if isinstance(item, dict):
+            item_name = item.get('item_name', '')
+            quantity = item.get('quantity', 0)
+            unit_price = item.get('unit_price', 0)
+            subtotal = item.get('subtotal', 0)
+        else:
+            item_name = item.item_name
+            quantity = item.quantity
+            unit_price = item.unit_price
+            subtotal = item.subtotal
+
+        if row_index % 2 == 0:
+            c.setFillColor(HexColor('#f8fafc'))
+            c.rect(table_left, y - 14, table_right - table_left, row_height, fill=1, stroke=0)
+        c.setFillColor(HexColor('#0f172a'))
+        c.setFont("Helvetica", 9)
+        c.drawString(table_left + 8, y - 12, str(item_name)[:38])
+        c.drawRightString(table_left + 330, y - 12, str(quantity))
+        c.drawRightString(table_left + 420, y - 12, format_currency(float(unit_price)))
+        c.drawRightString(table_right - 10, y - 12, format_currency(float(subtotal)))
+        y -= row_height
+
+    y -= 6
+    c.setStrokeColor(HexColor('#e2e8f0'))
     c.line(50, y, width-50, y)
-    
-    # Total
-    y -= 20
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(350, y, "TOTAL:")
-    c.drawString(420, y, format_currency(float(sale.total_amount)))
-    
-    y -= 5
-    c.line(50, y, width-50, y)
-    
-    # Payment details
-    y -= 25
-    c.setFont("Helvetica", 10)
-    
-    if sale.payment_type == 'full':
-        c.drawString(50, y, "Payment Method: FULL PAYMENT")
-        y -= 15
-        c.drawString(50, y, f"Amount Paid: {format_currency(float(sale.amount_paid))}")
+
+    # Totals box
+    if totals_override:
+        total_amount = totals_override.get('total_amount', float(sale.total_amount))
+        amount_paid = totals_override.get('amount_paid', float(sale.amount_paid))
+        balance = totals_override.get('balance', float(sale.balance))
+        payment_type = totals_override.get('payment_type', sale.payment_type)
     else:
-        c.drawString(50, y, "Payment Method: PART PAYMENT")
-        y -= 15
-        c.drawString(50, y, f"Amount Paid: {format_currency(float(sale.amount_paid))}")
-        y -= 15
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(50, y, f"Balance Due: {format_currency(float(sale.balance))}")
-        
-        if sale.customer:
-            y -= 25
-            c.setFont("Helvetica", 10)
-            c.drawString(50, y, f"Customer: {sale.customer.name}")
-            y -= 15
-            c.drawString(50, y, f"Phone: {sale.customer.phone}")
-    
-    y -= 30
+        total_amount = float(sale.total_amount)
+        amount_paid = float(sale.amount_paid)
+        balance = float(sale.balance)
+        payment_type = sale.payment_type
+
+    totals = [
+        ("Total", format_currency(float(total_amount))),
+        ("Paid", format_currency(float(amount_paid))),
+        ("Balance", format_currency(float(balance)))
+    ]
+    box_width = 210
+    box_height = 18 * len(totals) + 14
+    box_x = width - 50 - box_width
+    box_y = y - box_height - 6
+    c.setFillColor(HexColor('#fff7f5'))
+    c.roundRect(box_x, box_y, box_width, box_height, 8, fill=1, stroke=0)
+    c.setFillColor(HexColor('#0f172a'))
+    c.setFont("Helvetica-Bold", 9)
+    for idx, (label, value) in enumerate(totals):
+        line_y = box_y + box_height - 18 - idx * 18
+        c.drawString(box_x + 10, line_y, label.upper())
+        c.drawRightString(box_x + box_width - 10, line_y, value)
+
+    y = box_y - 20
+
+    # Payment details
+    c.setFillColor(HexColor('#0f172a'))
+    c.setFont("Helvetica", 9)
+    payment_label = "FULL PAYMENT" if payment_type == 'full' else "PART PAYMENT"
+    c.drawString(50, y, f"Payment Method: {payment_label}")
+    if payment_type != 'full':
+        y -= 14
+        c.setFillColor(HexColor('#c24b28'))
+        c.setFont("Helvetica-Bold", 9)
+        c.drawString(50, y, f"Balance Due: {format_currency(float(balance))}")
+        c.setFillColor(HexColor('#0f172a'))
+    y -= 18
+    c.setStrokeColor(HexColor('#e2e8f0'))
     c.line(50, y, width-50, y)
     
     # Footer

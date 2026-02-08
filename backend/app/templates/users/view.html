@@ -2,9 +2,14 @@
 
 {% block title %}{{ user.full_name or user.username }} - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>{{ user.full_name or user.username }}</h2>
+<p>@{{ user.username }} &middot; {{ user.role|title }}</p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <a href="{{ url_for('dashboard.users') }}" class="text-indigo-600 hover:underline">&larr; Back to Users</a>
+<div class="mb-4">
+    <a href="{{ url_for('dashboard.users') }}" style="color:var(--terra-600);" class="hover:underline text-sm">&larr; Back to Users</a>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -14,16 +19,16 @@
             {% if user.profile_picture %}
             <img src="{{ url_for('static', filename=user.profile_picture) }}"
                  alt="{{ user.full_name or user.username }}"
-                 class="w-32 h-32 rounded-full object-cover border-4 border-indigo-300 mx-auto mb-4">
+                 style="width:128px;height:128px;border-radius:50%;object-fit:cover;border:4px solid var(--terra-400);margin:0 auto 16px;">
             {% else %}
-            <div class="w-32 h-32 rounded-full bg-indigo-100 flex items-center justify-center border-4 border-indigo-300 mx-auto mb-4">
-                <span class="text-5xl font-bold text-indigo-600">
+            <div style="width:128px;height:128px;border-radius:50%;background:var(--terra-50);display:flex;align-items:center;justify-content:center;border:4px solid var(--terra-400);margin:0 auto 16px;">
+                <span style="font-size:48px;font-weight:700;color:var(--terra-600);">
                     {{ (user.full_name or user.username)[0]|upper }}
                 </span>
             </div>
             {% endif %}
 
-            <h1 class="text-2xl font-bold text-gray-800">{{ user.full_name or user.username }}</h1>
+            <h1 style="font-size:24px;font-weight:700;color:var(--navy-900);">{{ user.full_name or user.username }}</h1>
             <p class="text-gray-500">@{{ user.username }}</p>
 
             <div class="mt-3">
@@ -35,10 +40,10 @@
                 {% endif %}
             </div>
 
-            <div class="mt-6 pt-4 border-t text-left">
+            <div class="mt-6 pt-4 text-left" style="border-top:1px solid var(--border);">
                 {% if user.email %}
                 <div class="flex items-center gap-2 mb-2">
-                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg style="width:20px;height:20px;color:var(--navy-400);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
                     </svg>
                     <span class="text-gray-600">{{ user.email }}</span>
@@ -46,7 +51,7 @@
                 {% endif %}
                 {% if user.phone %}
                 <div class="flex items-center gap-2 mb-2">
-                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg style="width:20px;height:20px;color:var(--navy-400);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
                     </svg>
                     <span class="text-gray-600">{{ user.phone }}</span>
@@ -54,7 +59,7 @@
                 {% endif %}
                 {% if user.boutique_branch %}
                 <div class="flex items-center gap-2 mb-2">
-                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg style="width:20px;height:20px;color:var(--navy-400);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
                     </svg>
                     <span class="text-gray-600">Branch {{ user.boutique_branch }}</span>
@@ -63,7 +68,7 @@
             </div>
 
             <!-- Actions -->
-            <div class="mt-6 pt-4 border-t flex flex-col gap-2">
+            <div class="mt-6 pt-4 flex flex-col gap-2" style="border-top:1px solid var(--border);">
                 <a href="{{ url_for('dashboard.edit_user', id=user.id) }}" class="btn btn-primary w-full">Edit Profile</a>
                 <form method="POST" action="{{ url_for('dashboard.toggle_user_active', id=user.id) }}">
                     <button type="submit" class="btn {{ 'btn-danger' if user.is_active else 'btn-success' }} w-full">
@@ -83,13 +88,9 @@
                 <div class="p-3 rounded-lg {{ 'bg-green-50 border border-green-200' if user.role == 'manager' or user.can_access_boutique or user.role == 'boutique' else 'bg-gray-50 border border-gray-200' }}">
                     <div class="flex items-center gap-2">
                         {% if user.role == 'manager' or user.can_access_boutique or user.role == 'boutique' %}
-                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                        </svg>
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                         {% else %}
-                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                        </svg>
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
                         {% endif %}
                         <span class="font-medium">Boutique</span>
                     </div>
@@ -97,13 +98,9 @@
                 <div class="p-3 rounded-lg {{ 'bg-green-50 border border-green-200' if user.role == 'manager' or user.can_access_hardware or user.role == 'hardware' else 'bg-gray-50 border border-gray-200' }}">
                     <div class="flex items-center gap-2">
                         {% if user.role == 'manager' or user.can_access_hardware or user.role == 'hardware' %}
-                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                        </svg>
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                         {% else %}
-                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                        </svg>
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
                         {% endif %}
                         <span class="font-medium">Hardware</span>
                     </div>
@@ -111,13 +108,9 @@
                 <div class="p-3 rounded-lg {{ 'bg-green-50 border border-green-200' if user.role == 'manager' or user.can_access_finance or user.role == 'finance' else 'bg-gray-50 border border-gray-200' }}">
                     <div class="flex items-center gap-2">
                         {% if user.role == 'manager' or user.can_access_finance or user.role == 'finance' %}
-                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                        </svg>
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                         {% else %}
-                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                        </svg>
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
                         {% endif %}
                         <span class="font-medium">Finance</span>
                     </div>
@@ -125,13 +118,9 @@
                 <div class="p-3 rounded-lg {{ 'bg-green-50 border border-green-200' if user.role == 'manager' or user.can_access_customers else 'bg-gray-50 border border-gray-200' }}">
                     <div class="flex items-center gap-2">
                         {% if user.role == 'manager' or user.can_access_customers %}
-                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-                        </svg>
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
                         {% else %}
-                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-                        </svg>
+                        <svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
                         {% endif %}
                         <span class="font-medium">Customers</span>
                     </div>
@@ -170,7 +159,7 @@
             {% if recent_logs %}
             <div class="space-y-3">
                 {% for log in recent_logs %}
-                <div class="flex justify-between items-start text-sm border-b pb-2">
+                <div class="flex justify-between items-start text-sm pb-2" style="border-bottom:1px solid var(--border);">
                     <div>
                         <span class="font-medium">{{ log.action|title }}</span>
                         <span class="text-gray-500">{{ log.entity }}</span>

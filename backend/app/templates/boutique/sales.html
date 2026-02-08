@@ -2,17 +2,19 @@
 
 {% block title %}Boutique Sales - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Boutique Sales</h2>
+<p>{{ sales|length }} transactions</p>
+{% endblock %}
+
 {% block content %}
 <div class="flex justify-between items-center mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-800">Boutique Sales</h1>
-        <p class="text-gray-600">{{ sales|length }} transactions</p>
-    </div>
+    <div></div>
     <a href="{{ url_for('boutique.new_sale') }}" class="btn btn-primary">New Sale</a>
 </div>
 
 <!-- Date Filter -->
-<div class="bg-white rounded-lg shadow p-4 mb-4">
+<div class="section-card mb-4">
     <form method="GET" class="flex flex-wrap items-end gap-4">
         <div>
             <label class="form-label">From Date</label>
@@ -28,7 +30,7 @@
 </div>
 
 <!-- Sales Table -->
-<div class="bg-white rounded-lg shadow overflow-hidden">
+<div class="section-card" style="padding:0;overflow:hidden;">
     <table class="data-table">
         <thead>
             <tr>
@@ -61,7 +63,8 @@
                     {% endif %}
                 </td>
                 <td>
-                    <a href="{{ url_for('boutique.view_sale', id=sale.id) }}" class="text-indigo-600 hover:underline text-sm">View</a>
+                    <a href="{{ url_for('boutique.view_sale', id=sale.id) }}" style="color:var(--terra-600);" class="hover:underline text-sm">View</a>
+                    <a href="{{ url_for('boutique.receipt_preview', id=sale.id) }}" style="color:var(--terra-600);" class="hover:underline text-sm ml-2">Receipt</a>
                     <form method="POST" action="{{ url_for('boutique.delete_sale', id=sale.id) }}" class="inline" onsubmit="return confirm('Delete this sale? Stock will be restored.')">
                         <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
                     </form>

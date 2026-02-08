@@ -2,11 +2,12 @@
 
 {% block title %}Finance - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Finance</h2>
+<p>Loan management and tracking</p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">Finance</h1>
-    <p class="text-gray-600">Loan management and tracking</p>
-</div>
 
 <!-- Quick Guide -->
 <div class="guideline mb-6">
@@ -43,7 +44,7 @@
         </h2>
         <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">View Only - Click to see details</span>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <a href="{{ url_for('finance.loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value">{{ active_loans }}</div>
             <div class="stat-card-label">Active Loans</div>
@@ -63,6 +64,11 @@
             <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(total_outstanding) }}</div>
             <div class="stat-card-label">Outstanding</div>
             <div class="text-xs text-indigo-600 mt-1">View payments &rarr;</div>
+        </a>
+        <a href="{{ url_for('finance.loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
+            <div class="stat-card-value text-amber-600">UGX {{ "{:,.0f}".format(total_interest_expected) }}</div>
+            <div class="stat-card-label">Interest Expected</div>
+            <div class="text-xs text-indigo-600 mt-1">View loans &rarr;</div>
         </a>
     </div>
 </div>

@@ -2,12 +2,13 @@
 
 {% block title %}Loans - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Individual Loans</h2>
+<p>{{ loans|length }} loans</p>
+{% endblock %}
+
 {% block content %}
-<div class="flex justify-between items-center mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-800">Individual Loans</h1>
-        <p class="text-gray-600">{{ loans|length }} loans</p>
-    </div>
+<div class="flex justify-end mb-6">
     <button onclick="showModal('add-loan-modal')" class="btn btn-primary">New Loan</button>
 </div>
 
@@ -72,7 +73,7 @@
                         {% endif %}
                     </td>
                     <td>
-                        <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="text-indigo-600 hover:underline text-sm">View</a>
+                        <a href="{{ url_for('finance.view_loan', id=loan.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
                         {% if current_section == 'manager' %}
                         <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="text-green-600 hover:underline text-sm ml-2">Edit</a>
                         {% endif %}
@@ -116,7 +117,7 @@
                     <option value="{{ client.id }}">{{ client.name }} ({{ client.phone }})</option>
                     {% endfor %}
                 </select>
-                <p class="text-xs text-gray-500 mt-1">Don't see your client? <a href="{{ url_for('finance.clients') }}" class="text-indigo-600">Add them first</a></p>
+                <p class="text-xs text-gray-500 mt-1">Don't see your client? <a href="{{ url_for('finance.clients') }}" style="color:var(--terra-600);" class="">Add them first</a></p>
             </div>
             <div class="grid grid-cols-2 gap-4">
                 <div class="form-group">

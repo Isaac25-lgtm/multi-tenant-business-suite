@@ -2,17 +2,18 @@
 
 {% block title %}Loan Clients - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Loan Clients</h2>
+<p>{{ clients|length }} clients</p>
+{% endblock %}
+
 {% block content %}
-<div class="flex justify-between items-center mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-800">Loan Clients</h1>
-        <p class="text-gray-600">{{ clients|length }} clients</p>
-    </div>
+<div class="flex justify-end mb-6">
     <button onclick="showModal('add-client-modal')" class="btn btn-primary">Add Client</button>
 </div>
 
 <!-- Clients Table -->
-<div class="bg-white rounded-lg shadow overflow-hidden">
+<div class="section-card" style="padding:0;overflow:hidden;">
     <table class="data-table">
         <thead>
             <tr>

@@ -2,11 +2,12 @@
 
 {% block title %}Hardware - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Hardware</h2>
+<p>Manage hardware inventory and sales</p>
+{% endblock %}
+
 {% block content %}
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">Hardware</h1>
-    <p class="text-gray-600">Manage hardware inventory and sales</p>
-</div>
 
 <!-- Quick Guide -->
 <div class="guideline mb-6">
@@ -47,22 +48,22 @@
         <a href="{{ url_for('hardware.stock') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value">{{ stock_count }}</div>
             <div class="stat-card-label">Stock Items</div>
-            <div class="text-xs text-indigo-600 mt-1">View all stock &rarr;</div>
+            <div class="text-xs mt-1" style="color:var(--terra-600);">View all stock &rarr;</div>
         </a>
         <a href="{{ url_for('hardware.stock') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value {% if low_stock > 0 %}text-red-600{% endif %}">{{ low_stock }}</div>
             <div class="stat-card-label">Low Stock</div>
-            <div class="text-xs text-indigo-600 mt-1">Check stock levels &rarr;</div>
+            <div class="text-xs mt-1" style="color:var(--terra-600);">Check stock levels &rarr;</div>
         </a>
         <a href="{{ url_for('hardware.credits') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value text-orange-600">{{ pending_credits }}</div>
             <div class="stat-card-label">Pending Credits</div>
-            <div class="text-xs text-indigo-600 mt-1">Manage credits &rarr;</div>
+            <div class="text-xs mt-1" style="color:var(--terra-600);">Manage credits &rarr;</div>
         </a>
         <a href="{{ url_for('hardware.sales') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value text-green-600">{{ today_sales }}</div>
             <div class="stat-card-label">Today's Sales</div>
-            <div class="text-xs text-indigo-600 mt-1">View sales &rarr;</div>
+            <div class="text-xs mt-1" style="color:var(--terra-600);">View sales &rarr;</div>
         </a>
     </div>
 </div>
@@ -74,7 +75,7 @@
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"/></svg>
             Quick Actions
         </h2>
-        <span class="text-xs text-white bg-indigo-600 px-2 py-1 rounded">Data Entry Here</span>
+        <span class="text-xs text-white px-2 py-1 rounded" style="background:var(--terra-600);">Data Entry Here</span>
     </div>
     <p class="text-sm text-gray-500 mb-4">Start all your data entry from these sections</p>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

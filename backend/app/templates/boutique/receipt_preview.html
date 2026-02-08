@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Receipt Preview {{ sale.reference_number }} - Denove APS{% endblock %}
+
+{% block page_header %}
+<h2>Receipt Preview</h2>
+<p>Edit items before downloading the receipt</p>
+{% endblock %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('boutique.download_receipt', id=sale.id) }}">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Receipt Preview -->
+        <div class="lg:col-span-2">
+            <div class="agreement-preview section-card receipt-preview">
+                <div class="agreement-header">
+                    <div class="brand-lockup brand-lockup--center">
+                        <img src="{{ url_for('static', filename='images/denovo.png') }}" alt="Denove" class="brand-logo">
+                        <div class="brand-stack">
+                            <h1 class="brand-name">Denove</h1>
+                            <span class="brand-tag">Premium</span>
+                        </div>
+                    </div>
+                    <h2 class="agreement-title">{{ business_name }} Receipt</h2>
+                    <div class="agreement-accent"></div>
+                </div>
+
+                <div class="section-title">SALE DETAILS</div>
+                <table class="w-full mb-6 text-sm">
+                    <tr>
+                        <td class="py-1 w-1/3"><strong>Reference:</strong></td>
+                        <td>{{ sale.reference_number }}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-1"><strong>Date:</strong></td>
+                        <td>
+                            <input type="date" name="receipt_date" value="{{ sale.sale_date.strftime('%Y-%m-%d') }}" class="form-input">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="py-1"><strong>Customer:</strong></td>
+                        <td>
+                            <input type="text" name="receipt_customer" value="{{ sale.customer.name if sale.customer else '' }}" class="form-input" placeholder="Optional">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="py-1"><strong>Payment Type:</strong></td>
+                        <td><span id="receipt-payment-type">{{ sale.payment_type|title }}</span></td>
+                    </tr>
+                </table>
+
+                <div class="section-title">ITEMS</div>
+                <table class="data-table mb-4">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th class="text-right">Qty</th>
+                            <th class="text-right">Price</th>
+                            <th class="text-right">Subtotal</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="receipt-items-body">
+                        {% for item in items %}
+                        <tr class="receipt-item-row">
+                            <td>
+                                <input type="text" name="item_name[]" value="{{ item.item_name }}" class="form-input" required>
+                            </td>
+                            <td class="text-right">
+                                <input type="number" name="quantity[]" value="{{ item.quantity }}" min="0" step="1" class="form-input receipt-qty" required>
+                            </td>
+                            <td class="text-right">
+                                <input type="number" name="price[]" value="{{ item.unit_price }}" min="0" step="0.01" class="form-input receipt-price" required>
+                            </td>
+                            <td class="text-right">
+                                <span class="receipt-subtotal">UGX 0</span>
+                            </td>
+                            <td class="text-right">
+                                <button type="button" class="text-red-600 hover:underline text-xs" onclick="removeReceiptItemRow(this)">Remove</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <button type="button" onclick="addReceiptItemRow()" style="color:var(--terra-600);" class="hover:underline text-sm">+ Add Item</button>
+            </div>
+        </div>
+
+        <!-- Actions Panel -->
+        <div class="lg:col-span-1">
+            <div class="section-card sticky top-4">
+                <h3 class="font-bold text-lg mb-4">Receipt Summary</h3>
+
+                <div class="space-y-3 mb-6">
+                    <div class="form-group">
+                        <label class="form-label">Receipt Label</label>
+                        <input type="text" name="receipt_business_name" value="{{ business_name }}" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Served By</label>
+                        <input type="text" name="receipt_served_by" value="{{ current_user or '' }}" class="form-input" placeholder="Staff name">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Phone</label>
+                        <input type="text" name="receipt_phone" class="form-input" placeholder="Business phone">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Address</label>
+                        <textarea name="receipt_address" class="form-input" rows="2" placeholder="Business address"></textarea>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Total:</span>
+                        <span class="font-medium" id="receipt-total">UGX 0</span>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Amount Paid</label>
+                        <input type="number" name="amount_paid" id="receipt-amount-paid" min="0" step="0.01"
+                               value="{{ sale.total_amount if is_full_payment else sale.amount_paid }}"
+                               class="form-input" {% if is_full_payment %}readonly{% endif %}>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-500">Balance:</span>
+                        <span class="font-medium" id="receipt-balance">UGX 0</span>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <button type="submit" class="btn btn-primary w-full">Download Receipt</button>
+                    <a href="{{ url_for('boutique.view_sale', id=sale.id) }}" class="btn btn-secondary w-full">Back to Sale</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+const isFullPayment = {{ 'true' if is_full_payment else 'false' }};
+
+function recalcReceiptTotals() {
+    const rows = document.querySelectorAll('.receipt-item-row');
+    let total = 0;
+
+    rows.forEach(row => {
+        const qty = parseFloat(row.querySelector('.receipt-qty')?.value) || 0;
+        const price = parseFloat(row.querySelector('.receipt-price')?.value) || 0;
+        const subtotal = qty * price;
+        const subtotalEl = row.querySelector('.receipt-subtotal');
+        if (subtotalEl) {
+            subtotalEl.textContent = formatCurrency(subtotal);
+        }
+        total += subtotal;
+    });
+
+    const totalEl = document.getElementById('receipt-total');
+    if (totalEl) {
+        totalEl.textContent = formatCurrency(total);
+    }
+
+    const amountPaidInput = document.getElementById('receipt-amount-paid');
+    if (amountPaidInput) {
+        if (isFullPayment) {
+            amountPaidInput.value = total.toFixed(2);
+        }
+        amountPaidInput.max = total.toFixed(2);
+        let amountPaid = parseFloat(amountPaidInput.value) || 0;
+        if (amountPaid > total) {
+            amountPaid = total;
+            amountPaidInput.value = total.toFixed(2);
+        }
+        const balance = Math.max(total - amountPaid, 0);
+        const balanceEl = document.getElementById('receipt-balance');
+        if (balanceEl) {
+            balanceEl.textContent = formatCurrency(balance);
+        }
+
+        const paymentTypeEl = document.getElementById('receipt-payment-type');
+        if (paymentTypeEl) {
+            paymentTypeEl.textContent = balance <= 0 ? 'Full' : 'Part';
+        }
+    }
+}
+
+function addReceiptItemRow() {
+    const tbody = document.getElementById('receipt-items-body');
+    if (!tbody) return;
+
+    const row = document.createElement('tr');
+    row.className = 'receipt-item-row';
+    row.innerHTML = `
+        <td><input type="text" name="item_name[]" class="form-input" required></td>
+        <td class="text-right"><input type="number" name="quantity[]" min="0" step="1" class="form-input receipt-qty" required></td>
+        <td class="text-right"><input type="number" name="price[]" min="0" step="0.01" class="form-input receipt-price" required></td>
+        <td class="text-right"><span class="receipt-subtotal">UGX 0</span></td>
+        <td class="text-right"><button type="button" class="text-red-600 hover:underline text-xs" onclick="removeReceiptItemRow(this)">Remove</button></td>
+    `;
+    tbody.appendChild(row);
+    row.querySelectorAll('input').forEach(input => input.addEventListener('input', recalcReceiptTotals));
+    recalcReceiptTotals();
+}
+
+function removeReceiptItemRow(button) {
+    if (!button) return;
+    const row = button.closest('tr');
+    if (row) {
+        row.remove();
+        recalcReceiptTotals();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.receipt-qty, .receipt-price').forEach(input => {
+        input.addEventListener('input', recalcReceiptTotals);
+    });
+    const amountPaidInput = document.getElementById('receipt-amount-paid');
+    if (amountPaidInput && !isFullPayment) {
+        amountPaidInput.addEventListener('input', recalcReceiptTotals);
+    }
+    recalcReceiptTotals();
+});
+</script>
+{% endblock %}

@@ -2,13 +2,22 @@
 
 {% block title %}Boutique Stock - Denove APS{% endblock %}
 
+{% block page_header %}
+<h2>Boutique Stock</h2>
+<p>{{ stock|length }} items in inventory</p>
+{% endblock %}
+
 {% block content %}
 <div class="flex justify-between items-center mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-800">Boutique Stock</h1>
-        <p class="text-gray-600">{{ stock|length }} items</p>
+    <div class="flex gap-2">
+        <button onclick="showModal('add-stock-modal')" class="btn btn-primary">Add Stock Item</button>
+        <form method="POST" action="{{ url_for('boutique.fetch_all_images') }}" class="inline">
+            <button type="submit" class="btn btn-outline" title="Fetch images for items without photos">
+                <svg style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                Fetch All Images
+            </button>
+        </form>
     </div>
-    <button onclick="showModal('add-stock-modal')" class="btn btn-primary">Add Stock Item</button>
 </div>
 
 <!-- Quick Guide -->
@@ -37,76 +46,134 @@
     </form>
 </div>
 
-<!-- Stock Table -->
-<div class="section-card">
-    <table class="data-table">
-        <thead>
-            <tr>
-                <th>Item Name</th>
-                <th>Category</th>
-                <th class="text-right">Qty</th>
-                <th class="text-right">Cost/Item</th>
-                <th class="text-right">Total Cost</th>
-                <th class="text-right">Min Price</th>
-                <th class="text-right">Max Price</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in stock %}
-            <tr class="{% if item.is_low_stock %}bg-yellow-50{% endif %}">
-                <td class="font-medium">{{ item.item_name }}</td>
-                <td>{{ item.category.name if item.category else '-' }}</td>
-                <td class="text-right">
-                    {{ item.quantity }} {{ item.unit }}
-                    {% if item.is_low_stock %}
-                    <span class="badge badge-warning ml-2">Low</span>
-                    {% endif %}
-                </td>
-                <td class="text-right">{{ "{:,.0f}".format(item.cost_price) }}</td>
-                <td class="text-right text-gray-600">{{ "{:,.0f}".format(item.cost_price * item.initial_quantity) }}</td>
-                <td class="text-right">{{ "{:,.0f}".format(item.min_selling_price) }}</td>
-                <td class="text-right">{{ "{:,.0f}".format(item.max_selling_price) }}</td>
-                <td>
-                    {% if item.is_active %}
-                    <span class="badge badge-success">Active</span>
-                    {% else %}
-                    <span class="badge badge-danger">Inactive</span>
-                    {% endif %}
-                </td>
-                <td>
-                    <button onclick="editStock({{ item.id }}, '{{ item.item_name }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ 'true' if item.is_active else 'false' }})" class="text-indigo-600 hover:underline text-sm">Edit</button>
-                    {% if item.is_active %}
-                    <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
-                        <button type="submit" class="text-orange-600 hover:underline text-sm ml-2">Deactivate</button>
-                    </form>
-                    {% else %}
-                    <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}" class="inline">
-                        <button type="submit" class="text-green-600 hover:underline text-sm ml-2">Reactivate</button>
-                    </form>
-                    {% endif %}
-                    {% if current_section == 'manager' %}
-                    <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('PERMANENTLY DELETE this item? This cannot be undone!')">
-                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
-                    </form>
-                    {% endif %}
-                </td>
-            </tr>
+<!-- Stock Grid (Card View) -->
+<div class="product-grid mb-6">
+    {% for item in stock %}
+    <div class="product-card {% if not item.is_active %}opacity-60{% endif %}">
+        <div class="product-img">
+            {% if item.image_url %}
+            <img src="{{ item.image_url }}" alt="{{ item.item_name }}" onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--navy-300);font-size:48px;\'>📦</div>'">
             {% else %}
-            <tr>
-                <td colspan="9" class="text-center text-gray-500 py-8">No stock items found</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+            <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--navy-300);font-size:48px;">📦</div>
+            {% endif %}
+        </div>
+        <div class="product-info">
+            <h4 class="font-semibold text-sm" style="color:var(--navy-900);">{{ item.item_name }}</h4>
+            <p class="text-xs text-gray-500">{{ item.category.name if item.category else 'Uncategorized' }}</p>
+            <div class="flex justify-between items-center mt-2">
+                <span class="text-sm font-bold" style="color:var(--terra-600);">{{ "{:,.0f}".format(item.min_selling_price) }} - {{ "{:,.0f}".format(item.max_selling_price) }}</span>
+                <span class="text-xs {% if item.quantity <= (item.low_stock_threshold or 0) %}text-red-500 font-bold{% else %}text-gray-500{% endif %}">{{ item.quantity }} {{ item.unit }}</span>
+            </div>
+            <div class="flex items-center justify-between mt-2 pt-2" style="border-top:1px solid var(--border);">
+                <div class="flex gap-1">
+                    {% if item.is_active %}
+                    <span class="badge badge-success" style="font-size:10px;">Active</span>
+                    {% else %}
+                    <span class="badge badge-danger" style="font-size:10px;">Inactive</span>
+                    {% endif %}
+                    {% if item.quantity <= (item.low_stock_threshold or 0) %}
+                    <span class="badge badge-warning" style="font-size:10px;">Low</span>
+                    {% endif %}
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" style="color:var(--terra-600);" class="hover:underline text-xs">Edit</button>
+                    <form method="POST" action="{{ url_for('boutique.refresh_image', id=item.id) }}" class="inline">
+                        <button type="submit" style="color:var(--navy-400);" class="hover:underline text-xs" title="Refresh image">🔄</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="section-card text-center py-8" style="grid-column:1/-1;">
+        <p class="text-gray-500">No stock items found</p>
+    </div>
+    {% endfor %}
 </div>
+
+<!-- Stock Table (Detailed View) -->
+<details class="mb-6">
+    <summary class="btn btn-outline cursor-pointer mb-4" style="display:inline-flex;align-items:center;gap:8px;">
+        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        Table View
+    </summary>
+    <div class="section-card">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Category</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Cost/Item</th>
+                    <th class="text-right">Total Cost</th>
+                    <th class="text-right">Min Price</th>
+                    <th class="text-right">Max Price</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in stock %}
+                <tr class="{% if item.quantity <= (item.low_stock_threshold or 0) %}bg-yellow-50{% endif %}">
+                    <td class="font-medium">
+                        <div class="flex items-center gap-2">
+                            {% if item.image_url %}
+                            <img src="{{ item.image_url }}" alt="" style="width:32px;height:32px;border-radius:var(--radius);object-fit:cover;" onerror="this.style.display='none'">
+                            {% endif %}
+                            {{ item.item_name }}
+                        </div>
+                    </td>
+                    <td>{{ item.category.name if item.category else '-' }}</td>
+                    <td class="text-right">
+                        {{ item.quantity }} {{ item.unit }}
+                        {% if item.quantity <= (item.low_stock_threshold or 0) %}
+                        <span class="badge badge-warning ml-2">Low</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-right">{{ "{:,.0f}".format(item.cost_price) }}</td>
+                    <td class="text-right text-gray-600">{{ "{:,.0f}".format(item.cost_price * item.initial_quantity) }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(item.min_selling_price) }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(item.max_selling_price) }}</td>
+                    <td>
+                        {% if item.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-danger">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
+                        {% if item.is_active %}
+                        <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
+                            <button type="submit" class="text-orange-600 hover:underline text-sm ml-2">Deactivate</button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}" class="inline">
+                            <button type="submit" class="text-green-600 hover:underline text-sm ml-2">Reactivate</button>
+                        </form>
+                        {% endif %}
+                        {% if current_section == 'manager' %}
+                        <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('PERMANENTLY DELETE this item? This cannot be undone!')">
+                            <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" class="text-center text-gray-500 py-8">No stock items found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</details>
 
 <!-- Add Stock Modal -->
 <div id="add-stock-modal" class="modal">
     <div class="modal-content max-w-2xl">
         <h3 class="text-lg font-semibold mb-2">Add Stock Item</h3>
-        <p class="text-sm text-gray-600 mb-4">Fill in all details to add stock. Category can be selected or created new.</p>
+        <p class="text-sm text-gray-600 mb-4">Fill in all details to add stock. A product image will be fetched automatically.</p>
         <form method="POST" action="{{ url_for('boutique.add_stock') }}" id="add-stock-form">
             <div class="form-group">
                 <label class="form-label">Item Name *</label>
@@ -142,12 +209,12 @@
             </div>
 
             <!-- Cost Price Per Item with Total Calculation -->
-            <div class="bg-pink-50 p-4 rounded-lg mb-4">
-                <label class="form-label text-pink-800">Cost Price (Per Item) *</label>
+            <div style="background:var(--terra-50);padding:16px;border-radius:var(--radius-lg);margin-bottom:16px;">
+                <label class="form-label" style="color:var(--terra-800);">Cost Price (Per Item) *</label>
                 <input type="number" name="cost_price" id="add-cost-per-item" min="0" step="0.01" class="form-input" placeholder="Cost of ONE item" oninput="calculateTotalCost('add')">
-                <div class="mt-2 p-2 bg-white rounded border border-pink-200">
+                <div class="mt-2 p-2 bg-white rounded" style="border:1px solid var(--terra-200);">
                     <span class="text-sm text-gray-600">Total Purchase Cost:</span>
-                    <span id="add-total-cost" class="text-lg font-bold text-pink-700 ml-2">UGX 0</span>
+                    <span id="add-total-cost" class="text-lg font-bold ml-2" style="color:var(--terra-700);">UGX 0</span>
                 </div>
             </div>
 

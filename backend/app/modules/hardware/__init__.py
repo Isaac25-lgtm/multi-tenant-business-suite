@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, Response
 from app.models.hardware import (
     HardwareCategory, HardwareStock, HardwareSale,
     HardwareSaleItem, HardwareCreditPayment
@@ -8,6 +8,7 @@ from app.modules.auth import login_required, log_action
 from app.extensions import db
 from app.utils.timezone import get_local_today
 from app.utils.utils import generate_reference_number
+from app.utils.pdf_generator import generate_receipt_pdf
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -22,6 +23,39 @@ def safe_decimal(value, default='0'):
         return Decimal(str(value).strip())
     except (InvalidOperation, ValueError):
         return Decimal(default)
+
+
+def parse_receipt_items(form):
+    """Parse receipt item rows from a form submission."""
+    names = form.getlist('item_name[]')
+    quantities = form.getlist('quantity[]')
+    prices = form.getlist('price[]')
+    items = []
+
+    for i, name in enumerate(names):
+        name = (name or '').strip()
+        if not name:
+            continue
+
+        qty_raw = quantities[i] if i < len(quantities) else '0'
+        price_raw = prices[i] if i < len(prices) else '0'
+        qty = safe_decimal(qty_raw, '0')
+        price = safe_decimal(price_raw, '0')
+
+        if qty <= 0 or price <= 0:
+            continue
+
+        subtotal = qty * price
+        qty_value = int(qty) if qty == qty.to_integral() else float(qty)
+
+        items.append({
+            'item_name': name,
+            'quantity': qty_value,
+            'unit_price': float(price),
+            'subtotal': float(subtotal)
+        })
+
+    return items
 
 
 def check_date_permission(entry_date, user_section):
@@ -395,6 +429,83 @@ def view_sale(id):
     items = sale.items.all()
     payments = HardwareCreditPayment.query.filter_by(sale_id=id).order_by(HardwareCreditPayment.payment_date.desc()).all()
     return render_template('hardware/sale_detail.html', sale=sale, items=items, payments=payments)
+
+
+@hardware_bp.route('/sales/<int:id>/receipt/preview')
+@login_required('hardware')
+def receipt_preview(id):
+    """Preview receipt with editable items before download"""
+    sale = HardwareSale.query.get_or_404(id)
+    items = sale.items.all()
+    return render_template('hardware/receipt_preview.html',
+        sale=sale,
+        items=items,
+        business_name="HARDWARE",
+        is_full_payment=(sale.payment_type == 'full')
+    )
+
+
+@hardware_bp.route('/sales/<int:id>/receipt', methods=['GET', 'POST'])
+@login_required('hardware')
+def download_receipt(id):
+    """Download sale receipt as PDF"""
+    sale = HardwareSale.query.get_or_404(id)
+    items_override = None
+    totals_override = None
+    meta_override = None
+    served_by_override = session.get('username')
+    business_name_override = "HARDWARE"
+
+    if request.method == 'POST':
+        business_name_input = request.form.get('receipt_business_name', '').strip()
+        if business_name_input:
+            business_name_override = business_name_input
+        served_by_input = request.form.get('receipt_served_by', '').strip()
+        if served_by_input:
+            served_by_override = served_by_input
+
+        meta_override = {
+            'sale_date': request.form.get('receipt_date', '').strip() or None,
+            'customer_name': request.form.get('receipt_customer', '').strip() or None,
+            'phone': request.form.get('receipt_phone', '').strip() or None,
+            'address': request.form.get('receipt_address', '').strip() or None
+        }
+
+        items_override = parse_receipt_items(request.form)
+        if not items_override:
+            flash('Please add at least one valid item before downloading the receipt.', 'error')
+            return redirect(url_for('hardware.receipt_preview', id=id))
+
+        total_amount = sum(item['subtotal'] for item in items_override)
+        amount_paid = safe_decimal(request.form.get('amount_paid', str(sale.amount_paid)), str(sale.amount_paid))
+        amount_paid_value = float(amount_paid)
+        if amount_paid_value > total_amount:
+            flash('Amount paid cannot exceed the total amount.', 'error')
+            return redirect(url_for('hardware.receipt_preview', id=id))
+
+        balance_value = max(total_amount - amount_paid_value, 0)
+        payment_type = 'full' if balance_value <= 0 else 'part'
+        totals_override = {
+            'total_amount': total_amount,
+            'amount_paid': amount_paid_value,
+            'balance': balance_value,
+            'payment_type': payment_type
+        }
+
+    buffer = generate_receipt_pdf(
+        sale,
+        business_name_override,
+        served_by=served_by_override,
+        items_override=items_override,
+        totals_override=totals_override,
+        meta_override=meta_override
+    )
+    filename = f"receipt_{sale.reference_number}.pdf"
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
 
 
 @hardware_bp.route('/sales/<int:id>/delete', methods=['POST'])

@@ -2,13 +2,13 @@
 
 {% block title %}New Hardware Sale - Denove APS{% endblock %}
 
-{% block content %}
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-gray-800">New Hardware Sale</h1>
-    <p class="text-gray-600">Record a new sale transaction</p>
-</div>
+{% block page_header %}
+<h2>New Hardware Sale</h2>
+<p>Record a new sale transaction</p>
+{% endblock %}
 
-<form method="POST" action="{{ url_for('hardware.create_sale') }}" class="bg-white rounded-lg shadow p-6">
+{% block content %}
+<form method="POST" action="{{ url_for('hardware.create_sale') }}" class="section-card">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="form-group">
             <label class="form-label">Sale Date</label>
@@ -33,7 +33,7 @@
     </div>
 
     <!-- New Customer Fields (for credit sales) -->
-    <div id="new-customer-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-gray-50 rounded">
+    <div id="new-customer-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 rounded" style="background:var(--navy-50);">
         <div class="form-group">
             <label class="form-label">New Customer Name</label>
             <input type="text" name="customer_name" class="form-input" placeholder="Enter customer name">
@@ -78,7 +78,7 @@
     </div>
 
     <!-- Totals -->
-    <div class="border-t pt-4 mb-6">
+    <div class="pt-4 mb-6" style="border-top:1px solid var(--border);">
         <div class="flex justify-between items-center text-lg mb-2">
             <span class="font-semibold">Total Amount:</span>
             <span id="sale-total" class="font-bold text-xl">UGX 0</span>

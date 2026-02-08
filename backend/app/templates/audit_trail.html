@@ -2,24 +2,22 @@
 
 {% block title %}Audit Trail - Denove APS{% endblock %}
 
-{% block content %}
-<div class="flex justify-between items-center mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-800">Audit Trail</h1>
-        <p class="text-gray-600">Monitor all system activity - Dual timezone view (Uganda EAT / Germany CET)</p>
-    </div>
-</div>
+{% block page_header %}
+<h2>Audit Trail</h2>
+<p>Dual timezone view (Uganda EAT / Germany CET)</p>
+{% endblock %}
 
+{% block content %}
 <!-- Timezone Legend -->
-<div class="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-4 mb-6 border border-blue-200">
+<div style="background:linear-gradient(135deg,var(--navy-50),var(--forest-50));border:1px solid var(--navy-200);border-radius:var(--radius-lg);padding:16px;margin-bottom:24px;">
     <div class="flex flex-wrap gap-6 text-sm">
         <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+            <span style="width:12px;height:12px;border-radius:50%;background:var(--navy-500);display:inline-block;"></span>
             <span class="font-medium">Uganda (EAT)</span>
             <span class="text-gray-500">UTC+3</span>
         </div>
         <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-green-500"></span>
+            <span style="width:12px;height:12px;border-radius:50%;background:var(--forest-500);display:inline-block;"></span>
             <span class="font-medium">Germany (CET/CEST)</span>
             <span class="text-gray-500">UTC+1/+2</span>
         </div>
@@ -27,7 +25,7 @@
 </div>
 
 <!-- Filters -->
-<div class="bg-white rounded-lg shadow p-4 mb-6">
+<div class="section-card mb-6">
     <form method="GET" class="flex flex-wrap gap-4 items-end">
         <div class="flex-1 min-w-[150px]">
             <label class="form-label">Username</label>
@@ -66,25 +64,25 @@
 <!-- Audit Log Cards -->
 <div class="space-y-4">
     {% for log in logs %}
-    <div class="bg-white rounded-lg shadow p-4 border-l-4
-        {% if log.action == 'create' %}border-green-500
-        {% elif log.action == 'update' %}border-blue-500
-        {% elif log.action == 'delete' or log.action == 'permanent_delete' %}border-red-500
-        {% elif log.action == 'login' %}border-indigo-500
-        {% elif log.action == 'logout' %}border-gray-400
-        {% elif log.action == 'adjust' %}border-yellow-500
-        {% elif log.action == 'reactivate' %}border-teal-500
-        {% else %}border-gray-300{% endif %}">
+    <div class="section-card" style="border-left:4px solid
+        {% if log.action == 'create' %}var(--forest-500)
+        {% elif log.action == 'update' %}var(--navy-500)
+        {% elif log.action == 'delete' or log.action == 'permanent_delete' %}#ef4444
+        {% elif log.action == 'login' %}var(--terra-500)
+        {% elif log.action == 'logout' %}var(--navy-300)
+        {% elif log.action == 'adjust' %}var(--sand-600)
+        {% elif log.action == 'reactivate' %}var(--forest-400)
+        {% else %}var(--navy-200){% endif %};">
 
         <!-- Header Row -->
         <div class="flex flex-wrap justify-between items-start gap-4 mb-3">
             <div class="flex items-center gap-3">
                 <!-- User Avatar -->
-                <div class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-bold">
+                <div style="width:40px;height:40px;border-radius:50%;background:var(--navy-100);display:flex;align-items:center;justify-content:center;color:var(--navy-600);font-weight:700;">
                     {{ log.username[0]|upper }}
                 </div>
                 <div>
-                    <span class="font-semibold text-gray-800">{{ log.username }}</span>
+                    <span class="font-semibold" style="color:var(--navy-900);">{{ log.username }}</span>
                     <div class="flex gap-2 mt-1">
                         <span class="px-2 py-0.5 text-xs rounded-full
                             {% if log.section == 'manager' %}bg-purple-100 text-purple-800
@@ -112,21 +110,21 @@
             <!-- Dual Timezone Display -->
             <div class="text-right text-sm">
                 {% set tz_info = convert_to_dual_timezone(log.created_at) %}
-                <div class="flex items-center gap-2 text-blue-700">
-                    <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                <div class="flex items-center gap-2" style="color:var(--navy-700);">
+                    <span style="width:8px;height:8px;border-radius:50%;background:var(--navy-500);display:inline-block;"></span>
                     <span class="font-medium">{{ tz_info.uganda.formatted }}</span>
-                    <span class="text-blue-500 text-xs">(Uganda EAT)</span>
+                    <span style="color:var(--navy-400);" class="text-xs">(Uganda EAT)</span>
                 </div>
-                <div class="flex items-center gap-2 text-green-700 mt-1">
-                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                <div class="flex items-center gap-2 mt-1" style="color:var(--forest-700);">
+                    <span style="width:8px;height:8px;border-radius:50%;background:var(--forest-500);display:inline-block;"></span>
                     <span class="font-medium">{{ tz_info.germany.formatted }}</span>
-                    <span class="text-green-500 text-xs">(Germany {{ tz_info.germany.timezone.split()[0] }})</span>
+                    <span style="color:var(--forest-400);" class="text-xs">(Germany {{ tz_info.germany.timezone.split()[0] }})</span>
                 </div>
             </div>
         </div>
 
         <!-- Action Description -->
-        <div class="bg-gray-50 rounded p-3 mb-3">
+        <div style="background:var(--navy-50);border-radius:var(--radius);padding:12px;margin-bottom:12px;">
             <div class="flex items-start gap-2">
                 <span class="text-gray-400 mt-0.5">
                     {% if log.action == 'create' %}
@@ -144,7 +142,7 @@
                     {% endif %}
                 </span>
                 <div class="flex-1">
-                    <p class="text-gray-800">
+                    <p style="color:var(--navy-800);">
                         <strong>{{ log.username }}</strong>
                         {% if log.action == 'login' %}
                             logged into the <strong>{{ log.section }}</strong> section
@@ -181,13 +179,13 @@
         {% if log.details %}
         {% set details = log.details|from_json %}
         {% if details %}
-        <div class="border-t pt-3">
+        <div style="border-top:1px solid var(--border);padding-top:12px;">
             <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Details of Changes</p>
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 text-sm">
                 {% for key, value in details.items() %}
-                <div class="bg-gray-100 rounded px-3 py-2">
+                <div style="background:var(--navy-50);border-radius:var(--radius);padding:8px 12px;">
                     <span class="text-gray-500">{{ key|replace('_', ' ')|title }}:</span>
-                    <span class="font-medium text-gray-800 ml-1">
+                    <span class="font-medium ml-1" style="color:var(--navy-800);">
                         {% if value is none %}
                         <span class="text-gray-400 italic">None</span>
                         {% elif value is mapping %}
@@ -204,17 +202,17 @@
         {% endif %}
 
         <!-- Footer -->
-        <div class="flex justify-between items-center mt-3 pt-3 border-t text-xs text-gray-500">
+        <div class="flex justify-between items-center mt-3 pt-3 text-xs text-gray-500" style="border-top:1px solid var(--border);">
             <span>IP Address: <span class="font-mono">{{ log.ip_address or 'Unknown' }}</span></span>
             <span>Log ID: #{{ log.id }}</span>
         </div>
     </div>
     {% else %}
-    <div class="bg-white rounded-lg shadow p-8 text-center text-gray-500">
-        <svg class="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div class="section-card text-center" style="padding:32px;">
+        <svg style="width:48px;height:48px;margin:0 auto 16px;color:var(--navy-300);" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
         </svg>
-        <p>No audit logs found</p>
+        <p class="text-gray-500">No audit logs found</p>
     </div>
     {% endfor %}
 </div>
@@ -226,7 +224,7 @@
     <a href="{{ url_for('dashboard.audit_trail', page=pagination.prev_num, **filters) }}" class="btn btn-secondary">Previous</a>
     {% endif %}
 
-    <span class="px-4 py-2 text-gray-600 bg-white rounded-lg shadow">
+    <span class="section-card" style="padding:8px 16px;display:inline-flex;align-items:center;">
         Page {{ pagination.page }} of {{ pagination.pages }}
     </span>
 

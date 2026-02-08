@@ -68,10 +68,16 @@ def index():
     total_outstanding += float(db.session.query(db.func.sum(GroupLoan.balance)).filter(
         GroupLoan.is_deleted == False, GroupLoan.balance > 0).scalar() or 0)
 
+    total_interest_expected = float(db.session.query(db.func.sum(Loan.interest_amount)).filter(
+        Loan.is_deleted == False, Loan.balance > 0).scalar() or 0)
+    total_interest_expected += float(db.session.query(db.func.sum(GroupLoan.interest_amount)).filter(
+        GroupLoan.is_deleted == False, GroupLoan.balance > 0).scalar() or 0)
+
     return render_template('finance/index.html',
         active_loans=active_loans, active_groups=active_groups,
         overdue_loans=overdue_loans, overdue_groups=overdue_groups,
-        total_outstanding=total_outstanding
+        total_outstanding=total_outstanding,
+        total_interest_expected=total_interest_expected
     )
 
 
