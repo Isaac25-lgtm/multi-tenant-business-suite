@@ -9,14 +9,21 @@
 
 {% block content %}
 <div class="flex justify-between items-center mb-6">
-    <div class="flex gap-2">
+    <div class="flex gap-2 items-center">
         <button onclick="showModal('add-stock-modal')" class="btn btn-primary">Add Stock Item</button>
         <form method="POST" action="{{ url_for('boutique.fetch_all_images') }}" class="inline">
             <button type="submit" class="btn btn-outline" title="Fetch images for items without photos">
-                <svg style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <svg style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:4px;" fill="none"
+                    stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
                 Fetch All Images
             </button>
         </form>
+        <span style="color: #16a34a; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">
+            ← <em>Get product photos</em>
+        </span>
     </div>
 </div>
 
@@ -40,7 +47,8 @@
 <div class="section-card mb-4">
     <form method="GET" class="flex items-center gap-4">
         <label class="flex items-center">
-            <input type="checkbox" name="show_inactive" value="true" {% if show_inactive %}checked{% endif %} onchange="this.form.submit()" class="mr-2 w-4 h-4">
+            <input type="checkbox" name="show_inactive" value="true" {% if show_inactive %}checked{% endif %}
+                onchange="this.form.submit()" class="mr-2 w-4 h-4">
             <span class="text-sm">Show inactive items</span>
         </label>
     </form>
@@ -52,17 +60,23 @@
     <div class="product-card {% if not item.is_active %}opacity-60{% endif %}">
         <div class="product-img">
             {% if item.image_url %}
-            <img src="{{ item.image_url }}" alt="{{ item.item_name }}" onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--navy-300);font-size:48px;\'>📦</div>'">
+            <img src="{{ item.image_url }}" alt="{{ item.item_name }}"
+                onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;color:var(--navy-300);font-size:48px;\'>📦</div>'">
             {% else %}
-            <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--navy-300);font-size:48px;">📦</div>
+            <div
+                style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--navy-300);font-size:48px;">
+                📦</div>
             {% endif %}
         </div>
         <div class="product-info">
             <h4 class="font-semibold text-sm" style="color:var(--navy-900);">{{ item.item_name }}</h4>
             <p class="text-xs text-gray-500">{{ item.category.name if item.category else 'Uncategorized' }}</p>
             <div class="flex justify-between items-center mt-2">
-                <span class="text-sm font-bold" style="color:var(--terra-600);">{{ "{:,.0f}".format(item.min_selling_price) }} - {{ "{:,.0f}".format(item.max_selling_price) }}</span>
-                <span class="text-xs {% if item.quantity <= (item.low_stock_threshold or 0) %}text-red-500 font-bold{% else %}text-gray-500{% endif %}">{{ item.quantity }} {{ item.unit }}</span>
+                <span class="text-sm font-bold" style="color:var(--terra-600);">{{
+                    "{:,.0f}".format(item.min_selling_price) }} - {{ "{:,.0f}".format(item.max_selling_price) }}</span>
+                <span
+                    class="text-xs {% if item.quantity <= (item.low_stock_threshold or 0) %}text-red-500 font-bold{% else %}text-gray-500{% endif %}">{{
+                    item.quantity }} {{ item.unit }}</span>
             </div>
             <div class="flex items-center justify-between mt-2 pt-2" style="border-top:1px solid var(--border);">
                 <div class="flex gap-1">
@@ -71,14 +85,17 @@
                     {% else %}
                     <span class="badge badge-danger" style="font-size:10px;">Inactive</span>
                     {% endif %}
-                    {% if item.quantity <= (item.low_stock_threshold or 0) %}
-                    <span class="badge badge-warning" style="font-size:10px;">Low</span>
-                    {% endif %}
+                    {% if item.quantity <= (item.low_stock_threshold or 0) %} <span class="badge badge-warning"
+                        style="font-size:10px;">Low</span>
+                        {% endif %}
                 </div>
                 <div class="flex gap-2">
-                    <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" style="color:var(--terra-600);" class="hover:underline text-xs">Edit</button>
+                    <button
+                        onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})"
+                        style="color:var(--terra-600);" class="hover:underline text-xs">Edit</button>
                     <form method="POST" action="{{ url_for('boutique.refresh_image', id=item.id) }}" class="inline">
-                        <button type="submit" style="color:var(--navy-400);" class="hover:underline text-xs" title="Refresh image">🔄</button>
+                        <button type="submit" style="color:var(--navy-400);" class="hover:underline text-xs"
+                            title="Refresh image">🔄</button>
                     </form>
                 </div>
             </div>
@@ -94,7 +111,10 @@
 <!-- Stock Table (Detailed View) -->
 <details class="mb-6">
     <summary class="btn btn-outline cursor-pointer mb-4" style="display:inline-flex;align-items:center;gap:8px;">
-        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+        </svg>
         Table View
     </summary>
     <div class="section-card">
@@ -118,7 +138,9 @@
                     <td class="font-medium">
                         <div class="flex items-center gap-2">
                             {% if item.image_url %}
-                            <img src="{{ item.image_url }}" alt="" style="width:32px;height:32px;border-radius:var(--radius);object-fit:cover;" onerror="this.style.display='none'">
+                            <img src="{{ item.image_url }}" alt=""
+                                style="width:32px;height:32px;border-radius:var(--radius);object-fit:cover;"
+                                onerror="this.style.display='none'">
                             {% endif %}
                             {{ item.item_name }}
                         </div>
@@ -126,12 +148,13 @@
                     <td>{{ item.category.name if item.category else '-' }}</td>
                     <td class="text-right">
                         {{ item.quantity }} {{ item.unit }}
-                        {% if item.quantity <= (item.low_stock_threshold or 0) %}
-                        <span class="badge badge-warning ml-2">Low</span>
-                        {% endif %}
+                        {% if item.quantity <= (item.low_stock_threshold or 0) %} <span
+                            class="badge badge-warning ml-2">Low</span>
+                            {% endif %}
                     </td>
                     <td class="text-right">{{ "{:,.0f}".format(item.cost_price) }}</td>
-                    <td class="text-right text-gray-600">{{ "{:,.0f}".format(item.cost_price * item.initial_quantity) }}</td>
+                    <td class="text-right text-gray-600">{{ "{:,.0f}".format(item.cost_price * item.initial_quantity) }}
+                    </td>
                     <td class="text-right">{{ "{:,.0f}".format(item.min_selling_price) }}</td>
                     <td class="text-right">{{ "{:,.0f}".format(item.max_selling_price) }}</td>
                     <td>
@@ -142,18 +165,26 @@
                         {% endif %}
                     </td>
                     <td>
-                        <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
+                        <button
+                            onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})"
+                            style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
                         {% if item.is_active %}
-                        <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
-                            <button type="submit" class="text-orange-600 hover:underline text-sm ml-2">Deactivate</button>
+                        <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline"
+                            onsubmit="return confirm('Deactivate this item?')">
+                            <button type="submit"
+                                class="text-orange-600 hover:underline text-sm ml-2">Deactivate</button>
                         </form>
                         {% else %}
-                        <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}" class="inline">
-                            <button type="submit" class="text-green-600 hover:underline text-sm ml-2">Reactivate</button>
+                        <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}"
+                            class="inline">
+                            <button type="submit"
+                                class="text-green-600 hover:underline text-sm ml-2">Reactivate</button>
                         </form>
                         {% endif %}
                         {% if current_section == 'manager' %}
-                        <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('PERMANENTLY DELETE this item? This cannot be undone!')">
+                        <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}"
+                            class="inline"
+                            onsubmit="return confirm('PERMANENTLY DELETE this item? This cannot be undone!')">
                             <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
                         </form>
                         {% endif %}
@@ -173,18 +204,21 @@
 <div id="add-stock-modal" class="modal">
     <div class="modal-content max-w-2xl">
         <h3 class="text-lg font-semibold mb-2">Add Stock Item</h3>
-        <p class="text-sm text-gray-600 mb-4">Fill in all details to add stock. A product image will be fetched automatically.</p>
+        <p class="text-sm text-gray-600 mb-4">Fill in all details to add stock. A product image will be fetched
+            automatically.</p>
         <form method="POST" action="{{ url_for('boutique.add_stock') }}" id="add-stock-form">
             <div class="form-group">
                 <label class="form-label">Item Name *</label>
-                <input type="text" name="item_name" required class="form-input" placeholder="e.g., T-Shirt, Dress, Shoes">
+                <input type="text" name="item_name" required class="form-input"
+                    placeholder="e.g., T-Shirt, Dress, Shoes">
             </div>
 
             <!-- Category with inline creation -->
             <div class="form-group">
                 <label class="form-label">Category *</label>
                 <div class="flex gap-2">
-                    <select name="category_id" id="add-category-select" class="form-select flex-1" onchange="toggleNewCategory('add')">
+                    <select name="category_id" id="add-category-select" class="form-select flex-1"
+                        onchange="toggleNewCategory('add')">
                         <option value="">-- Select Category --</option>
                         {% for cat in categories %}
                         <option value="{{ cat.id }}">{{ cat.name }}</option>
@@ -200,7 +234,8 @@
             <div class="grid grid-cols-2 gap-4">
                 <div class="form-group">
                     <label class="form-label">Quantity Purchased *</label>
-                    <input type="number" name="quantity" id="add-quantity" min="1" required class="form-input" placeholder="Total items bought" oninput="calculateTotalCost('add')">
+                    <input type="number" name="quantity" id="add-quantity" min="1" required class="form-input"
+                        placeholder="Total items bought" oninput="calculateTotalCost('add')">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Unit</label>
@@ -211,26 +246,31 @@
             <!-- Cost Price Per Item with Total Calculation -->
             <div style="background:var(--terra-50);padding:16px;border-radius:var(--radius-lg);margin-bottom:16px;">
                 <label class="form-label" style="color:var(--terra-800);">Cost Price (Per Item) *</label>
-                <input type="number" name="cost_price" id="add-cost-per-item" min="0" step="0.01" class="form-input" placeholder="Cost of ONE item" oninput="calculateTotalCost('add')">
+                <input type="number" name="cost_price" id="add-cost-per-item" min="0" step="0.01" class="form-input"
+                    placeholder="Cost of ONE item" oninput="calculateTotalCost('add')">
                 <div class="mt-2 p-2 bg-white rounded" style="border:1px solid var(--terra-200);">
                     <span class="text-sm text-gray-600">Total Purchase Cost:</span>
-                    <span id="add-total-cost" class="text-lg font-bold ml-2" style="color:var(--terra-700);">UGX 0</span>
+                    <span id="add-total-cost" class="text-lg font-bold ml-2" style="color:var(--terra-700);">UGX
+                        0</span>
                 </div>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
                 <div class="form-group">
                     <label class="form-label">Min Selling Price (Per Item)</label>
-                    <input type="number" name="min_selling_price" min="0" step="0.01" class="form-input" placeholder="Lowest sale price">
+                    <input type="number" name="min_selling_price" min="0" step="0.01" class="form-input"
+                        placeholder="Lowest sale price">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Max Selling Price (Per Item)</label>
-                    <input type="number" name="max_selling_price" min="0" step="0.01" class="form-input" placeholder="Highest sale price">
+                    <input type="number" name="max_selling_price" min="0" step="0.01" class="form-input"
+                        placeholder="Highest sale price">
                 </div>
             </div>
             <div class="form-group">
                 <label class="form-label">Low Stock Threshold</label>
-                <input type="number" name="low_stock_threshold" min="0" class="form-input" placeholder="Auto-calculated as 25% of quantity if empty">
+                <input type="number" name="low_stock_threshold" min="0" class="form-input"
+                    placeholder="Auto-calculated as 25% of quantity if empty">
             </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button type="button" onclick="hideModal('add-stock-modal')" class="btn btn-secondary">Cancel</button>
@@ -252,7 +292,8 @@
             <div class="form-group">
                 <label class="form-label">Category</label>
                 <div class="flex gap-2">
-                    <select name="category_id" id="edit-category-id" class="form-select flex-1" onchange="toggleNewCategory('edit')">
+                    <select name="category_id" id="edit-category-id" class="form-select flex-1"
+                        onchange="toggleNewCategory('edit')">
                         <option value="">-- Select Category --</option>
                         {% for cat in categories %}
                         <option value="{{ cat.id }}">{{ cat.name }}</option>
@@ -275,11 +316,13 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Min Sell Price</label>
-                    <input type="number" name="min_selling_price" id="edit-min-price" min="0" step="0.01" class="form-input">
+                    <input type="number" name="min_selling_price" id="edit-min-price" min="0" step="0.01"
+                        class="form-input">
                 </div>
                 <div class="form-group">
                     <label class="form-label">Max Sell Price</label>
-                    <input type="number" name="max_selling_price" id="edit-max-price" min="0" step="0.01" class="form-input">
+                    <input type="number" name="max_selling_price" id="edit-max-price" min="0" step="0.01"
+                        class="form-input">
                 </div>
             </div>
             <div class="form-group">
@@ -295,42 +338,42 @@
 </div>
 
 <script>
-function editStock(id, name, categoryId, unit, costPrice, minPrice, maxPrice, threshold) {
-    document.getElementById('edit-stock-form').action = '/boutique/stock/' + id + '/edit';
-    document.getElementById('edit-item-name').value = name;
-    document.getElementById('edit-category-id').value = categoryId || '';
-    document.getElementById('edit-unit').value = unit;
-    document.getElementById('edit-cost-price').value = costPrice;
-    document.getElementById('edit-min-price').value = minPrice;
-    document.getElementById('edit-max-price').value = maxPrice;
-    document.getElementById('edit-threshold').value = threshold;
-    // Hide new category input when opening edit modal
-    document.getElementById('edit-new-category-input').classList.add('hidden');
-    showModal('edit-stock-modal');
-}
-
-function toggleNewCategory(prefix) {
-    const select = document.getElementById(prefix + '-category-select') || document.getElementById(prefix + '-category-id');
-    const newCategoryInput = document.getElementById(prefix + '-new-category-input');
-
-    if (select.value === 'new') {
-        newCategoryInput.classList.remove('hidden');
-        newCategoryInput.querySelector('input').required = true;
-    } else {
-        newCategoryInput.classList.add('hidden');
-        newCategoryInput.querySelector('input').required = false;
+    function editStock(id, name, categoryId, unit, costPrice, minPrice, maxPrice, threshold) {
+        document.getElementById('edit-stock-form').action = '/boutique/stock/' + id + '/edit';
+        document.getElementById('edit-item-name').value = name;
+        document.getElementById('edit-category-id').value = categoryId || '';
+        document.getElementById('edit-unit').value = unit;
+        document.getElementById('edit-cost-price').value = costPrice;
+        document.getElementById('edit-min-price').value = minPrice;
+        document.getElementById('edit-max-price').value = maxPrice;
+        document.getElementById('edit-threshold').value = threshold;
+        // Hide new category input when opening edit modal
+        document.getElementById('edit-new-category-input').classList.add('hidden');
+        showModal('edit-stock-modal');
     }
-}
 
-function calculateTotalCost(prefix) {
-    const quantity = parseFloat(document.getElementById(prefix + '-quantity')?.value) || 0;
-    const costPerItem = parseFloat(document.getElementById(prefix + '-cost-per-item')?.value) || 0;
-    const totalCost = quantity * costPerItem;
+    function toggleNewCategory(prefix) {
+        const select = document.getElementById(prefix + '-category-select') || document.getElementById(prefix + '-category-id');
+        const newCategoryInput = document.getElementById(prefix + '-new-category-input');
 
-    const totalCostElement = document.getElementById(prefix + '-total-cost');
-    if (totalCostElement) {
-        totalCostElement.textContent = 'UGX ' + totalCost.toLocaleString('en-US', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+        if (select.value === 'new') {
+            newCategoryInput.classList.remove('hidden');
+            newCategoryInput.querySelector('input').required = true;
+        } else {
+            newCategoryInput.classList.add('hidden');
+            newCategoryInput.querySelector('input').required = false;
+        }
     }
-}
+
+    function calculateTotalCost(prefix) {
+        const quantity = parseFloat(document.getElementById(prefix + '-quantity')?.value) || 0;
+        const costPerItem = parseFloat(document.getElementById(prefix + '-cost-per-item')?.value) || 0;
+        const totalCost = quantity * costPerItem;
+
+        const totalCostElement = document.getElementById(prefix + '-total-cost');
+        if (totalCostElement) {
+            totalCostElement.textContent = 'UGX ' + totalCost.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+        }
+    }
 </script>
 {% endblock %}
