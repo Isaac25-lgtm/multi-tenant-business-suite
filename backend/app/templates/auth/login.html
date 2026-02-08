@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
+
 <body class="auth-page" data-section="{{ section }}">
     <div class="auth-card">
         <div class="auth-header">
@@ -25,13 +27,13 @@
 
         <div class="auth-body">
             {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="flash-message flash-{{ category }}">
-                            <span>{{ message }}</span>
-                        </div>
-                    {% endfor %}
-                {% endif %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="flash-message flash-{{ category }}">
+                <span>{{ message }}</span>
+            </div>
+            {% endfor %}
+            {% endif %}
             {% endwith %}
 
             <form method="POST" action="{{ url_for('auth.do_login', section=section) }}" id="login-form">
@@ -44,11 +46,10 @@
                         <select id="account-select" onchange="onAccountSelect(this)" class="form-select">
                             <option value="">Select account</option>
                             {% for user in existing_users %}
-                            <option value="{{ user.id }}"
-                                    data-username="{{ user.username }}"
-                                    data-fullname="{{ user.full_name or user.username }}"
-                                    data-has-password="{{ 'true' if user.password_hash else 'false' }}"
-                                    data-profile-picture="{{ user.profile_picture or '' }}">
+                            <option value="{{ user.id }}" data-username="{{ user.username }}"
+                                data-fullname="{{ user.full_name or user.username }}"
+                                data-has-password="{{ 'true' if user.password_hash else 'false' }}"
+                                data-profile-picture="{{ user.profile_picture or '' }}">
                                 {{ user.full_name or user.username }}
                             </option>
                             {% endfor %}
@@ -75,12 +76,14 @@
 
                 <div class="form-group">
                     <label class="form-label">Username</label>
-                    <input type="text" name="username" id="username-input" class="form-input" placeholder="Enter your username">
+                    <input type="text" name="username" id="username-input" class="form-input"
+                        placeholder="Enter your username">
                 </div>
 
                 <div class="form-group" id="password-field" style="display: none;">
                     <label class="form-label">Password</label>
-                    <input type="password" name="password" id="password-input" class="form-input" placeholder="Enter your password">
+                    <input type="password" name="password" id="password-input" class="form-input"
+                        placeholder="Enter your password">
                 </div>
 
                 <button type="submit" id="login-button" class="btn btn-primary w-full">Sign In</button>
@@ -103,6 +106,19 @@
                     {% endif %}
                 </div>
             </div>
+
+            <!-- Back to Website -->
+            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center;">
+                <a href="{{ url_for('storefront.home') }}"
+                    style="display: inline-flex; align-items: center; gap: 8px; color: #16a34a; font-weight: 600; text-decoration: none; padding: 12px 24px; border-radius: 8px; background: #f0fdf4; transition: background 0.2s;"
+                    onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5"></path>
+                        <polyline points="12 19 5 12 12 5"></polyline>
+                    </svg>
+                    <span>Back to Website</span>
+                </a>
+            </div>
         </div>
     </div>
 
@@ -122,7 +138,8 @@
                 <input type="hidden" name="username" id="modal-username-input" value="">
 
                 <div class="form-group">
-                    <input type="password" name="password" id="modal-password-input" required class="form-input" style="text-align:center;letter-spacing:0.2em;" placeholder="Enter password">
+                    <input type="password" name="password" id="modal-password-input" required class="form-input"
+                        style="text-align:center;letter-spacing:0.2em;" placeholder="Enter password">
                 </div>
 
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -222,19 +239,19 @@
             document.getElementById('selected-user-id').value = '';
         }
 
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
                 closeModal();
             }
         });
 
-        document.getElementById('password-modal').addEventListener('click', function(e) {
+        document.getElementById('password-modal').addEventListener('click', function (e) {
             if (e.target === this) {
                 closeModal();
             }
         });
 
-        document.getElementById('username-input').addEventListener('input', function() {
+        document.getElementById('username-input').addEventListener('input', function () {
             const passwordField = document.getElementById('password-field');
             if (this.value.trim()) {
                 passwordField.style.display = 'block';
@@ -242,4 +259,5 @@
         });
     </script>
 </body>
+
 </html>
