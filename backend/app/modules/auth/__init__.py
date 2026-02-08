@@ -155,7 +155,7 @@ def do_login(section='boutique'):
     elif section == 'finance':
         return redirect(url_for('finance.index'))
 
-    return redirect(url_for('dashboard.index'))
+    return redirect(url_for('root'))
 
 
 @auth_bp.route('/logout')

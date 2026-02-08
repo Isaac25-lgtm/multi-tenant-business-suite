@@ -10,6 +10,30 @@ with app.app_context():
     db.create_all()
     print("Database tables created successfully!")
 
+    # Fix tables with incompatible old schemas: drop and recreate
+    print("Checking for incompatible table schemas...")
+    try:
+        inspector = inspect(db.engine)
+        actual_tables = inspector.get_table_names()
+
+        # audit_logs: old schema has user_id NOT NULL that conflicts with new model
+        if 'audit_logs' in actual_tables:
+            actual_cols = {col['name'] for col in inspector.get_columns('audit_logs')}
+            model_cols = {col.name for col in db.metadata.tables['audit_logs'].columns}
+            extra_cols = actual_cols - model_cols  # columns in DB but NOT in model
+            if extra_cols:
+                print(f"  audit_logs has extra columns {extra_cols}, dropping and recreating...")
+                with db.engine.connect() as conn:
+                    conn.execute(text('DROP TABLE audit_logs CASCADE'))
+                    conn.commit()
+                db.create_all()  # recreate with correct schema
+                print("  audit_logs table recreated with correct schema")
+                # Refresh inspector after table change
+                inspector = inspect(db.engine)
+                actual_tables = inspector.get_table_names()
+    except Exception as e:
+        print(f"  Schema fix warning: {e}")
+
     # Auto-migrate: compare model schema vs actual DB and add missing columns
     print("Running auto schema migration...")
     try:
