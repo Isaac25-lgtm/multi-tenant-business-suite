@@ -12,36 +12,44 @@ with app.app_context():
 
     # Add new columns to existing tables if they don't exist yet
     # (db.create_all() only creates new tables, not new columns)
-    inspector = inspect(db.engine)
+    def add_column_if_missing(table, column, col_type):
+        """Safely add a column to a table if it doesn't exist."""
+        try:
+            insp = inspect(db.engine)
+            existing = [c['name'] for c in insp.get_columns(table)]
+            if column not in existing:
+                with db.engine.connect() as conn:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {column} {col_type}'))
+                    conn.commit()
+                print(f"  Added {column} to {table}")
+                return True
+        except Exception as e:
+            print(f"  Warning: Could not add {column} to {table}: {e}")
+        return False
 
-    # Check and add columns to boutique_stock
-    boutique_stock_columns = [col['name'] for col in inspector.get_columns('boutique_stock')]
-    with db.engine.connect() as conn:
-        if 'image_url' not in boutique_stock_columns:
-            conn.execute(text('ALTER TABLE boutique_stock ADD COLUMN image_url VARCHAR(500)'))
-            conn.commit()
-            print("Added image_url column to boutique_stock table")
+    print("Running schema migrations...")
 
-        if 'branch' not in boutique_stock_columns:
-            conn.execute(text('ALTER TABLE boutique_stock ADD COLUMN branch VARCHAR(10)'))
-            conn.commit()
-            print("Added branch column to boutique_stock table")
+    # Users table - all potentially missing columns
+    add_column_if_missing('users', 'last_login', 'TIMESTAMP')
+    add_column_if_missing('users', 'full_name', 'VARCHAR(100)')
+    add_column_if_missing('users', 'email', 'VARCHAR(100)')
+    add_column_if_missing('users', 'phone', 'VARCHAR(20)')
+    add_column_if_missing('users', 'profile_picture', 'VARCHAR(255)')
+    add_column_if_missing('users', 'can_access_boutique', 'BOOLEAN DEFAULT FALSE')
+    add_column_if_missing('users', 'can_access_hardware', 'BOOLEAN DEFAULT FALSE')
+    add_column_if_missing('users', 'can_access_finance', 'BOOLEAN DEFAULT FALSE')
+    add_column_if_missing('users', 'can_access_customers', 'BOOLEAN DEFAULT FALSE')
+    add_column_if_missing('users', 'boutique_branch', 'VARCHAR(10)')
+    add_column_if_missing('users', 'created_by', 'INTEGER')
 
-    # Check and add columns to boutique_sales
-    boutique_sales_columns = [col['name'] for col in inspector.get_columns('boutique_sales')]
-    with db.engine.connect() as conn:
-        if 'branch' not in boutique_sales_columns:
-            conn.execute(text('ALTER TABLE boutique_sales ADD COLUMN branch VARCHAR(10)'))
-            conn.commit()
-            print("Added branch column to boutique_sales table")
+    # Boutique stock table
+    add_column_if_missing('boutique_stock', 'branch', 'VARCHAR(10)')
+    add_column_if_missing('boutique_stock', 'image_url', 'VARCHAR(500)')
 
-    # Check and add columns to users
-    users_columns = [col['name'] for col in inspector.get_columns('users')]
-    with db.engine.connect() as conn:
-        if 'last_login' not in users_columns:
-            conn.execute(text('ALTER TABLE users ADD COLUMN last_login TIMESTAMP'))
-            conn.commit()
-            print("Added last_login column to users table")
+    # Boutique sales table
+    add_column_if_missing('boutique_sales', 'branch', 'VARCHAR(10)')
+
+    print("Schema migrations complete!")
 
 
 if __name__ == '__main__':
