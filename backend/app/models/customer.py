@@ -10,7 +10,7 @@ class Customer(db.Model):
     phone = db.Column(db.String(20), nullable=False)
     address = db.Column(db.String(255), nullable=True)
     nin = db.Column(db.String(20), nullable=True)
-    business_type = db.Column(db.Enum('boutique', 'hardware', 'finances', name='customer_business_type'))
+    business_type = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=get_local_now)
 
     def to_dict(self):

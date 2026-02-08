@@ -27,6 +27,9 @@ def create_app(config_class=Config):
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
     app.register_blueprint(boutique_bp, url_prefix='/boutique')
+    app.register_blueprint(hardware_bp, url_prefix='/hardware')
+    app.register_blueprint(customers_bp, url_prefix='/customers')
+    app.register_blueprint(finance_bp, url_prefix='/finance')
 
     # Root URL redirects to login page
     @app.route('/')
@@ -35,9 +38,6 @@ def create_app(config_class=Config):
         if 'username' in session:
             return redirect(url_for('dashboard.index'))
         return redirect(url_for('auth.login'))
-    app.register_blueprint(hardware_bp, url_prefix='/hardware')
-    app.register_blueprint(customers_bp, url_prefix='/customers')
-    app.register_blueprint(finance_bp, url_prefix='/finance')
 
     # Register custom Jinja2 filters
     @app.template_filter('from_json')

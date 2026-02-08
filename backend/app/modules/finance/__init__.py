@@ -46,32 +46,37 @@ def index():
     """Finance overview"""
     today = get_local_today()
 
-    # Update loan statuses
-    Loan.query.filter(
-        Loan.is_deleted == False, Loan.status.in_(['active', 'due_soon']),
-        Loan.due_date < today, Loan.balance > 0
-    ).update({'status': 'overdue'}, synchronize_session=False)
+    try:
+        # Update loan statuses
+        Loan.query.filter(
+            Loan.is_deleted == False, Loan.status.in_(['active', 'due_soon']),
+            Loan.due_date < today, Loan.balance > 0
+        ).update({'status': 'overdue'}, synchronize_session=False)
 
-    GroupLoan.query.filter(
-        GroupLoan.is_deleted == False, GroupLoan.status == 'active',
-        GroupLoan.due_date < today, GroupLoan.balance > 0
-    ).update({'status': 'overdue'}, synchronize_session=False)
-    db.session.commit()
+        GroupLoan.query.filter(
+            GroupLoan.is_deleted == False, GroupLoan.status == 'active',
+            GroupLoan.due_date < today, GroupLoan.balance > 0
+        ).update({'status': 'overdue'}, synchronize_session=False)
+        db.session.commit()
 
-    active_loans = Loan.query.filter(Loan.is_deleted == False, Loan.balance > 0).count()
-    active_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.balance > 0).count()
-    overdue_loans = Loan.query.filter(Loan.is_deleted == False, Loan.status == 'overdue').count()
-    overdue_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.status == 'overdue').count()
+        active_loans = Loan.query.filter(Loan.is_deleted == False, Loan.balance > 0).count()
+        active_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.balance > 0).count()
+        overdue_loans = Loan.query.filter(Loan.is_deleted == False, Loan.status == 'overdue').count()
+        overdue_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.status == 'overdue').count()
 
-    total_outstanding = float(db.session.query(db.func.sum(Loan.balance)).filter(
-        Loan.is_deleted == False, Loan.balance > 0).scalar() or 0)
-    total_outstanding += float(db.session.query(db.func.sum(GroupLoan.balance)).filter(
-        GroupLoan.is_deleted == False, GroupLoan.balance > 0).scalar() or 0)
+        total_outstanding = float(db.session.query(db.func.sum(Loan.balance)).filter(
+            Loan.is_deleted == False, Loan.balance > 0).scalar() or 0)
+        total_outstanding += float(db.session.query(db.func.sum(GroupLoan.balance)).filter(
+            GroupLoan.is_deleted == False, GroupLoan.balance > 0).scalar() or 0)
 
-    total_interest_expected = float(db.session.query(db.func.sum(Loan.interest_amount)).filter(
-        Loan.is_deleted == False, Loan.balance > 0).scalar() or 0)
-    total_interest_expected += float(db.session.query(db.func.sum(GroupLoan.interest_amount)).filter(
-        GroupLoan.is_deleted == False, GroupLoan.balance > 0).scalar() or 0)
+        total_interest_expected = float(db.session.query(db.func.sum(Loan.interest_amount)).filter(
+            Loan.is_deleted == False, Loan.balance > 0).scalar() or 0)
+        total_interest_expected += float(db.session.query(db.func.sum(GroupLoan.interest_amount)).filter(
+            GroupLoan.is_deleted == False, GroupLoan.balance > 0).scalar() or 0)
+    except Exception:
+        db.session.rollback()
+        active_loans = active_groups = overdue_loans = overdue_groups = 0
+        total_outstanding = total_interest_expected = 0
 
     return render_template('finance/index.html',
         active_loans=active_loans, active_groups=active_groups,

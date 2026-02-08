@@ -87,8 +87,11 @@ def login(section='boutique'):
     if section not in ['manager', 'boutique', 'hardware', 'finance']:
         section = 'boutique'
 
-    # TESTING MODE: Show ALL users (including deactivated) regardless of section
-    existing_users = User.query.order_by(User.full_name).all()
+    try:
+        existing_users = User.query.order_by(User.full_name).all()
+    except Exception:
+        db.session.rollback()
+        existing_users = []
 
     return render_template('auth/login.html', section=section, existing_users=existing_users)
 

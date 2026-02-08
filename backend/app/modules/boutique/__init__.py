@@ -136,33 +136,40 @@ def index():
     # Auto-fetch missing images once per day per session
     today_str = str(today)
     if session.get(AUTO_IMAGE_FETCH_SESSION_KEY) != today_str:
-        auto_fetch_missing_images()
+        try:
+            auto_fetch_missing_images()
+        except Exception:
+            pass
         session[AUTO_IMAGE_FETCH_SESSION_KEY] = today_str
 
-    # Build queries with branch filter
-    stock_query = BoutiqueStock.query.filter_by(is_active=True)
-    sales_query = BoutiqueSale.query.filter_by(is_deleted=False)
-    credits_query = BoutiqueSale.query.filter(
-        BoutiqueSale.is_deleted == False,
-        BoutiqueSale.payment_type == 'part',
-        BoutiqueSale.is_credit_cleared == False
-    )
-
-    # Filter by branch unless viewing all
-    if current_branch != 'ALL':
-        stock_query = stock_query.filter(
-            db.or_(BoutiqueStock.branch == current_branch, BoutiqueStock.branch == None)
+    try:
+        # Build queries with branch filter
+        stock_query = BoutiqueStock.query.filter_by(is_active=True)
+        sales_query = BoutiqueSale.query.filter_by(is_deleted=False)
+        credits_query = BoutiqueSale.query.filter(
+            BoutiqueSale.is_deleted == False,
+            BoutiqueSale.payment_type == 'part',
+            BoutiqueSale.is_credit_cleared == False
         )
-        sales_query = sales_query.filter(BoutiqueSale.branch == current_branch)
-        credits_query = credits_query.filter(BoutiqueSale.branch == current_branch)
 
-    # Quick stats
-    stock_count = stock_query.count()
-    low_stock = stock_query.filter(
-        BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
-    ).count()
-    pending_credits = credits_query.count()
-    today_sales = sales_query.filter(BoutiqueSale.sale_date == today).count()
+        # Filter by branch unless viewing all
+        if current_branch != 'ALL':
+            stock_query = stock_query.filter(
+                db.or_(BoutiqueStock.branch == current_branch, BoutiqueStock.branch == None)
+            )
+            sales_query = sales_query.filter(BoutiqueSale.branch == current_branch)
+            credits_query = credits_query.filter(BoutiqueSale.branch == current_branch)
+
+        # Quick stats
+        stock_count = stock_query.count()
+        low_stock = stock_query.filter(
+            BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
+        ).count()
+        pending_credits = credits_query.count()
+        today_sales = sales_query.filter(BoutiqueSale.sale_date == today).count()
+    except Exception:
+        db.session.rollback()
+        stock_count = low_stock = pending_credits = today_sales = 0
 
     branch_name = 'All Branches' if current_branch == 'ALL' else BRANCHES.get(current_branch, current_branch)
 

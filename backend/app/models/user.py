@@ -10,7 +10,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=True)  # Nullable for open access mode
-    role = db.Column(db.Enum('manager', 'boutique', 'hardware', 'finance', name='user_role'), nullable=False)
+    role = db.Column(db.String(20), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
     last_login = db.Column(db.DateTime, nullable=True)

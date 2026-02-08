@@ -72,20 +72,24 @@ def check_date_permission(entry_date, user_section):
 def index():
     """Hardware overview page"""
     today = get_local_today()
-    stock_count = HardwareStock.query.filter_by(is_active=True).count()
-    low_stock = HardwareStock.query.filter(
-        HardwareStock.is_active == True,
-        HardwareStock.quantity <= HardwareStock.low_stock_threshold
-    ).count()
-    pending_credits = HardwareSale.query.filter(
-        HardwareSale.is_deleted == False,
-        HardwareSale.payment_type == 'part',
-        HardwareSale.is_credit_cleared == False
-    ).count()
-    today_sales = HardwareSale.query.filter(
-        HardwareSale.sale_date == today,
-        HardwareSale.is_deleted == False
-    ).count()
+    try:
+        stock_count = HardwareStock.query.filter_by(is_active=True).count()
+        low_stock = HardwareStock.query.filter(
+            HardwareStock.is_active == True,
+            HardwareStock.quantity <= HardwareStock.low_stock_threshold
+        ).count()
+        pending_credits = HardwareSale.query.filter(
+            HardwareSale.is_deleted == False,
+            HardwareSale.payment_type == 'part',
+            HardwareSale.is_credit_cleared == False
+        ).count()
+        today_sales = HardwareSale.query.filter(
+            HardwareSale.sale_date == today,
+            HardwareSale.is_deleted == False
+        ).count()
+    except Exception:
+        db.session.rollback()
+        stock_count = low_stock = pending_credits = today_sales = 0
 
     return render_template('hardware/index.html',
         stock_count=stock_count, low_stock=low_stock,

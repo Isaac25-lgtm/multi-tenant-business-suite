@@ -10,10 +10,14 @@ customers_bp = Blueprint('customers', __name__)
 def index():
     """List all customers"""
     business_type = request.args.get('business_type')
-    query = Customer.query
-    if business_type:
-        query = query.filter_by(business_type=business_type)
-    customers = query.order_by(Customer.name).all()
+    try:
+        query = Customer.query
+        if business_type:
+            query = query.filter_by(business_type=business_type)
+        customers = query.order_by(Customer.name).all()
+    except Exception:
+        db.session.rollback()
+        customers = []
     return render_template('customers/index.html', customers=customers, business_type=business_type)
 
 

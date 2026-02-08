@@ -60,7 +60,7 @@ class HardwareSale(db.Model):
     reference_number = db.Column(db.String(20), unique=True)
     sale_date = db.Column(db.Date, nullable=False)
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)
-    payment_type = db.Column(db.Enum('full', 'part', name='hardware_payment_type'), nullable=False)
+    payment_type = db.Column(db.String(10), nullable=False)
     total_amount = db.Column(db.Numeric(12, 2), nullable=False)
     amount_paid = db.Column(db.Numeric(12, 2), nullable=False)
     balance = db.Column(db.Numeric(12, 2), default=0)
