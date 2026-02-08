@@ -13,12 +13,35 @@ with app.app_context():
     # Add new columns to existing tables if they don't exist yet
     # (db.create_all() only creates new tables, not new columns)
     inspector = inspect(db.engine)
-    columns = [col['name'] for col in inspector.get_columns('boutique_stock')]
-    if 'image_url' not in columns:
-        with db.engine.connect() as conn:
+
+    # Check and add columns to boutique_stock
+    boutique_stock_columns = [col['name'] for col in inspector.get_columns('boutique_stock')]
+    with db.engine.connect() as conn:
+        if 'image_url' not in boutique_stock_columns:
             conn.execute(text('ALTER TABLE boutique_stock ADD COLUMN image_url VARCHAR(500)'))
             conn.commit()
-        print("Added image_url column to boutique_stock table")
+            print("Added image_url column to boutique_stock table")
+
+        if 'branch' not in boutique_stock_columns:
+            conn.execute(text('ALTER TABLE boutique_stock ADD COLUMN branch VARCHAR(10)'))
+            conn.commit()
+            print("Added branch column to boutique_stock table")
+
+    # Check and add columns to boutique_sales
+    boutique_sales_columns = [col['name'] for col in inspector.get_columns('boutique_sales')]
+    with db.engine.connect() as conn:
+        if 'branch' not in boutique_sales_columns:
+            conn.execute(text('ALTER TABLE boutique_sales ADD COLUMN branch VARCHAR(10)'))
+            conn.commit()
+            print("Added branch column to boutique_sales table")
+
+    # Check and add columns to users
+    users_columns = [col['name'] for col in inspector.get_columns('users')]
+    with db.engine.connect() as conn:
+        if 'last_login' not in users_columns:
+            conn.execute(text('ALTER TABLE users ADD COLUMN last_login TIMESTAMP'))
+            conn.commit()
+            print("Added last_login column to users table")
 
 
 if __name__ == '__main__':
