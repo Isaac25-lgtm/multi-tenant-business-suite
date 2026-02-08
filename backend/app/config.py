@@ -28,6 +28,21 @@ class Config:
     SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # PostgreSQL Connection Pool Settings (for production stability)
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,  # Check connection health before using
+        'pool_recycle': 300,    # Recycle connections every 5 minutes
+        'pool_size': 5,         # Number of connections to maintain
+        'max_overflow': 10,     # Max connections beyond pool_size
+        'connect_args': {
+            'connect_timeout': 10,
+            'keepalives': 1,
+            'keepalives_idle': 30,
+            'keepalives_interval': 10,
+            'keepalives_count': 5,
+        } if os.getenv('DATABASE_URL') else {}  # Only for PostgreSQL
+    }
+
     # File Upload
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')
     MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 5242880))  # 5MB
