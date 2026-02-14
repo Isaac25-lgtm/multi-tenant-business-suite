@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Boutique Hires - Denove APS{% endblock %}
+
+{% block page_header %}
+<h2>Hire Management</h2>
+<p>Track items hired out to customers</p>
+{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+    <a href="{{ url_for('boutique.new_hire') }}" class="btn btn-primary">New Hire</a>
+</div>
+
+<!-- Status Filter Tabs -->
+<div class="flex gap-2 mb-4 flex-wrap">
+    <a href="{{ url_for('boutique.hires', status='all') }}" class="btn {% if status_filter == 'all' %}btn-primary{% else %}btn-outline{% endif %}" style="font-size:13px;">All</a>
+    <a href="{{ url_for('boutique.hires', status='active') }}" class="btn {% if status_filter == 'active' %}btn-primary{% else %}btn-outline{% endif %}" style="font-size:13px;">Active</a>
+    <a href="{{ url_for('boutique.hires', status='overdue') }}" class="btn {% if status_filter == 'overdue' %}btn-primary{% else %}btn-outline{% endif %}" style="font-size:13px;">Overdue</a>
+    <a href="{{ url_for('boutique.hires', status='returned') }}" class="btn {% if status_filter == 'returned' %}btn-primary{% else %}btn-outline{% endif %}" style="font-size:13px;">Returned</a>
+    <a href="{{ url_for('boutique.hires', status='damaged') }}" class="btn {% if status_filter == 'damaged' %}btn-primary{% else %}btn-outline{% endif %}" style="font-size:13px;">Damaged</a>
+</div>
+
+<!-- Date Filter -->
+<div class="section-card mb-4">
+    <form method="GET" class="flex items-end gap-4 flex-wrap">
+        <input type="hidden" name="status" value="{{ status_filter }}">
+        <div class="form-group" style="margin:0;">
+            <label class="form-label text-xs">From</label>
+            <input type="date" name="start_date" value="{{ start_date or '' }}" class="form-input" style="font-size:13px;">
+        </div>
+        <div class="form-group" style="margin:0;">
+            <label class="form-label text-xs">To</label>
+            <input type="date" name="end_date" value="{{ end_date or '' }}" class="form-input" style="font-size:13px;">
+        </div>
+        <button type="submit" class="btn btn-outline" style="font-size:13px;">Filter</button>
+        <a href="{{ url_for('boutique.hires') }}" class="btn btn-secondary" style="font-size:13px;">Clear</a>
+    </form>
+</div>
+
+<!-- Hires Table -->
+<div class="section-card" style="padding:0;">
+    <table class="data-table" style="width:100%;font-size:12px;">
+        <thead>
+            <tr>
+                <th>Reference</th>
+                <th>Item</th>
+                <th>Customer</th>
+                <th>Hired</th>
+                <th>Return By</th>
+                <th class="text-right">Rate/Day</th>
+                <th class="text-right">Deposit</th>
+                <th class="text-right">Total</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for hire in hires %}
+            <tr>
+                <td class="font-medium">{{ hire.reference_number }}</td>
+                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ hire.stock_item.item_name if hire.stock_item else '-' }}">
+                    {{ hire.stock_item.item_name if hire.stock_item else '-' }}
+                    {% if hire.quantity > 1 %}<span class="text-gray-500">(x{{ hire.quantity }})</span>{% endif %}
+                </td>
+                <td>{{ hire.customer.name if hire.customer else hire.customer_name or '-' }}</td>
+                <td>{{ hire.hire_date.strftime('%d/%m/%y') }}</td>
+                <td>
+                    {{ hire.expected_return_date.strftime('%d/%m/%y') }}
+                    {% if hire.actual_return_date %}
+                    <br><span class="text-xs text-gray-500">Returned: {{ hire.actual_return_date.strftime('%d/%m/%y') }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-right">{{ "{:,.0f}".format(hire.daily_rate) }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(hire.deposit_amount) }}</td>
+                <td class="text-right">{{ "{:,.0f}".format(hire.total_amount) }}</td>
+                <td>
+                    {% if hire.status == 'active' %}
+                    <span class="badge" style="background:#2563eb;color:white;font-size:10px;">Active</span>
+                    {% elif hire.status == 'overdue' %}
+                    <span class="badge badge-danger" style="font-size:10px;">Overdue</span>
+                    {% elif hire.status == 'returned' %}
+                    <span class="badge badge-success" style="font-size:10px;">Returned</span>
+                    {% elif hire.status == 'damaged' %}
+                    <span class="badge badge-warning" style="font-size:10px;">Damaged</span>
+                    {% endif %}
+                </td>
+                <td style="white-space:nowrap;font-size:11px;">
+                    <a href="{{ url_for('boutique.view_hire', id=hire.id) }}" style="color:var(--terra-600);" class="hover:underline">View</a>
+                    {% if hire.status in ('active', 'overdue') %}
+                    <a href="{{ url_for('boutique.view_hire', id=hire.id) }}#return" style="color:var(--green-600, #16a34a);" class="hover:underline ml-1">Return</a>
+                    {% endif %}
+                    <a href="{{ url_for('boutique.hire_receipt', id=hire.id) }}" style="color:var(--navy-500);" class="hover:underline ml-1">Receipt</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="10" class="text-center text-gray-500 py-8">No hires found</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

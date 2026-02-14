@@ -454,3 +454,166 @@ def generate_group_agreement_pdf(group_loan):
 
     buffer.seek(0)
     return buffer
+
+
+def generate_hire_receipt_pdf(hire, business_name, served_by=None):
+    """Generate PDF receipt for a hire/rental transaction"""
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    # Header with logo
+    y = height - 20
+    y = draw_logo_header(c, width, y)
+
+    y -= 10
+    c.setFont("Helvetica", 12)
+    c.drawCentredString(width / 2, y, f"[{business_name}]")
+
+    y -= 30
+    c.line(50, y, width - 50, y)
+
+    # Title
+    y -= 24
+    c.setFont("Helvetica-Bold", 13)
+    c.setFillColor(HexColor('#7c3aed'))
+    c.drawCentredString(width / 2, y, "HIRE AGREEMENT / RECEIPT")
+    c.setFillColor(HexColor('#0f172a'))
+
+    # Reference & dates
+    y -= 28
+    c.setFont("Helvetica", 10)
+    c.drawString(50, y, f"Reference: {hire.reference_number}")
+    c.drawRightString(width - 50, y, f"Date: {hire.hire_date.strftime('%B %d, %Y')}")
+
+    # Customer info
+    y -= 20
+    customer_name = hire.customer.name if hire.customer else (hire.customer_name or 'N/A')
+    customer_phone = hire.customer.phone if hire.customer else (hire.customer_phone or 'N/A')
+    c.drawString(50, y, f"Customer: {customer_name}")
+    c.drawRightString(width - 50, y, f"Phone: {customer_phone}")
+
+    if hire.purpose:
+        y -= 16
+        c.drawString(50, y, f"Purpose: {hire.purpose}")
+
+    y -= 20
+    c.line(50, y, width - 50, y)
+
+    # Item details table header
+    y -= 24
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(HexColor('#f8fafc'))
+    c.rect(50, y - 4, width - 100, 20, fill=True, stroke=False)
+    c.setFillColor(HexColor('#0f172a'))
+    c.drawString(55, y, "Item")
+    c.drawString(250, y, "Qty")
+    c.drawString(310, y, "Rate/Day")
+    c.drawString(400, y, "Days")
+    c.drawRightString(width - 55, y, "Amount")
+
+    # Item row
+    y -= 20
+    c.setFont("Helvetica", 10)
+    item_name = hire.stock_item.item_name if hire.stock_item else 'N/A'
+    hire_days = max(1, ((hire.actual_return_date or hire.expected_return_date) - hire.hire_date).days)
+    line_total = float(hire.daily_rate) * hire.quantity * hire_days
+
+    c.drawString(55, y, item_name[:30])
+    c.drawString(250, y, str(hire.quantity))
+    c.drawString(310, y, format_currency(float(hire.daily_rate)))
+    c.drawString(400, y, str(hire_days))
+    c.drawRightString(width - 55, y, format_currency(line_total))
+
+    y -= 16
+    c.line(50, y, width - 50, y)
+
+    # Dates section
+    y -= 22
+    c.setFont("Helvetica", 10)
+    c.drawString(50, y, f"Hire Date: {hire.hire_date.strftime('%B %d, %Y')}")
+    y -= 16
+    c.drawString(50, y, f"Expected Return: {hire.expected_return_date.strftime('%B %d, %Y')}")
+    if hire.actual_return_date:
+        y -= 16
+        c.drawString(50, y, f"Actual Return: {hire.actual_return_date.strftime('%B %d, %Y')}")
+    if hire.return_condition:
+        y -= 16
+        c.drawString(50, y, f"Return Condition: {hire.return_condition}")
+
+    y -= 20
+    c.line(50, y, width - 50, y)
+
+    # Financial summary
+    y -= 22
+    c.setFont("Helvetica", 10)
+    c.drawString(50, y, "Total Amount:")
+    c.setFont("Helvetica-Bold", 11)
+    c.drawRightString(width - 50, y, format_currency(float(hire.total_amount)))
+
+    y -= 18
+    c.setFont("Helvetica", 10)
+    c.drawString(50, y, "Deposit Paid:")
+    c.setFillColor(HexColor('#16a34a'))
+    c.drawRightString(width - 50, y, format_currency(float(hire.deposit_amount)))
+    c.setFillColor(HexColor('#0f172a'))
+
+    y -= 18
+    c.drawString(50, y, "Total Paid:")
+    c.setFillColor(HexColor('#16a34a'))
+    c.drawRightString(width - 50, y, format_currency(float(hire.amount_paid)))
+    c.setFillColor(HexColor('#0f172a'))
+
+    if hire.balance > 0:
+        y -= 18
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(50, y, "Balance Due:")
+        c.setFillColor(HexColor('#ea580c'))
+        c.drawRightString(width - 50, y, format_currency(float(hire.balance)))
+        c.setFillColor(HexColor('#0f172a'))
+
+    y -= 18
+    c.line(50, y, width - 50, y)
+
+    # Status
+    y -= 22
+    c.setFont("Helvetica-Bold", 10)
+    status_label = hire.status.upper()
+    c.drawString(50, y, f"Status: {status_label}")
+
+    # Terms
+    y -= 30
+    c.setFont("Helvetica-Bold", 10)
+    c.drawString(50, y, "Terms & Conditions:")
+    y -= 16
+    c.setFont("Helvetica", 8)
+    terms = [
+        "1. Items must be returned in the same condition as received.",
+        "2. Late returns may incur additional charges at the daily rate.",
+        "3. The hirer is responsible for any damage, loss, or theft of hired items.",
+        "4. Deposit is refundable upon satisfactory return of items.",
+        "5. Full payment is due upon return of items."
+    ]
+    for term in terms:
+        c.drawString(55, y, term)
+        y -= 14
+
+    # Served by
+    if served_by:
+        y -= 20
+        c.setFont("Helvetica", 9)
+        c.drawString(50, y, f"Served by: {served_by}")
+
+    # Footer
+    y -= 30
+    c.setFont("Helvetica-Oblique", 10)
+    c.drawCentredString(width / 2, y, "Thank you for choosing our hire service!")
+
+    y -= 16
+    c.setFont("Helvetica", 8)
+    c.setFillColor(HexColor('#94a3b8'))
+    c.drawCentredString(width / 2, y, f"Generated on {datetime.now().strftime('%B %d, %Y at %I:%M %p')}")
+
+    c.save()
+    buffer.seek(0)
+    return buffer

@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+
+{% block title %}Hire {{ hire.reference_number }} - Denove APS{% endblock %}
+
+{% block page_header %}
+<h2>Hire Details</h2>
+<p>{{ hire.reference_number }}</p>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{{ url_for('boutique.hires') }}" style="color:var(--terra-600);" class="hover:underline text-sm">&larr; Back to Hires</a>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Left: Hire Info -->
+    <div class="section-card">
+        <h3 class="font-semibold mb-4" style="color:var(--navy-800);">Hire Information</h3>
+
+        <div class="space-y-3">
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Status</span>
+                <span>
+                    {% if hire.status == 'active' %}
+                    <span class="badge" style="background:#2563eb;color:white;">Active</span>
+                    {% elif hire.status == 'overdue' %}
+                    <span class="badge badge-danger">Overdue</span>
+                    {% elif hire.status == 'returned' %}
+                    <span class="badge badge-success">Returned</span>
+                    {% elif hire.status == 'damaged' %}
+                    <span class="badge badge-warning">Damaged</span>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Item</span>
+                <span class="font-medium">{{ hire.stock_item.item_name if hire.stock_item else '-' }} (x{{ hire.quantity }})</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Customer</span>
+                <span>{{ hire.customer.name if hire.customer else hire.customer_name or '-' }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Phone</span>
+                <span>{{ hire.customer.phone if hire.customer else hire.customer_phone or '-' }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Purpose</span>
+                <span>{{ hire.purpose or '-' }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Hire Date</span>
+                <span>{{ hire.hire_date.strftime('%B %d, %Y') }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Expected Return</span>
+                <span>{{ hire.expected_return_date.strftime('%B %d, %Y') }}</span>
+            </div>
+            {% if hire.actual_return_date %}
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Actual Return</span>
+                <span>{{ hire.actual_return_date.strftime('%B %d, %Y') }}</span>
+            </div>
+            {% endif %}
+            {% if hire.return_condition %}
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Return Condition</span>
+                <span>{{ hire.return_condition }}</span>
+            </div>
+            {% endif %}
+            <div class="flex justify-between">
+                <span class="text-gray-500 text-sm">Daily Rate</span>
+                <span>UGX {{ "{:,.0f}".format(hire.daily_rate) }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Financial Summary -->
+    <div>
+        <div class="section-card mb-4">
+            <h3 class="font-semibold mb-4" style="color:var(--navy-800);">Financial Summary</h3>
+            <div class="space-y-3">
+                <div class="flex justify-between">
+                    <span class="text-gray-500 text-sm">Total Amount</span>
+                    <span class="font-bold text-lg">UGX {{ "{:,.0f}".format(hire.total_amount) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500 text-sm">Deposit</span>
+                    <span style="color:var(--green-600, #16a34a);">UGX {{ "{:,.0f}".format(hire.deposit_amount) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500 text-sm">Total Paid</span>
+                    <span style="color:var(--green-600, #16a34a);">UGX {{ "{:,.0f}".format(hire.amount_paid) }}</span>
+                </div>
+                <div class="flex justify-between pt-2" style="border-top:1px solid var(--border);">
+                    <span class="text-gray-500 text-sm">Balance</span>
+                    <span class="font-bold text-lg {% if hire.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">
+                        UGX {{ "{:,.0f}".format(hire.balance) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="section-card">
+            <h3 class="font-semibold mb-4" style="color:var(--navy-800);">Actions</h3>
+            <div class="space-y-3">
+                <!-- Download Receipt -->
+                <a href="{{ url_for('boutique.hire_receipt', id=hire.id) }}" class="btn btn-outline w-full text-center" style="display:block;">Download Receipt</a>
+
+                {% if hire.status in ('active', 'overdue') %}
+                <!-- Extend -->
+                <form method="POST" action="{{ url_for('boutique.extend_hire', id=hire.id) }}" class="flex gap-2">
+                    <input type="date" name="new_return_date" required class="form-input flex-1" min="{{ today }}">
+                    <button type="submit" class="btn btn-outline">Extend</button>
+                </form>
+                {% endif %}
+
+                {% if hire.balance > 0 %}
+                <!-- Payment -->
+                <form method="POST" action="{{ url_for('boutique.pay_hire', id=hire.id) }}" class="flex gap-2">
+                    <input type="number" name="amount" min="1" step="0.01" required class="form-input flex-1" placeholder="Amount">
+                    <input type="hidden" name="payment_date" value="{{ today }}">
+                    <button type="submit" class="btn btn-primary">Pay</button>
+                </form>
+                {% endif %}
+
+                <!-- Delete -->
+                <form method="POST" action="{{ url_for('boutique.delete_hire', id=hire.id) }}" onsubmit="return confirm('Delete this hire record?')">
+                    <button type="submit" class="btn btn-secondary w-full text-red-600">Delete Hire</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Return Section -->
+{% if hire.status in ('active', 'overdue') %}
+<div class="section-card mt-6" id="return">
+    <h3 class="font-semibold mb-4" style="color:var(--navy-800);">Process Return</h3>
+    <form method="POST" action="{{ url_for('boutique.return_hire', id=hire.id) }}">
+        <div class="grid grid-cols-2 gap-4">
+            <div class="form-group">
+                <label class="form-label">Return Date *</label>
+                <input type="date" name="return_date" value="{{ today }}" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Return Status</label>
+                <select name="status" class="form-select">
+                    <option value="returned">Good Condition</option>
+                    <option value="damaged">Damaged</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Condition Notes</label>
+            <textarea name="return_condition" rows="2" class="form-input" placeholder="Any notes about the item's condition on return..."></textarea>
+        </div>
+        <div class="flex justify-end">
+            <button type="submit" class="btn btn-primary">Process Return</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<!-- Payment History -->
+{% if payments %}
+<div class="section-card mt-6">
+    <h3 class="font-semibold mb-4" style="color:var(--navy-800);">Payment History</h3>
+    <table class="data-table" style="font-size:13px;">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th class="text-right">Amount</th>
+                <th class="text-right">Remaining</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in payments %}
+            <tr>
+                <td>{{ p.payment_date.strftime('%B %d, %Y') }}</td>
+                <td class="text-right" style="color:var(--green-600, #16a34a);">UGX {{ "{:,.0f}".format(p.amount) }}</td>
+                <td class="text-right">UGX {{ "{:,.0f}".format(p.remaining_balance) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

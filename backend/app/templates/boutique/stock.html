@@ -122,78 +122,55 @@
         </svg>
         Table View
     </summary>
-    <div class="section-card" style="padding:0;overflow-x:auto;">
-        <table class="data-table">
+    <div class="section-card" style="padding:0;">
+        <table class="data-table" style="width:100%;table-layout:auto;font-size:12px;">
             <thead>
                 <tr>
-                    <th>Item Name</th>
+                    <th>Item</th>
                     <th>Category</th>
                     <th class="text-right">Qty</th>
-                    <th class="text-right">Cost/Item</th>
-                    <th class="text-right">Total Cost</th>
-                    <th class="text-right">Min Price</th>
-                    <th class="text-right">Max Price</th>
+                    <th class="text-right">Cost</th>
+                    <th class="text-right">Total</th>
+                    <th class="text-right">Min</th>
+                    <th class="text-right">Max</th>
                     <th>Status</th>
-                    <th style="min-width: 200px; white-space: nowrap;">Actions</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for item in stock %}
                 <tr class="{% if item.quantity <= (item.low_stock_threshold or 0) %}bg-yellow-50{% endif %}">
-                    <td class="font-medium">
-                        <div class="flex items-center gap-2">
-                            {% if item.image_url %}
-                            <img src="{{ item.image_url }}" alt=""
-                                style="width:32px;height:32px;border-radius:var(--radius);object-fit:cover;"
-                                onerror="this.style.display='none'">
-                            {% endif %}
-                            {{ item.item_name }}
-                        </div>
+                    <td class="font-medium" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ item.item_name }}">
+                        {{ item.item_name }}
                     </td>
-                    <td>{{ item.category.name if item.category else '-' }}</td>
-                    <td class="text-right">
-                        {{ item.quantity }} {{ item.unit }}
-                        {% if item.quantity <= (item.low_stock_threshold or 0) %} <span
-                            class="badge badge-warning ml-2">Low</span>
-                            {% endif %}
+                    <td style="font-size:11px;">{{ item.category.name if item.category else '-' }}</td>
+                    <td class="text-right" style="white-space:nowrap;">
+                        {{ item.quantity }}
+                        {% if item.quantity <= (item.low_stock_threshold or 0) %}<span class="badge badge-warning" style="font-size:9px;padding:1px 4px;margin-left:2px;">Low</span>{% endif %}
                     </td>
                     <td class="text-right">{{ "{:,.0f}".format(item.cost_price) }}</td>
-                    <td class="text-right text-gray-600">{{ "{:,.0f}".format(item.cost_price * item.initial_quantity) }}
-                    </td>
+                    <td class="text-right text-gray-600">{{ "{:,.0f}".format(item.cost_price * item.initial_quantity) }}</td>
                     <td class="text-right">{{ "{:,.0f}".format(item.min_selling_price) }}</td>
                     <td class="text-right">{{ "{:,.0f}".format(item.max_selling_price) }}</td>
-                    <td>
-                        {% if item.is_active %}
-                        <span class="badge badge-success">Active</span>
-                        {% else %}
-                        <span class="badge badge-danger">Inactive</span>
-                        {% endif %}
-                        {% if item.for_hire %}
-                        <span class="badge" style="background:#7c3aed;color:white;">For Hire</span>
-                        {% endif %}
+                    <td style="white-space:nowrap;">
+                        {% if item.is_active %}<span class="badge badge-success" style="font-size:10px;padding:1px 6px;">Active</span>
+                        {% else %}<span class="badge badge-danger" style="font-size:10px;padding:1px 6px;">Inactive</span>{% endif %}
+                        {% if item.for_hire %}<span class="badge" style="background:#7c3aed;color:white;font-size:10px;padding:1px 6px;">Hire</span>{% endif %}
                     </td>
-                    <td style="white-space: nowrap;">
-                        <button
-                            onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }})"
-                            style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
+                    <td style="white-space:nowrap;font-size:11px;">
+                        <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }})" style="color:var(--terra-600);" class="hover:underline">Edit</button>
                         {% if item.is_active %}
-                        <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline"
-                            onsubmit="return confirm('Deactivate this item?')">
-                            <button type="submit"
-                                class="text-orange-600 hover:underline text-sm ml-2">Deactivate</button>
+                        <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate?')">
+                            <button type="submit" class="text-orange-600 hover:underline ml-1">Off</button>
                         </form>
                         {% else %}
-                        <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}"
-                            class="inline">
-                            <button type="submit"
-                                class="text-green-600 hover:underline text-sm ml-2">Reactivate</button>
+                        <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}" class="inline">
+                            <button type="submit" class="text-green-600 hover:underline ml-1">On</button>
                         </form>
                         {% endif %}
                         {% if current_section == 'manager' %}
-                        <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}"
-                            class="inline"
-                            onsubmit="return confirm('PERMANENTLY DELETE this item? This cannot be undone!')">
-                            <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                        <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('PERMANENTLY DELETE this item?')">
+                            <button type="submit" class="text-red-600 hover:underline ml-1">Del</button>
                         </form>
                         {% endif %}
                     </td>

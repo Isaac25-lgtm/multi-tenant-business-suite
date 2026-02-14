@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}New Hire - Denove APS{% endblock %}
+
+{% block page_header %}
+<h2>New Hire</h2>
+<p>Hire out an item to a customer</p>
+{% endblock %}
+
+{% block content %}
+<div class="section-card max-w-2xl">
+    <form method="POST" action="{{ url_for('boutique.create_hire') }}">
+        <!-- Item Selection -->
+        <div class="form-group">
+            <label class="form-label">Item to Hire *</label>
+            <select name="stock_id" id="stock-select" required class="form-select" onchange="updateItemInfo()">
+                <option value="">-- Select an item --</option>
+                {% for item in stock %}
+                <option value="{{ item.id }}"
+                    data-qty="{{ item.quantity }}"
+                    data-rate="{{ item.min_selling_price }}"
+                    data-name="{{ item.item_name }}">
+                    {{ item.item_name }} ({{ item.quantity }} available)
+                </option>
+                {% endfor %}
+            </select>
+            {% if not stock %}
+            <p class="text-xs text-orange-600 mt-1">No items marked as "For Hire" with available stock. Mark items in Stock management first.</p>
+            {% endif %}
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div class="form-group">
+                <label class="form-label">Quantity *</label>
+                <input type="number" name="quantity" id="hire-qty" value="1" min="1" required class="form-input" oninput="calculateEstimate()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Daily Rate (UGX) *</label>
+                <input type="number" name="daily_rate" id="daily-rate" min="0" step="0.01" required class="form-input" oninput="calculateEstimate()">
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div class="form-group">
+                <label class="form-label">Hire Date *</label>
+                <input type="date" name="hire_date" id="hire-date" value="{{ today }}" required class="form-input" onchange="calculateEstimate()">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Expected Return Date *</label>
+                <input type="date" name="expected_return_date" id="return-date" required class="form-input" onchange="calculateEstimate()">
+            </div>
+        </div>
+
+        <!-- Estimated Total -->
+        <div style="background:var(--terra-50);padding:16px;border-radius:var(--radius-lg);margin-bottom:16px;">
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="text-sm text-gray-600">Estimated Duration:</span>
+                    <span id="est-days" class="font-bold ml-1">0 days</span>
+                </div>
+                <div>
+                    <span class="text-sm text-gray-600">Estimated Total:</span>
+                    <span id="est-total" class="text-lg font-bold ml-1" style="color:var(--terra-700);">UGX 0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Deposit Amount (UGX)</label>
+            <input type="number" name="deposit_amount" min="0" step="0.01" value="0" class="form-input" placeholder="Upfront payment/deposit">
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Purpose / Reason for Hire</label>
+            <textarea name="purpose" rows="2" class="form-input" placeholder="e.g., Wedding event, Photo shoot, Party..."></textarea>
+        </div>
+
+        <!-- Customer Section -->
+        <div style="background:var(--navy-50);padding:16px;border-radius:var(--radius-lg);margin-bottom:16px;">
+            <label class="form-label" style="color:var(--navy-800);font-weight:600;">Customer Details</label>
+            <div class="form-group mt-2">
+                <label class="form-label text-xs">Existing Customer</label>
+                <select name="customer_id" id="customer-select" class="form-select" onchange="toggleNewCustomer()">
+                    <option value="">-- New Customer --</option>
+                    {% for c in customers %}
+                    <option value="{{ c.id }}">{{ c.name }} ({{ c.phone }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div id="new-customer-fields">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label class="form-label text-xs">Customer Name *</label>
+                        <input type="text" name="customer_name" id="cust-name" class="form-input" placeholder="Full name" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label text-xs">Phone Number</label>
+                        <input type="text" name="customer_phone" class="form-input" placeholder="07XXXXXXXX">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-2 mt-4">
+            <a href="{{ url_for('boutique.hires') }}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Hire</button>
+        </div>
+    </form>
+</div>
+
+<script>
+function updateItemInfo() {
+    var sel = document.getElementById('stock-select');
+    var opt = sel.options[sel.selectedIndex];
+    if (opt && opt.value) {
+        var rate = opt.getAttribute('data-rate');
+        document.getElementById('daily-rate').value = rate || 0;
+        var qty = parseInt(opt.getAttribute('data-qty')) || 1;
+        document.getElementById('hire-qty').max = qty;
+    }
+    calculateEstimate();
+}
+
+function calculateEstimate() {
+    var hireDate = document.getElementById('hire-date').value;
+    var returnDate = document.getElementById('return-date').value;
+    var rate = parseFloat(document.getElementById('daily-rate').value) || 0;
+    var qty = parseInt(document.getElementById('hire-qty').value) || 1;
+
+    var days = 0;
+    if (hireDate && returnDate) {
+        var d1 = new Date(hireDate);
+        var d2 = new Date(returnDate);
+        days = Math.max(1, Math.ceil((d2 - d1) / (1000 * 60 * 60 * 24)));
+    }
+
+    document.getElementById('est-days').textContent = days + ' day' + (days !== 1 ? 's' : '');
+    var total = rate * qty * days;
+    document.getElementById('est-total').textContent = 'UGX ' + total.toLocaleString('en-US', {minimumFractionDigits: 0});
+}
+
+function toggleNewCustomer() {
+    var sel = document.getElementById('customer-select');
+    var fields = document.getElementById('new-customer-fields');
+    var nameInput = document.getElementById('cust-name');
+    if (sel.value) {
+        fields.style.display = 'none';
+        nameInput.required = false;
+    } else {
+        fields.style.display = 'block';
+        nameInput.required = true;
+    }
+}
+</script>
+{% endblock %}

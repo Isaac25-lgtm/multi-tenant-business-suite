@@ -139,3 +139,75 @@ class BoutiqueCreditPayment(db.Model):
             'remaining_balance': float(self.remaining_balance),
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+
+class BoutiqueHire(db.Model):
+    __tablename__ = 'boutique_hires'
+
+    id = db.Column(db.Integer, primary_key=True)
+    reference_number = db.Column(db.String(20), unique=True)
+    stock_id = db.Column(db.Integer, db.ForeignKey('boutique_stock.id'))
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)
+    customer_name = db.Column(db.String(100))
+    customer_phone = db.Column(db.String(20))
+    purpose = db.Column(db.Text)
+    quantity = db.Column(db.Integer, default=1)
+    hire_date = db.Column(db.Date, nullable=False)
+    expected_return_date = db.Column(db.Date, nullable=False)
+    actual_return_date = db.Column(db.Date, nullable=True)
+    daily_rate = db.Column(db.Numeric(12, 2), nullable=False)
+    deposit_amount = db.Column(db.Numeric(12, 2), default=0)
+    total_amount = db.Column(db.Numeric(12, 2), default=0)
+    amount_paid = db.Column(db.Numeric(12, 2), default=0)
+    balance = db.Column(db.Numeric(12, 2), default=0)
+    status = db.Column(db.String(20), default='active')  # active, returned, overdue, damaged
+    return_condition = db.Column(db.Text, nullable=True)
+    branch = db.Column(db.String(10), nullable=True)
+    is_deleted = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, onupdate=get_local_now)
+
+    stock_item = db.relationship('BoutiqueStock', backref='hires')
+    customer = db.relationship('Customer', backref='boutique_hires', foreign_keys=[customer_id])
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'reference_number': self.reference_number,
+            'item_name': self.stock_item.item_name if self.stock_item else None,
+            'customer_name': self.customer.name if self.customer else self.customer_name,
+            'customer_phone': self.customer.phone if self.customer else self.customer_phone,
+            'purpose': self.purpose,
+            'quantity': self.quantity,
+            'hire_date': self.hire_date.isoformat(),
+            'expected_return_date': self.expected_return_date.isoformat(),
+            'actual_return_date': self.actual_return_date.isoformat() if self.actual_return_date else None,
+            'daily_rate': float(self.daily_rate),
+            'deposit_amount': float(self.deposit_amount),
+            'total_amount': float(self.total_amount),
+            'amount_paid': float(self.amount_paid),
+            'balance': float(self.balance),
+            'status': self.status,
+            'return_condition': self.return_condition
+        }
+
+
+class BoutiqueHirePayment(db.Model):
+    __tablename__ = 'boutique_hire_payments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    hire_id = db.Column(db.Integer, db.ForeignKey('boutique_hires.id'))
+    payment_date = db.Column(db.Date, nullable=False)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    remaining_balance = db.Column(db.Numeric(12, 2), nullable=False)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+
+    hire = db.relationship('BoutiqueHire', backref='payments')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'payment_date': self.payment_date.isoformat(),
+            'amount': float(self.amount),
+            'remaining_balance': float(self.remaining_balance)
+        }

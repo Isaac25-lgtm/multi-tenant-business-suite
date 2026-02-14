@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, Response
 from app.models.boutique import (
     BoutiqueCategory, BoutiqueStock, BoutiqueSale,
-    BoutiqueSaleItem, BoutiqueCreditPayment
+    BoutiqueSaleItem, BoutiqueCreditPayment,
+    BoutiqueHire, BoutiqueHirePayment
 )
 from app.models.customer import Customer
 from app.models.user import User
@@ -845,3 +846,309 @@ def pay_credit(id):
         flash(f'Error recording payment: {str(e)}', 'error')
 
     return redirect(url_for('boutique.credits'))
+
+
+# ============ HIRES ============
+
+@boutique_bp.route('/hires')
+@login_required('boutique')
+def hires():
+    """List all hires"""
+    status_filter = request.args.get('status', 'all')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    query = BoutiqueHire.query.filter_by(is_deleted=False)
+
+    if status_filter != 'all':
+        query = query.filter(BoutiqueHire.status == status_filter)
+
+    if start_date:
+        query = query.filter(BoutiqueHire.hire_date >= date.fromisoformat(start_date))
+    if end_date:
+        query = query.filter(BoutiqueHire.hire_date <= date.fromisoformat(end_date))
+
+    # Auto-mark overdue hires
+    today = get_local_today()
+    overdue_hires = BoutiqueHire.query.filter(
+        BoutiqueHire.is_deleted == False,
+        BoutiqueHire.status == 'active',
+        BoutiqueHire.expected_return_date < today
+    ).all()
+    for h in overdue_hires:
+        h.status = 'overdue'
+    if overdue_hires:
+        db.session.commit()
+
+    hires_list = query.order_by(BoutiqueHire.hire_date.desc(), BoutiqueHire.id.desc()).limit(100).all()
+    return render_template('boutique/hires.html',
+        hires=hires_list,
+        status_filter=status_filter,
+        start_date=start_date,
+        end_date=end_date,
+        today=today
+    )
+
+
+@boutique_bp.route('/hires/new')
+@login_required('boutique')
+def new_hire():
+    """New hire form"""
+    stock_items = BoutiqueStock.query.filter_by(is_active=True, for_hire=True).filter(
+        BoutiqueStock.quantity > 0
+    ).order_by(BoutiqueStock.item_name).all()
+    customers = Customer.query.filter_by(business_type='boutique').order_by(Customer.name).all()
+    return render_template('boutique/hire_form.html',
+        stock=stock_items,
+        customers=customers,
+        today=get_local_today()
+    )
+
+
+@boutique_bp.route('/hires/create', methods=['POST'])
+@login_required('boutique')
+def create_hire():
+    """Create a new hire"""
+    try:
+        stock_id = request.form.get('stock_id', type=int)
+        quantity = request.form.get('quantity', 1, type=int)
+        hire_date = date.fromisoformat(request.form.get('hire_date', str(get_local_today())))
+        expected_return_date = date.fromisoformat(request.form.get('expected_return_date'))
+        daily_rate = safe_decimal(request.form.get('daily_rate', '0'))
+        deposit_amount = safe_decimal(request.form.get('deposit_amount', '0'))
+        purpose = request.form.get('purpose', '').strip()
+        customer_id = request.form.get('customer_id', type=int)
+        customer_name = request.form.get('customer_name', '').strip()
+        customer_phone = request.form.get('customer_phone', '').strip()
+
+        if not stock_id or not expected_return_date:
+            flash('Item and expected return date are required', 'error')
+            return redirect(url_for('boutique.new_hire'))
+
+        stock_item = BoutiqueStock.query.get(stock_id)
+        if not stock_item or not stock_item.for_hire:
+            flash('Selected item is not available for hire', 'error')
+            return redirect(url_for('boutique.new_hire'))
+
+        if quantity > stock_item.quantity:
+            flash(f'Only {stock_item.quantity} available for hire', 'error')
+            return redirect(url_for('boutique.new_hire'))
+
+        # Create customer if needed
+        if not customer_id and customer_name:
+            existing = Customer.query.filter_by(phone=customer_phone, business_type='boutique').first() if customer_phone else None
+            if existing:
+                customer_id = existing.id
+            else:
+                customer = Customer(name=customer_name, phone=customer_phone, business_type='boutique')
+                db.session.add(customer)
+                db.session.flush()
+                customer_id = customer.id
+
+        # Calculate estimated total
+        days = max(1, (expected_return_date - hire_date).days)
+        estimated_total = daily_rate * quantity * days
+
+        hire = BoutiqueHire(
+            reference_number=generate_reference_number('DNV-HR-', BoutiqueHire),
+            stock_id=stock_id,
+            customer_id=customer_id,
+            customer_name=customer_name if not customer_id else None,
+            customer_phone=customer_phone if not customer_id else None,
+            purpose=purpose,
+            quantity=quantity,
+            hire_date=hire_date,
+            expected_return_date=expected_return_date,
+            daily_rate=daily_rate,
+            deposit_amount=deposit_amount,
+            total_amount=estimated_total,
+            amount_paid=deposit_amount,
+            balance=estimated_total - deposit_amount,
+            status='active',
+            branch=get_current_branch()
+        )
+        db.session.add(hire)
+
+        # Reduce stock
+        stock_item.quantity -= quantity
+
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'create', 'hire', hire.id,
+                   {'reference': hire.reference_number, 'item': stock_item.item_name,
+                    'quantity': quantity, 'daily_rate': float(daily_rate),
+                    'customer': customer_name or (hire.customer.name if hire.customer else 'N/A')})
+        flash(f'Hire {hire.reference_number} created successfully', 'success')
+        return redirect(url_for('boutique.hires'))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error creating hire: {str(e)}', 'error')
+        return redirect(url_for('boutique.new_hire'))
+
+
+@boutique_bp.route('/hires/<int:id>')
+@login_required('boutique')
+def view_hire(id):
+    """View hire details"""
+    hire = BoutiqueHire.query.get_or_404(id)
+    payments = BoutiqueHirePayment.query.filter_by(hire_id=id).order_by(BoutiqueHirePayment.payment_date.desc()).all()
+    return render_template('boutique/hire_detail.html', hire=hire, payments=payments, today=get_local_today())
+
+
+@boutique_bp.route('/hires/<int:id>/return', methods=['POST'])
+@login_required('boutique')
+def return_hire(id):
+    """Process hire return"""
+    hire = BoutiqueHire.query.get_or_404(id)
+
+    try:
+        actual_return_date = date.fromisoformat(request.form.get('return_date', str(get_local_today())))
+        return_condition = request.form.get('return_condition', '').strip()
+        status = request.form.get('status', 'returned')
+
+        # Calculate actual total based on real days
+        actual_days = max(1, (actual_return_date - hire.hire_date).days)
+        actual_total = hire.daily_rate * hire.quantity * actual_days
+
+        hire.actual_return_date = actual_return_date
+        hire.return_condition = return_condition
+        hire.total_amount = actual_total
+        hire.balance = actual_total - hire.amount_paid
+        if hire.balance < 0:
+            hire.balance = Decimal('0')
+        hire.status = status  # 'returned' or 'damaged'
+
+        # Restore stock
+        stock_item = BoutiqueStock.query.get(hire.stock_id)
+        if stock_item:
+            stock_item.quantity += hire.quantity
+
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'return', 'hire', hire.id,
+                   {'reference': hire.reference_number, 'actual_days': actual_days,
+                    'total_amount': float(actual_total), 'condition': return_condition,
+                    'status': status})
+        flash(f'Hire {hire.reference_number} returned successfully', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error processing return: {str(e)}', 'error')
+
+    return redirect(url_for('boutique.view_hire', id=id))
+
+
+@boutique_bp.route('/hires/<int:id>/extend', methods=['POST'])
+@login_required('boutique')
+def extend_hire(id):
+    """Extend hire return date"""
+    hire = BoutiqueHire.query.get_or_404(id)
+
+    try:
+        new_return_date = date.fromisoformat(request.form.get('new_return_date'))
+        old_date = hire.expected_return_date
+
+        hire.expected_return_date = new_return_date
+        # Recalculate estimated total
+        days = max(1, (new_return_date - hire.hire_date).days)
+        hire.total_amount = hire.daily_rate * hire.quantity * days
+        hire.balance = hire.total_amount - hire.amount_paid
+        if hire.status == 'overdue':
+            hire.status = 'active'
+
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'extend', 'hire', hire.id,
+                   {'reference': hire.reference_number,
+                    'old_return_date': old_date.isoformat(),
+                    'new_return_date': new_return_date.isoformat()})
+        flash(f'Hire {hire.reference_number} extended to {new_return_date}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error extending hire: {str(e)}', 'error')
+
+    return redirect(url_for('boutique.view_hire', id=id))
+
+
+@boutique_bp.route('/hires/<int:id>/pay', methods=['POST'])
+@login_required('boutique')
+def pay_hire(id):
+    """Record payment for hire"""
+    hire = BoutiqueHire.query.get_or_404(id)
+
+    try:
+        amount = safe_decimal(request.form.get('amount', '0'))
+        payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
+
+        if amount <= 0:
+            flash('Payment amount must be greater than 0', 'error')
+            return redirect(url_for('boutique.view_hire', id=id))
+
+        hire.amount_paid += amount
+        hire.balance = hire.total_amount - hire.amount_paid
+        if hire.balance < 0:
+            hire.balance = Decimal('0')
+
+        payment = BoutiqueHirePayment(
+            hire_id=hire.id,
+            payment_date=payment_date,
+            amount=amount,
+            remaining_balance=hire.balance
+        )
+        db.session.add(payment)
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'create', 'hire_payment', payment.id,
+                   {'hire_reference': hire.reference_number, 'amount': float(amount),
+                    'remaining_balance': float(hire.balance)})
+        flash(f'Payment of UGX {amount:,.0f} recorded for {hire.reference_number}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error recording payment: {str(e)}', 'error')
+
+    return redirect(url_for('boutique.view_hire', id=id))
+
+
+@boutique_bp.route('/hires/<int:id>/receipt', methods=['GET', 'POST'])
+@login_required('boutique')
+def hire_receipt(id):
+    """Generate hire receipt PDF"""
+    from app.utils.pdf_generator import generate_hire_receipt_pdf
+    hire = BoutiqueHire.query.get_or_404(id)
+    branch_label = BRANCHES.get(hire.branch) if hire.branch else None
+    business_name = f"BOUTIQUE - {branch_label}" if branch_label else "BOUTIQUE"
+    served_by = session.get('username')
+
+    buffer = generate_hire_receipt_pdf(hire, business_name, served_by=served_by)
+    filename = f"hire_receipt_{hire.reference_number}.pdf"
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+
+
+@boutique_bp.route('/hires/<int:id>/delete', methods=['POST'])
+@login_required('boutique')
+def delete_hire(id):
+    """Soft delete a hire"""
+    hire = BoutiqueHire.query.get_or_404(id)
+
+    try:
+        # If hire is still active, restore stock
+        if hire.status in ('active', 'overdue'):
+            stock_item = BoutiqueStock.query.get(hire.stock_id)
+            if stock_item:
+                stock_item.quantity += hire.quantity
+
+        hire.is_deleted = True
+        db.session.commit()
+
+        log_action(session['username'], 'boutique', 'delete', 'hire', hire.id,
+                   {'reference': hire.reference_number})
+        flash(f'Hire {hire.reference_number} deleted', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting hire: {str(e)}', 'error')
+
+    return redirect(url_for('boutique.hires'))
