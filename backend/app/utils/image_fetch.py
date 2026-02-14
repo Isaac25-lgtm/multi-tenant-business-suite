@@ -5,13 +5,15 @@ Falls back gracefully if the service is unavailable.
 import threading
 
 
-def fetch_product_image(product_name, category_name=None):
+def fetch_product_image(product_name, category_name=None, search_context='product'):
     """
     Search for a product image URL using DuckDuckGo image search.
 
     Args:
-        product_name: Name of the product (e.g., "Women's Dress")
+        product_name: Name of the product (e.g., "Women's Dress", "Iron Sheets")
         category_name: Optional category for better search results
+        search_context: Context suffix for the search query
+                        ('product' for boutique, 'hardware building material' for hardware)
 
     Returns:
         str: URL of the first matching image, or None if not found
@@ -19,18 +21,18 @@ def fetch_product_image(product_name, category_name=None):
     try:
         from duckduckgo_search import DDGS
 
-        # Build search query - include "boutique" context for better results
+        # Build search query with appropriate context
         query = product_name
         if category_name:
             query = f"{category_name} {product_name}"
-        query += " product"
+        query += f" {search_context}"
 
         with DDGS() as ddgs:
             results = ddgs.images(
                 keywords=query,
                 region="wt-wt",
                 safesearch="moderate",
-                max_results=3
+                max_results=5
             )
 
             for result in results:
@@ -47,15 +49,16 @@ def fetch_product_image(product_name, category_name=None):
     return None
 
 
-def fetch_product_image_async(stock_item_id, product_name, category_name=None):
+def fetch_product_image_async(stock_item_id, product_name, category_name=None, model_class='BoutiqueStock'):
     """
     Fetch a product image in the background and update the database.
     This avoids slowing down the stock creation flow.
 
     Args:
-        stock_item_id: ID of the BoutiqueStock item to update
+        stock_item_id: ID of the stock item to update
         product_name: Name of the product
         category_name: Optional category for better search
+        model_class: Name of the model class ('BoutiqueStock' or 'HardwareStock')
     """
     from flask import current_app
 
@@ -64,11 +67,23 @@ def fetch_product_image_async(stock_item_id, product_name, category_name=None):
     def _fetch_and_update():
         with app.app_context():
             from app.extensions import db
-            from app.models.boutique import BoutiqueStock
 
-            image_url = fetch_product_image(product_name, category_name)
+            # Import the correct model based on model_class parameter
+            if model_class == 'HardwareStock':
+                from app.models.hardware import HardwareStock
+                StockModel = HardwareStock
+            else:
+                from app.models.boutique import BoutiqueStock
+                StockModel = BoutiqueStock
+
+            # Use appropriate search context based on model type
+            if model_class == 'HardwareStock':
+                search_context = 'hardware building material'
+            else:
+                search_context = 'product'
+            image_url = fetch_product_image(product_name, category_name, search_context)
             if image_url:
-                item = BoutiqueStock.query.get(stock_item_id)
+                item = StockModel.query.get(stock_item_id)
                 if item:
                     item.image_url = image_url
                     db.session.commit()

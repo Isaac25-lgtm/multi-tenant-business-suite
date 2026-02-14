@@ -30,7 +30,7 @@
 </div>
 
 <!-- Sales Table -->
-<div class="section-card" style="padding:0;overflow:hidden;">
+<div class="section-card" style="padding:0;overflow-x:auto;">
     <table class="data-table">
         <thead>
             <tr>
@@ -41,7 +41,7 @@
                 <th class="text-right">Paid</th>
                 <th class="text-right">Balance</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th style="min-width: 180px; white-space: nowrap;">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -62,7 +62,7 @@
                     <span class="badge badge-warning">Credit</span>
                     {% endif %}
                 </td>
-                <td>
+                <td style="white-space: nowrap;">
                     <a href="{{ url_for('boutique.view_sale', id=sale.id) }}" style="color:var(--terra-600);" class="hover:underline text-sm">View</a>
                     <a href="{{ url_for('boutique.receipt_preview', id=sale.id) }}" style="color:var(--terra-600);" class="hover:underline text-sm ml-2">Receipt</a>
                     <form method="POST" action="{{ url_for('boutique.delete_sale', id=sale.id) }}" class="inline" onsubmit="return confirm('Delete this sale? Stock will be restored.')">

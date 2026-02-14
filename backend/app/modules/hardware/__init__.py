@@ -8,11 +8,14 @@ from app.modules.auth import login_required, log_action
 from app.extensions import db
 from app.utils.timezone import get_local_today
 from app.utils.utils import generate_reference_number
+from app.utils.image_fetch import fetch_product_image_async, fetch_product_image
 from app.utils.pdf_generator import generate_receipt_pdf
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 hardware_bp = Blueprint('hardware', __name__)
+
+AUTO_IMAGE_FETCH_SESSION_KEY = 'hardware_auto_image_fetch_date'
 
 
 def safe_decimal(value, default='0'):
@@ -65,6 +68,20 @@ def check_date_permission(entry_date, user_section):
     if user_section == 'manager':
         return True
     return yesterday <= entry_date <= today
+
+
+def auto_fetch_missing_images():
+    """Auto-fetch images for hardware items missing an image URL."""
+    items = HardwareStock.query.filter(
+        HardwareStock.is_active == True,
+        db.or_(HardwareStock.image_url == None, HardwareStock.image_url == '')
+    ).all()
+
+    for item in items:
+        category_name = item.category.name if item.category else None
+        fetch_product_image_async(item.id, item.item_name, category_name, model_class='HardwareStock')
+
+    return len(items)
 
 
 @hardware_bp.route('/')
@@ -126,6 +143,12 @@ def add_category():
 @hardware_bp.route('/stock')
 @login_required('hardware')
 def stock():
+    # Auto-fetch missing images once per day per session
+    today_str = str(get_local_today())
+    if session.get(AUTO_IMAGE_FETCH_SESSION_KEY) != today_str:
+        auto_fetch_missing_images()
+        session[AUTO_IMAGE_FETCH_SESSION_KEY] = today_str
+
     show_inactive = request.args.get('show_inactive', 'false').lower() == 'true'
     query = HardwareStock.query
     if not show_inactive:
@@ -183,6 +206,14 @@ def add_stock():
         )
         db.session.add(stock_item)
         db.session.commit()
+
+        # Auto-fetch product image in the background
+        category_name = None
+        if category_id:
+            cat = HardwareCategory.query.get(category_id)
+            if cat:
+                category_name = cat.name
+        fetch_product_image_async(stock_item.id, item_name, category_name, model_class='HardwareStock')
 
         log_action(session['username'], 'hardware', 'create', 'stock', stock_item.id,
                    {'item_name': item_name, 'quantity': quantity, 'cost_price': float(stock_item.cost_price)})
@@ -303,6 +334,43 @@ def permanent_delete_stock(id):
     log_action(session['username'], 'hardware', 'permanent_delete', 'stock', id,
                {'item_name': item_name})
     flash(f'Stock item "{item_name}" permanently deleted', 'success')
+    return redirect(url_for('hardware.stock'))
+
+
+@hardware_bp.route('/stock/<int:id>/refresh-image', methods=['POST'])
+@login_required('hardware')
+def refresh_image(id):
+    """Re-fetch the product image for a stock item"""
+    item = HardwareStock.query.get_or_404(id)
+    category_name = item.category.name if item.category else None
+    image_url = fetch_product_image(item.item_name, category_name, search_context='hardware building material')
+    if image_url:
+        item.image_url = image_url
+        db.session.commit()
+        flash(f'Image refreshed for "{item.item_name}"', 'success')
+    else:
+        flash(f'No image found for "{item.item_name}"', 'warning')
+    return redirect(url_for('hardware.stock'))
+
+
+@hardware_bp.route('/stock/fetch-all-images', methods=['POST'])
+@login_required('hardware')
+def fetch_all_images():
+    """Clear all existing images and re-fetch for all active stock items"""
+    items = HardwareStock.query.filter(HardwareStock.is_active == True).all()
+
+    # Clear all existing images first so they all get re-fetched
+    for item in items:
+        item.image_url = None
+    db.session.commit()
+
+    count = 0
+    for item in items:
+        category_name = item.category.name if item.category else None
+        fetch_product_image_async(item.id, item.item_name, category_name, model_class='HardwareStock')
+        count += 1
+
+    flash(f'Re-fetching images for {count} items in the background. Refresh the page in a few seconds.', 'success')
     return redirect(url_for('hardware.stock'))
 
 

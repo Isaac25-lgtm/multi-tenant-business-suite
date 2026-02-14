@@ -13,7 +13,7 @@
 </div>
 
 <!-- Clients Table -->
-<div class="section-card" style="padding:0;overflow:hidden;">
+<div class="section-card" style="padding:0;overflow-x:auto;">
     <table class="data-table">
         <thead>
             <tr>
@@ -22,6 +22,7 @@
                 <th>NIN</th>
                 <th>Address</th>
                 <th>Active Loans</th>
+                <th style="min-width: 140px; white-space: nowrap;">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -31,11 +32,17 @@
                 <td>{{ client.phone }}</td>
                 <td>{{ client.nin or '-' }}</td>
                 <td>{{ client.address or '-' }}</td>
-                <td>{{ client.loans.filter_by(is_deleted=False).count() }}</td>
+                <td class="text-center">{{ client.loans.filter_by(is_deleted=False).count() }}</td>
+                <td style="white-space: nowrap;">
+                    <button onclick="editClient({{ client.id }}, '{{ client.name|e }}', '{{ client.phone }}', '{{ client.nin or '' }}', '{{ (client.address or '')|e }}')" style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
+                    <form method="POST" action="{{ url_for('finance.delete_client', id=client.id) }}" class="inline" onsubmit="return confirm('Deactivate this client? This will only work if they have no active loans.')">
+                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
+                    </form>
+                </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" class="text-center text-gray-500 py-8">No clients found</td>
+                <td colspan="6" class="text-center text-gray-500 py-8">No clients found</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -70,4 +77,44 @@
         </form>
     </div>
 </div>
+
+<!-- Edit Client Modal -->
+<div id="edit-client-modal" class="modal">
+    <div class="modal-content">
+        <h3 class="text-lg font-semibold mb-4">Edit Client</h3>
+        <form id="edit-client-form" method="POST">
+            <div class="form-group">
+                <label class="form-label">Name *</label>
+                <input type="text" name="name" id="edit-client-name" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Phone *</label>
+                <input type="text" name="phone" id="edit-client-phone" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">NIN</label>
+                <input type="text" name="nin" id="edit-client-nin" class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Address</label>
+                <textarea name="address" id="edit-client-address" class="form-textarea" rows="2"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" onclick="hideModal('edit-client-modal')" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function editClient(id, name, phone, nin, address) {
+    document.getElementById('edit-client-form').action = '/finance/clients/' + id + '/edit';
+    document.getElementById('edit-client-name').value = name;
+    document.getElementById('edit-client-phone').value = phone;
+    document.getElementById('edit-client-nin').value = nin;
+    document.getElementById('edit-client-address').value = address;
+    showModal('edit-client-modal');
+}
+</script>
 {% endblock %}

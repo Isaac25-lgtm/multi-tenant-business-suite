@@ -45,6 +45,7 @@ frontend/build/
 .DS_Store
 Thumbs.db
 desktop.ini
+nul
 
 # Uploads
 backend/uploads/*

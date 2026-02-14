@@ -26,7 +26,7 @@
 </div>
 
 <!-- Group Loans Table -->
-<div class="section-card" style="padding:0;overflow:hidden;">
+<div class="section-card" style="padding:0;overflow-x:auto;">
     <table class="data-table">
         <thead>
             <tr>
@@ -38,7 +38,7 @@
                 <th>Period</th>
                 <th>Progress</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th style="min-width: 140px; white-space: nowrap;">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -60,7 +60,7 @@
                     <span class="badge badge-info">Active</span>
                     {% endif %}
                 </td>
-                <td>
+                <td style="white-space: nowrap;">
                     <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
                     <form method="POST" action="{{ url_for('finance.delete_group_loan', id=group.id) }}" class="inline" onsubmit="return confirm('Delete this group loan?')">
                         <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>

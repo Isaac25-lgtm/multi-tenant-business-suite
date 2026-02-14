@@ -118,6 +118,53 @@ def add_client():
     return redirect(url_for('finance.clients'))
 
 
+@finance_bp.route('/clients/<int:id>/edit', methods=['POST'])
+@login_required('finance')
+def edit_client(id):
+    """Edit a client's details"""
+    client = LoanClient.query.get_or_404(id)
+    name = request.form.get('name', '').strip()
+    phone = request.form.get('phone', '').strip()
+
+    if not name or not phone:
+        flash('Name and phone required', 'error')
+        return redirect(url_for('finance.clients'))
+
+    old_name = client.name
+    client.name = name
+    client.phone = phone
+    client.nin = request.form.get('nin', '').strip()
+    client.address = request.form.get('address', '').strip()
+
+    db.session.commit()
+
+    log_action(session['username'], 'finance', 'update', 'client', client.id,
+               {'old_name': old_name, 'new_name': name, 'phone': phone})
+    flash(f'Client "{name}" updated', 'success')
+    return redirect(url_for('finance.clients'))
+
+
+@finance_bp.route('/clients/<int:id>/delete', methods=['POST'])
+@login_required('finance')
+def delete_client(id):
+    """Deactivate a client (soft delete)"""
+    client = LoanClient.query.get_or_404(id)
+
+    # Check if client has active loans
+    active_loans = client.loans.filter_by(is_deleted=False).count()
+    if active_loans > 0:
+        flash(f'Cannot delete client with {active_loans} active loans', 'error')
+        return redirect(url_for('finance.clients'))
+
+    client.is_active = False
+    db.session.commit()
+
+    log_action(session['username'], 'finance', 'deactivate', 'client', client.id,
+               {'name': client.name})
+    flash(f'Client "{client.name}" deactivated', 'success')
+    return redirect(url_for('finance.clients'))
+
+
 # ============ INDIVIDUAL LOANS ============
 
 @finance_bp.route('/loans')
@@ -209,6 +256,75 @@ def pay_loan(id):
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('finance.view_loan', id=id))
+
+
+@finance_bp.route('/loans/<int:id>/renew', methods=['POST'])
+@login_required('finance')
+def renew_loan(id):
+    """Renew a loan by paying interest and creating a new loan with revised or same terms"""
+    try:
+        old_loan = Loan.query.get_or_404(id)
+
+        # Calculate interest owed on old loan
+        interest_owed = Decimal(str(old_loan.total_amount - old_loan.principal))
+
+        # Update old loan - mark as paid
+        old_loan.amount_paid = Decimal(str(old_loan.amount_paid)) + interest_owed
+        old_loan.balance = Decimal(str(old_loan.total_amount)) - Decimal(str(old_loan.amount_paid))
+        if old_loan.balance <= 0:
+            old_loan.status = 'paid'
+
+        # Record interest payment on old loan
+        interest_payment = LoanPayment(
+            loan_id=old_loan.id,
+            amount=interest_owed,
+            payment_date=get_local_today(),
+            balance_after=old_loan.balance
+        )
+        db.session.add(interest_payment)
+
+        # Get new terms from form (may be revised or same as old)
+        new_principal = Decimal(request.form.get('principal', str(old_loan.principal)))
+        new_rate = Decimal(request.form.get('interest_rate', str(old_loan.interest_rate)))
+        new_weeks = int(request.form.get('duration_weeks', old_loan.duration_weeks))
+
+        # Calculate new loan amounts
+        new_interest = new_principal * new_rate / Decimal('100')
+        new_total = new_principal + new_interest
+
+        # Create new loan with (possibly revised) terms
+        new_loan = Loan(
+            client_id=old_loan.client_id,
+            principal=new_principal,
+            interest_rate=new_rate,
+            interest_amount=new_interest,
+            duration_weeks=new_weeks,
+            total_amount=new_total,
+            issue_date=get_local_today(),
+            due_date=get_local_today() + timedelta(weeks=new_weeks),
+            amount_paid=0,
+            balance=new_total,
+            status='active'
+        )
+        db.session.add(new_loan)
+        db.session.commit()
+
+        # Log the renewal action
+        log_action(session['username'], 'finance', 'renew', 'loan', old_loan.id,
+                   {'client': old_loan.client.name if old_loan.client else 'Unknown',
+                    'interest_paid': float(interest_owed),
+                    'new_loan_id': new_loan.id,
+                    'new_principal': float(new_principal),
+                    'new_rate': float(new_rate),
+                    'new_weeks': new_weeks})
+
+        flash(f'Loan renewed! Interest of {interest_owed:,.0f} paid. New loan of {float(new_total):,.0f} created.', 'success')
+        return redirect(url_for('finance.view_loan', id=new_loan.id))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error renewing loan: {str(e)}', 'error')
+        return redirect(url_for('finance.loans'))
 
 
 @finance_bp.route('/loans/<int:id>/delete', methods=['POST'])

@@ -30,10 +30,18 @@ class HardwareStock(db.Model):
     max_selling_price = db.Column(db.Numeric(12, 2), nullable=False)
     low_stock_threshold = db.Column(db.Integer)
     is_active = db.Column(db.Boolean, default=True)
+    image_url = db.Column(db.String(500), nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
 
     category = db.relationship('HardwareCategory', backref='stock_items')
+
+    @property
+    def is_low_stock(self):
+        """Check if stock is below threshold"""
+        if self.low_stock_threshold:
+            return self.quantity <= self.low_stock_threshold
+        return False
 
     def to_dict(self):
         return {
@@ -49,7 +57,8 @@ class HardwareStock(db.Model):
             'max_selling_price': float(self.max_selling_price),
             'low_stock_threshold': self.low_stock_threshold,
             'is_active': self.is_active,
-            'is_low_stock': self.quantity <= self.low_stock_threshold if self.low_stock_threshold else False
+            'image_url': self.image_url,
+            'is_low_stock': self.is_low_stock
         }
 
 

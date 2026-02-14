@@ -51,7 +51,7 @@
                     <th class="text-right">Balance</th>
                     <th>Due Date</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th style="min-width: 160px; white-space: nowrap;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -72,8 +72,11 @@
                         <span class="badge badge-info">Active</span>
                         {% endif %}
                     </td>
-                    <td>
+                    <td style="white-space: nowrap;">
                         <a href="{{ url_for('finance.view_loan', id=loan.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
+                        {% if loan.status == 'active' and loan.balance > 0 %}
+                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.total_amount - loan.principal }})" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
+                        {% endif %}
                         {% if current_section == 'manager' %}
                         <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="text-green-600 hover:underline text-sm ml-2">Edit</a>
                         {% endif %}
@@ -148,11 +151,72 @@
     </div>
 </div>
 
+<!-- Renew Loan Modal -->
+<div id="renew-loan-modal" class="modal">
+    <div class="modal-content">
+        <h3 class="text-lg font-semibold mb-4">Renew Loan</h3>
+        <form id="renew-loan-form" method="POST">
+            <div class="guideline mb-4">
+                <strong>Renewing loan for: </strong><span id="renew-client-name" class="font-semibold"></span><br>
+                <span class="text-sm text-gray-600">Interest of <strong id="renew-interest-display"></strong> will be recorded as paid on the old loan. A new loan will be created with the terms below.</span>
+            </div>
+
+            <div class="section-card mb-4" style="padding: 12px; background: var(--gray-50);">
+                <div class="font-semibold text-sm text-gray-600 mb-2">Previous Loan Terms</div>
+                <div class="grid grid-cols-3 gap-2 text-sm">
+                    <div>Principal: <strong id="renew-old-principal"></strong></div>
+                    <div>Rate: <strong id="renew-old-rate"></strong>%</div>
+                    <div>Duration: <strong id="renew-old-weeks"></strong> weeks</div>
+                </div>
+            </div>
+
+            <div class="font-semibold text-sm text-gray-700 mb-2">New Loan Terms</div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Principal Amount *</label>
+                    <input type="number" name="principal" id="renew-principal" min="1" step="0.01" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Interest Rate (%) *</label>
+                    <input type="number" name="interest_rate" id="renew-rate" min="0" step="0.01" required class="form-input">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Duration (weeks) *</label>
+                <input type="number" name="duration_weeks" id="renew-weeks" min="1" required class="form-input">
+            </div>
+
+            <div class="flex justify-end gap-2 mt-4">
+                <button type="button" onclick="hideModal('renew-loan-modal')" class="btn btn-secondary">Cancel</button>
+                <button type="submit" class="btn btn-primary">Confirm Renewal</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script>
 // Initialize date restrictions based on user role
 document.addEventListener('DOMContentLoaded', function() {
     const isManager = '{{ current_section }}' === 'manager';
     initDateRestrictions(isManager);
 });
+
+function openRenewModal(loanId, clientName, principal, rate, weeks, interestOwed) {
+    document.getElementById('renew-loan-form').action = '/finance/loans/' + loanId + '/renew';
+    document.getElementById('renew-client-name').textContent = clientName;
+    document.getElementById('renew-interest-display').textContent = Number(interestOwed).toLocaleString('en', {maximumFractionDigits: 0});
+
+    // Show previous terms
+    document.getElementById('renew-old-principal').textContent = Number(principal).toLocaleString('en', {maximumFractionDigits: 0});
+    document.getElementById('renew-old-rate').textContent = rate;
+    document.getElementById('renew-old-weeks').textContent = weeks;
+
+    // Pre-fill new terms with same values (editable)
+    document.getElementById('renew-principal').value = principal;
+    document.getElementById('renew-rate').value = rate;
+    document.getElementById('renew-weeks').value = weeks;
+
+    showModal('renew-loan-modal');
+}
 </script>
 {% endblock %}
