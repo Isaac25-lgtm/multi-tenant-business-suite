@@ -90,10 +90,13 @@
                     {% if item.quantity <= (item.low_stock_threshold or 0) %} <span class="badge badge-warning"
                         style="font-size:10px;">Low</span>
                         {% endif %}
+                    {% if item.for_hire %}
+                    <span class="badge" style="font-size:10px;background:#7c3aed;color:white;">For Hire</span>
+                    {% endif %}
                 </div>
                 <div class="flex gap-2">
                     <button
-                        onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})"
+                        onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }})"
                         style="color:var(--terra-600);" class="hover:underline text-xs">Edit</button>
                     <form method="POST" action="{{ url_for('boutique.refresh_image', id=item.id) }}" class="inline">
                         <button type="submit" style="color:var(--navy-400);" class="hover:underline text-xs"
@@ -119,7 +122,7 @@
         </svg>
         Table View
     </summary>
-    <div class="section-card">
+    <div class="section-card" style="padding:0;overflow-x:auto;">
         <table class="data-table">
             <thead>
                 <tr>
@@ -131,7 +134,7 @@
                     <th class="text-right">Min Price</th>
                     <th class="text-right">Max Price</th>
                     <th>Status</th>
-                    <th>Actions</th>
+                    <th style="min-width: 200px; white-space: nowrap;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -165,10 +168,13 @@
                         {% else %}
                         <span class="badge badge-danger">Inactive</span>
                         {% endif %}
+                        {% if item.for_hire %}
+                        <span class="badge" style="background:#7c3aed;color:white;">For Hire</span>
+                        {% endif %}
                     </td>
-                    <td>
+                    <td style="white-space: nowrap;">
                         <button
-                            onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})"
+                            onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }})"
                             style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
                         {% if item.is_active %}
                         <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline"
@@ -274,6 +280,13 @@
                 <input type="number" name="low_stock_threshold" min="0" class="form-input"
                     placeholder="Auto-calculated as 25% of quantity if empty">
             </div>
+            <div class="form-group">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="for_hire" class="w-4 h-4">
+                    <span class="form-label" style="margin:0;">Available for Hire</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-1">Check this if this item can be rented/hired out</p>
+            </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button type="button" onclick="hideModal('add-stock-modal')" class="btn btn-secondary">Cancel</button>
                 <button type="submit" class="btn btn-primary">Add Item</button>
@@ -311,6 +324,31 @@
                 <label class="form-label">Unit</label>
                 <input type="text" name="unit" id="edit-unit" class="form-input">
             </div>
+
+            <!-- Stock Adjustment Section -->
+            <div style="background:var(--navy-50);padding:16px;border-radius:var(--radius-lg);margin-bottom:16px;border:1px solid var(--navy-200);">
+                <label class="form-label" style="color:var(--navy-800);font-weight:600;">Stock Adjustment</label>
+                <div class="flex items-center gap-4 mt-2">
+                    <div class="text-center">
+                        <span class="text-xs text-gray-500">Current Stock</span>
+                        <div id="edit-current-qty" class="text-2xl font-bold" style="color:var(--navy-700);">0</div>
+                    </div>
+                    <div class="flex-1">
+                        <label class="text-xs text-gray-500">Add or Subtract Stock</label>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="adjustEditQty(-1)" class="btn btn-secondary" style="padding:4px 12px;font-size:18px;">−</button>
+                            <input type="number" name="stock_adjustment" id="edit-stock-adjustment" value="0" class="form-input text-center" style="width:100px;">
+                            <button type="button" onclick="adjustEditQty(1)" class="btn btn-secondary" style="padding:4px 12px;font-size:18px;">+</button>
+                        </div>
+                    </div>
+                    <div class="text-center">
+                        <span class="text-xs text-gray-500">New Stock</span>
+                        <div id="edit-new-qty" class="text-2xl font-bold" style="color:var(--terra-600);">0</div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">Use positive numbers to add stock, negative to subtract. Leave at 0 for no change.</p>
+            </div>
+
             <div class="grid grid-cols-3 gap-4">
                 <div class="form-group">
                     <label class="form-label">Cost Price (Per Item)</label>
@@ -331,6 +369,13 @@
                 <label class="form-label">Low Stock Threshold</label>
                 <input type="number" name="low_stock_threshold" id="edit-threshold" min="0" class="form-input">
             </div>
+            <div class="form-group">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="for_hire" id="edit-for-hire" class="w-4 h-4">
+                    <span class="form-label" style="margin:0;">Available for Hire</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-1">Check this if this item can be rented/hired out</p>
+            </div>
             <div class="flex justify-end gap-2 mt-4">
                 <button type="button" onclick="hideModal('edit-stock-modal')" class="btn btn-secondary">Cancel</button>
                 <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -340,7 +385,9 @@
 </div>
 
 <script>
-    function editStock(id, name, categoryId, unit, costPrice, minPrice, maxPrice, threshold) {
+    var editCurrentQty = 0;
+
+    function editStock(id, name, categoryId, unit, costPrice, minPrice, maxPrice, threshold, quantity, forHire) {
         document.getElementById('edit-stock-form').action = '/boutique/stock/' + id + '/edit';
         document.getElementById('edit-item-name').value = name;
         document.getElementById('edit-category-id').value = categoryId || '';
@@ -349,10 +396,35 @@
         document.getElementById('edit-min-price').value = minPrice;
         document.getElementById('edit-max-price').value = maxPrice;
         document.getElementById('edit-threshold').value = threshold;
+        // Stock adjustment
+        editCurrentQty = quantity || 0;
+        document.getElementById('edit-current-qty').textContent = editCurrentQty;
+        document.getElementById('edit-stock-adjustment').value = 0;
+        document.getElementById('edit-new-qty').textContent = editCurrentQty;
+        // For hire
+        document.getElementById('edit-for-hire').checked = forHire || false;
         // Hide new category input when opening edit modal
         document.getElementById('edit-new-category-input').classList.add('hidden');
         showModal('edit-stock-modal');
     }
+
+    function adjustEditQty(delta) {
+        var input = document.getElementById('edit-stock-adjustment');
+        var current = parseInt(input.value) || 0;
+        input.value = current + delta;
+        updateNewQty();
+    }
+
+    function updateNewQty() {
+        var adjustment = parseInt(document.getElementById('edit-stock-adjustment').value) || 0;
+        var newQty = Math.max(0, editCurrentQty + adjustment);
+        var el = document.getElementById('edit-new-qty');
+        el.textContent = newQty;
+        el.style.color = adjustment > 0 ? 'var(--green-600, #16a34a)' : adjustment < 0 ? 'var(--red-600, #dc2626)' : 'var(--terra-600)';
+    }
+
+    // Listen for manual input changes on adjustment field
+    document.getElementById('edit-stock-adjustment').addEventListener('input', updateNewQty);
 
     function toggleNewCategory(prefix) {
         const select = document.getElementById(prefix + '-category-select') || document.getElementById(prefix + '-category-id');

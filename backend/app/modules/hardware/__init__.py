@@ -230,6 +230,7 @@ def edit_stock(id):
     item = HardwareStock.query.get_or_404(id)
     try:
         old_name = item.item_name
+        old_quantity = item.quantity
         item.item_name = request.form.get('item_name', item.item_name).strip()
 
         # Handle category - either existing or new
@@ -255,10 +256,29 @@ def edit_stock(id):
         item.min_selling_price = safe_decimal(request.form.get('min_selling_price'), str(item.min_selling_price))
         item.max_selling_price = safe_decimal(request.form.get('max_selling_price'), str(item.max_selling_price))
         item.low_stock_threshold = request.form.get('low_stock_threshold', type=int) or item.low_stock_threshold
+
+        # Handle stock adjustment (add/subtract)
+        adjustment = request.form.get('stock_adjustment', type=int, default=0)
+        if adjustment != 0:
+            item.quantity += adjustment
+            if item.quantity < 0:
+                item.quantity = 0
+
         db.session.commit()
 
-        log_action(session['username'], 'hardware', 'update', 'stock', item.id,
-                   {'item_name': item.item_name, 'old_name': old_name})
+        # Log stock adjustment separately for audit trail
+        if adjustment != 0:
+            log_action(session['username'], 'hardware', 'adjust', 'stock', item.id,
+                       {'item_name': item.item_name, 'old_quantity': old_quantity,
+                        'adjustment': adjustment, 'new_quantity': item.quantity,
+                        'reason': 'Stock adjusted via edit'})
+
+        details = {'item_name': item.item_name, 'old_name': old_name}
+        if adjustment != 0:
+            details['stock_adjustment'] = adjustment
+            details['old_quantity'] = old_quantity
+            details['new_quantity'] = item.quantity
+        log_action(session['username'], 'hardware', 'update', 'stock', item.id, details)
         flash(f'Stock item updated', 'success')
     except Exception as e:
         db.session.rollback()

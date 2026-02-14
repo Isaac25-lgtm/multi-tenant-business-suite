@@ -31,6 +31,7 @@ class BoutiqueStock(db.Model):
     max_selling_price = db.Column(db.Numeric(12, 2), nullable=False)
     low_stock_threshold = db.Column(db.Integer)
     image_url = db.Column(db.String(500), nullable=True)
+    for_hire = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
@@ -51,6 +52,7 @@ class BoutiqueStock(db.Model):
             'max_selling_price': float(self.max_selling_price),
             'low_stock_threshold': self.low_stock_threshold,
             'image_url': self.image_url,
+            'for_hire': self.for_hire,
             'is_active': self.is_active,
             'is_low_stock': self.quantity <= self.low_stock_threshold if self.low_stock_threshold else False
         }
