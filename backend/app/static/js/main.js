@@ -222,6 +222,63 @@ function collectAgreementData() {
     return data;
 }
 
+// ============ SEARCHABLE SELECT ============
+function initSearchableSelects() {
+    document.querySelectorAll('select.searchable-select').forEach(function(select) {
+        if (select.dataset.searchified) return;
+        select.dataset.searchified = 'true';
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'searchable-select-wrapper';
+        wrapper.style.cssText = 'position:relative;';
+        select.parentNode.insertBefore(wrapper, select);
+
+        var searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Type to search...';
+        searchInput.className = 'form-input';
+        searchInput.style.cssText = 'margin-bottom:4px;font-size:13px;padding:6px 10px;';
+
+        wrapper.appendChild(searchInput);
+        wrapper.appendChild(select);
+
+        // Store original options
+        var options = Array.from(select.options);
+
+        searchInput.addEventListener('input', function() {
+            var query = this.value.toLowerCase();
+            select.innerHTML = '';
+
+            options.forEach(function(opt) {
+                if (!query || opt.value === '' || opt.text.toLowerCase().indexOf(query) !== -1) {
+                    select.appendChild(opt.cloneNode(true));
+                }
+            });
+
+            // If only one match (plus placeholder), auto-select it
+            if (select.options.length === 2 && select.options[0].value === '') {
+                select.selectedIndex = 1;
+                select.dispatchEvent(new Event('change'));
+            }
+        });
+
+        // Clear search when select changes
+        select.addEventListener('change', function() {
+            if (this.value) {
+                var selectedOpt = this.options[this.selectedIndex];
+                searchInput.value = selectedOpt ? selectedOpt.text : '';
+            }
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initSearchableSelects);
+
+// Re-initialize after dynamic content (e.g., adding sale items)
+function refreshSearchableSelects() {
+    initSearchableSelects();
+}
+
 // ============ COLLATERAL UPLOAD ============
 function initCollateralUpload() {
     const uploadZone = document.querySelector('.upload-zone');

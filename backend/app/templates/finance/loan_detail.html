@@ -34,7 +34,7 @@
                 </div>
                 <div>
                     <span class="text-gray-500">Duration:</span>
-                    <span class="font-medium ml-2">{{ loan.duration_weeks }} weeks</span>
+                    <span class="font-medium ml-2">{{ loan.duration_weeks }} {{ loan.duration_type or 'weeks' }}</span>
                 </div>
                 <div>
                     <span class="text-gray-500">Status:</span>

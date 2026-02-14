@@ -23,7 +23,7 @@
     <div class="font-semibold text-gray-700 mb-2">Data Entry Guide - Individual Loans</div>
     <ul class="list-disc list-inside space-y-1 text-sm">
         <li><strong>Step 1:</strong> Click "New Loan" to start - select a client from the list</li>
-        <li><strong>Step 2:</strong> Enter principal amount, interest rate (%), and duration in weeks</li>
+        <li><strong>Step 2:</strong> Enter principal amount, interest rate (%), and duration in weeks or months</li>
         <li><strong>Step 3:</strong> Click "Preview Agreement" to review all calculations before issuing</li>
         <li><strong>Step 4:</strong> Upload any collateral documents in the preview screen</li>
         <li><strong>Step 5:</strong> Click "Issue Loan" to finalize</li>
@@ -75,7 +75,7 @@
                     <td style="white-space: nowrap;">
                         <a href="{{ url_for('finance.view_loan', id=loan.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
                         {% if loan.status == 'active' and loan.balance > 0 %}
-                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.total_amount - loan.principal }})" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
+                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.total_amount - loan.principal }}, '{{ loan.duration_type or \"weeks\" }}')" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
                         {% endif %}
                         {% if current_section == 'manager' %}
                         <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="text-green-600 hover:underline text-sm ml-2">Edit</a>
@@ -114,7 +114,7 @@
         <form method="POST" action="{{ url_for('finance.preview_loan_agreement') }}">
             <div class="form-group">
                 <label class="form-label">Client *</label>
-                <select name="client_id" required class="form-select">
+                <select name="client_id" required class="form-select searchable-select">
                     <option value="">-- Select Client --</option>
                     {% for client in clients %}
                     <option value="{{ client.id }}">{{ client.name }} ({{ client.phone }})</option>
@@ -132,10 +132,17 @@
                     <input type="number" name="interest_rate" min="0" step="0.01" value="10" class="form-input">
                 </div>
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-3 gap-4">
                 <div class="form-group">
-                    <label class="form-label">Duration (weeks) *</label>
+                    <label class="form-label">Duration *</label>
                     <input type="number" name="duration_weeks" min="1" required class="form-input" placeholder="e.g., 4">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Period</label>
+                    <select name="duration_type" class="form-select">
+                        <option value="weeks">Weeks</option>
+                        <option value="months">Months</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Issue Date</label>
@@ -181,9 +188,18 @@
                     <input type="number" name="interest_rate" id="renew-rate" min="0" step="0.01" required class="form-input">
                 </div>
             </div>
-            <div class="form-group">
-                <label class="form-label">Duration (weeks) *</label>
-                <input type="number" name="duration_weeks" id="renew-weeks" min="1" required class="form-input">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label">Duration *</label>
+                    <input type="number" name="duration_weeks" id="renew-weeks" min="1" required class="form-input">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Period</label>
+                    <select name="duration_type" id="renew-duration-type" class="form-select">
+                        <option value="weeks">Weeks</option>
+                        <option value="months">Months</option>
+                    </select>
+                </div>
             </div>
 
             <div class="flex justify-end gap-2 mt-4">
@@ -201,7 +217,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initDateRestrictions(isManager);
 });
 
-function openRenewModal(loanId, clientName, principal, rate, weeks, interestOwed) {
+function openRenewModal(loanId, clientName, principal, rate, weeks, interestOwed, durationType) {
     document.getElementById('renew-loan-form').action = '/finance/loans/' + loanId + '/renew';
     document.getElementById('renew-client-name').textContent = clientName;
     document.getElementById('renew-interest-display').textContent = Number(interestOwed).toLocaleString('en', {maximumFractionDigits: 0});
@@ -209,12 +225,13 @@ function openRenewModal(loanId, clientName, principal, rate, weeks, interestOwed
     // Show previous terms
     document.getElementById('renew-old-principal').textContent = Number(principal).toLocaleString('en', {maximumFractionDigits: 0});
     document.getElementById('renew-old-rate').textContent = rate;
-    document.getElementById('renew-old-weeks').textContent = weeks;
+    document.getElementById('renew-old-weeks').textContent = weeks + ' ' + (durationType || 'weeks');
 
     // Pre-fill new terms with same values (editable)
     document.getElementById('renew-principal').value = principal;
     document.getElementById('renew-rate').value = rate;
     document.getElementById('renew-weeks').value = weeks;
+    document.getElementById('renew-duration-type').value = durationType || 'weeks';
 
     showModal('renew-loan-modal');
 }

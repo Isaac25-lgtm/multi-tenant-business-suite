@@ -183,6 +183,7 @@ def create_loan():
         principal = Decimal(request.form.get('principal', '0'))
         interest_rate = Decimal(request.form.get('interest_rate', '0'))
         duration_weeks = request.form.get('duration_weeks', type=int)
+        duration_type = request.form.get('duration_type', 'weeks')
         issue_date = date.fromisoformat(request.form.get('issue_date', str(get_local_today())))
 
         if not client_id or principal <= 0 or duration_weeks <= 0:
@@ -191,13 +192,17 @@ def create_loan():
 
         interest_amount = principal * (interest_rate / 100)
         total_amount = principal + interest_amount
-        due_date = issue_date + timedelta(weeks=duration_weeks)
+        if duration_type == 'months':
+            due_date = issue_date + timedelta(days=duration_weeks * 30)
+        else:
+            due_date = issue_date + timedelta(weeks=duration_weeks)
 
         loan = Loan(
             client_id=client_id, principal=principal, interest_rate=interest_rate,
             interest_amount=interest_amount, total_amount=total_amount,
             amount_paid=Decimal('0'), balance=total_amount,
-            duration_weeks=duration_weeks, issue_date=issue_date, due_date=due_date,
+            duration_weeks=duration_weeks, duration_type=duration_type,
+            issue_date=issue_date, due_date=due_date,
             status='active'
         )
         db.session.add(loan)
@@ -287,10 +292,17 @@ def renew_loan(id):
         new_principal = Decimal(request.form.get('principal', str(old_loan.principal)))
         new_rate = Decimal(request.form.get('interest_rate', str(old_loan.interest_rate)))
         new_weeks = int(request.form.get('duration_weeks', old_loan.duration_weeks))
+        new_duration_type = request.form.get('duration_type', old_loan.duration_type or 'weeks')
 
         # Calculate new loan amounts
         new_interest = new_principal * new_rate / Decimal('100')
         new_total = new_principal + new_interest
+
+        # Calculate due date based on duration type
+        if new_duration_type == 'months':
+            new_due_date = get_local_today() + timedelta(days=new_weeks * 30)
+        else:
+            new_due_date = get_local_today() + timedelta(weeks=new_weeks)
 
         # Create new loan with (possibly revised) terms
         new_loan = Loan(
@@ -299,9 +311,10 @@ def renew_loan(id):
             interest_rate=new_rate,
             interest_amount=new_interest,
             duration_weeks=new_weeks,
+            duration_type=new_duration_type,
             total_amount=new_total,
             issue_date=get_local_today(),
-            due_date=get_local_today() + timedelta(weeks=new_weeks),
+            due_date=new_due_date,
             amount_paid=0,
             balance=new_total,
             status='active'
@@ -586,6 +599,7 @@ def preview_loan_agreement():
     principal = safe_decimal(request.form.get('principal', '0'))
     interest_rate = safe_decimal(request.form.get('interest_rate', '0'))
     duration_weeks = request.form.get('duration_weeks', type=int, default=4)
+    duration_type = request.form.get('duration_type', 'weeks')
     issue_date = date.fromisoformat(request.form.get('issue_date', str(get_local_today())))
 
     if not client_id or principal <= 0:
@@ -599,7 +613,10 @@ def preview_loan_agreement():
 
     interest_amount = principal * (interest_rate / 100)
     total_amount = principal + interest_amount
-    due_date = issue_date + timedelta(weeks=duration_weeks)
+    if duration_type == 'months':
+        due_date = issue_date + timedelta(days=duration_weeks * 30)
+    else:
+        due_date = issue_date + timedelta(weeks=duration_weeks)
 
     # Default agreement terms that can be edited
     default_terms = [
@@ -620,6 +637,7 @@ def preview_loan_agreement():
         interest_amount=float(interest_amount),
         total_amount=float(total_amount),
         duration_weeks=duration_weeks,
+        duration_type=duration_type,
         issue_date=issue_date,
         due_date=due_date,
         default_terms=default_terms,
@@ -636,6 +654,7 @@ def create_loan_with_agreement():
         principal = safe_decimal(request.form.get('principal', '0'))
         interest_rate = safe_decimal(request.form.get('interest_rate', '0'))
         duration_weeks = request.form.get('duration_weeks', type=int)
+        duration_type = request.form.get('duration_type', 'weeks')
         issue_date = date.fromisoformat(request.form.get('issue_date', str(get_local_today())))
 
         # Check date permission
@@ -650,13 +669,17 @@ def create_loan_with_agreement():
 
         interest_amount = principal * (interest_rate / 100)
         total_amount = principal + interest_amount
-        due_date = issue_date + timedelta(weeks=duration_weeks)
+        if duration_type == 'months':
+            due_date = issue_date + timedelta(days=duration_weeks * 30)
+        else:
+            due_date = issue_date + timedelta(weeks=duration_weeks)
 
         loan = Loan(
             client_id=client_id, principal=principal, interest_rate=interest_rate,
             interest_amount=interest_amount, total_amount=total_amount,
             amount_paid=Decimal('0'), balance=total_amount,
-            duration_weeks=duration_weeks, issue_date=issue_date, due_date=due_date,
+            duration_weeks=duration_weeks, duration_type=duration_type,
+            issue_date=issue_date, due_date=due_date,
             status='active'
         )
         db.session.add(loan)
@@ -751,7 +774,8 @@ def download_loan_agreement_pdf(id):
     c.drawString(50, y, f"Total Repayment: UGX {float(loan.total_amount):,.0f}")
     c.setFont("Helvetica", 10)
     y -= 15
-    c.drawString(50, y, f"Duration: {loan.duration_weeks} weeks")
+    duration_label = loan.duration_type or 'weeks'
+    c.drawString(50, y, f"Duration: {loan.duration_weeks} {duration_label}")
     y -= 15
     c.drawString(50, y, f"Issue Date: {loan.issue_date.strftime('%B %d, %Y')}")
     y -= 15

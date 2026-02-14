@@ -65,7 +65,7 @@
                 </tr>
                 <tr>
                     <td class="py-1"><strong>Duration:</strong></td>
-                    <td>{{ duration_weeks }} weeks</td>
+                    <td>{{ duration_weeks }} {{ duration_type or 'weeks' }}</td>
                 </tr>
                 <tr>
                     <td class="py-1"><strong>Issue Date:</strong></td>
@@ -122,6 +122,7 @@
                 <input type="hidden" name="principal" value="{{ principal }}">
                 <input type="hidden" name="interest_rate" value="{{ interest_rate }}">
                 <input type="hidden" name="duration_weeks" value="{{ duration_weeks }}">
+                <input type="hidden" name="duration_type" value="{{ duration_type or 'weeks' }}">
                 <input type="hidden" name="issue_date" value="{{ issue_date }}">
 
                 <!-- Collateral Upload -->
@@ -143,7 +144,7 @@
                     <button type="submit" class="btn btn-primary w-full">
                         Issue Loan
                     </button>
-                    <a href="{{ url_for('finance.download_loan_agreement_pdf', id=0) }}?preview=true&client_id={{ client.id }}&principal={{ principal }}&interest_rate={{ interest_rate }}&duration_weeks={{ duration_weeks }}&issue_date={{ issue_date }}"
+                    <a href="{{ url_for('finance.download_loan_agreement_pdf', id=0) }}?preview=true&client_id={{ client.id }}&principal={{ principal }}&interest_rate={{ interest_rate }}&duration_weeks={{ duration_weeks }}&duration_type={{ duration_type or 'weeks' }}&issue_date={{ issue_date }}"
                        class="btn btn-outline w-full" onclick="window.print(); return false;">
                         Print Agreement
                     </a>

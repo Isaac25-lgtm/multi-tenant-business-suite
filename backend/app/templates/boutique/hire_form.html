@@ -13,7 +13,7 @@
         <!-- Item Selection -->
         <div class="form-group">
             <label class="form-label">Item to Hire *</label>
-            <select name="stock_id" id="stock-select" required class="form-select" onchange="updateItemInfo()">
+            <select name="stock_id" id="stock-select" required class="form-select searchable-select" onchange="updateItemInfo()">
                 <option value="">-- Select an item --</option>
                 {% for item in stock %}
                 <option value="{{ item.id }}"
@@ -80,7 +80,7 @@
             <label class="form-label" style="color:var(--navy-800);font-weight:600;">Customer Details</label>
             <div class="form-group mt-2">
                 <label class="form-label text-xs">Existing Customer</label>
-                <select name="customer_id" id="customer-select" class="form-select" onchange="toggleNewCustomer()">
+                <select name="customer_id" id="customer-select" class="form-select searchable-select" onchange="toggleNewCustomer()">
                     <option value="">-- New Customer --</option>
                     {% for c in customers %}
                     <option value="{{ c.id }}">{{ c.name }} ({{ c.phone }})</option>

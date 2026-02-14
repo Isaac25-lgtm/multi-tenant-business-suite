@@ -94,10 +94,24 @@
                     <span class="badge" style="font-size:10px;background:#7c3aed;color:white;">For Hire</span>
                     {% endif %}
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center">
                     <button
                         onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }})"
                         style="color:var(--terra-600);" class="hover:underline text-xs">Edit</button>
+                    {% if item.is_active %}
+                    <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
+                        <button type="submit" class="text-orange-600 hover:underline text-xs">Off</button>
+                    </form>
+                    {% else %}
+                    <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}" class="inline">
+                        <button type="submit" class="text-green-600 hover:underline text-xs">On</button>
+                    </form>
+                    {% endif %}
+                    {% if current_section == 'manager' %}
+                    <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('PERMANENTLY DELETE this item?')">
+                        <button type="submit" class="text-red-600 hover:underline text-xs">Del</button>
+                    </form>
+                    {% endif %}
                     <form method="POST" action="{{ url_for('boutique.refresh_image', id=item.id) }}" class="inline">
                         <button type="submit" style="color:var(--navy-400);" class="hover:underline text-xs"
                             title="Refresh image">🔄</button>

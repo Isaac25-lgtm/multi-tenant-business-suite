@@ -23,7 +23,7 @@
         </div>
         <div class="form-group">
             <label class="form-label">Existing Customer</label>
-            <select name="customer_id" id="customer-select" class="form-select">
+            <select name="customer_id" id="customer-select" class="form-select searchable-select">
                 <option value="">-- Select or Add New --</option>
                 {% for customer in customers %}
                 <option value="{{ customer.id }}">{{ customer.name }} ({{ customer.phone }})</option>
@@ -51,7 +51,7 @@
             <div class="sale-item grid grid-cols-12 gap-2 mb-2 items-end">
                 <div class="col-span-5">
                     <label class="form-label">Item</label>
-                    <select name="item_id[]" required class="form-select item-select" onchange="updatePrice(this)">
+                    <select name="item_id[]" required class="form-select item-select searchable-select" onchange="updatePrice(this)">
                         <option value="">-- Select Item --</option>
                         {% for item in stock %}
                         <option value="{{ item.id }}" data-price="{{ item.max_selling_price }}" data-qty="{{ item.quantity }}">
@@ -124,7 +124,20 @@ function addItem() {
     const newItem = firstItem.cloneNode(true);
 
     // Reset values
-    newItem.querySelector('.item-select').value = '';
+    var sel = newItem.querySelector('.item-select');
+    sel.value = '';
+
+    // Reset searchable select wrapper if present
+    var wrapper = newItem.querySelector('.searchable-select-wrapper');
+    if (wrapper) {
+        var searchInput = wrapper.querySelector('input[type="text"]');
+        if (searchInput) { searchInput.value = ''; }
+        sel.dataset.searchified = '';
+        var origSel = firstItem.querySelector('.item-select');
+        sel.innerHTML = origSel.innerHTML;
+        sel.value = '';
+    }
+
     newItem.querySelector('.item-quantity').value = 1;
     newItem.querySelector('.item-price').value = '';
     newItem.querySelector('.item-subtotal').textContent = 'UGX 0';
@@ -141,6 +154,7 @@ function addItem() {
     newItem.appendChild(removeBtn);
 
     container.appendChild(newItem);
+    refreshSearchableSelects();
 }
 
 function calculateTotal() {

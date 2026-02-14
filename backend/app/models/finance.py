@@ -41,6 +41,7 @@ class Loan(db.Model):
     amount_paid = db.Column(db.Numeric(12, 2), default=0)
     balance = db.Column(db.Numeric(12, 2), nullable=False)
     duration_weeks = db.Column(db.Integer, nullable=False)
+    duration_type = db.Column(db.String(10), default='weeks')  # 'weeks' or 'months'
     issue_date = db.Column(db.Date, nullable=False)
     due_date = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(20), default='active')
@@ -65,6 +66,7 @@ class Loan(db.Model):
             'amount_paid': float(self.amount_paid),
             'balance': float(self.balance),
             'duration_weeks': self.duration_weeks,
+            'duration_type': self.duration_type or 'weeks',
             'issue_date': self.issue_date.isoformat() if self.issue_date else None,
             'due_date': self.due_date.isoformat() if self.due_date else None,
             'status': self.status,
