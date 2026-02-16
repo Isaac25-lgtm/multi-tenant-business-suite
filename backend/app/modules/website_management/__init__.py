@@ -487,3 +487,51 @@ def update_order_status(id):
     log_action('update_order_status', f'{id}: {new_status}')
     flash(f'Order marked as {new_status}', 'success')
     return redirect(url_for('website.order_requests'))
+
+
+# ============ REAL-TIME NOTIFICATION API ============
+
+@website_bp.route('/api/new-orders')
+@staff_required
+def check_new_orders():
+    """Check for new orders since a given timestamp. Used by polling notifications."""
+    since = request.args.get('since')
+    query = WebsiteOrderRequest.query.filter_by(status='new', is_active=True)
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since)
+            query = query.filter(WebsiteOrderRequest.submitted_at > since_dt)
+        except (ValueError, TypeError):
+            pass
+    orders = query.order_by(WebsiteOrderRequest.submitted_at.desc()).all()
+    return jsonify({
+        'orders': [{
+            'id': o.id,
+            'customer_name': o.customer_name,
+            'customer_phone': o.customer_phone,
+            'items': o.items,
+            'total_amount': o.total_amount,
+            'item_count': o.item_count,
+            'submitted_at': o.submitted_at.isoformat() if o.submitted_at else None
+        } for o in orders],
+        'count': len(orders)
+    })
+
+
+@website_bp.route('/api/new-inquiries')
+@staff_required
+def check_new_inquiries():
+    """Check for new loan inquiries since a given timestamp."""
+    since = request.args.get('since')
+    query = WebsiteLoanInquiry.query.filter_by(status='new', is_active=True)
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since)
+            query = query.filter(WebsiteLoanInquiry.submitted_at > since_dt)
+        except (ValueError, TypeError):
+            pass
+    inquiries = query.order_by(WebsiteLoanInquiry.submitted_at.desc()).all()
+    return jsonify({
+        'inquiries': [i.to_dict() for i in inquiries],
+        'count': len(inquiries)
+    })

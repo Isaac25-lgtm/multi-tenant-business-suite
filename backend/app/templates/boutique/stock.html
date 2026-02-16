@@ -126,6 +126,12 @@
     </div>
     {% endfor %}
 </div>
+<!-- Hidden image data for edit modals -->
+{% for item in stock %}
+{% if product_images.get(item.id) %}
+<div id="stock-images-{{ item.id }}" style="display:none;" data-images='[{% for img in product_images[item.id] %}{"id":{{ img.id }},"url":"{{ img.image_url }}"}{% if not loop.last %},{% endif %}{% endfor %}]'></div>
+{% endif %}
+{% endfor %}
 
 <!-- Stock Table (Detailed View) -->
 <details class="mb-6">
@@ -291,17 +297,13 @@
     <div class="modal-content max-w-2xl">
         <h3 class="text-lg font-semibold mb-4">Edit Stock Item</h3>
         <form id="edit-stock-form" method="POST" enctype="multipart/form-data">
-            <!-- Image Upload -->
+            <!-- Image Gallery + Upload -->
             <div class="form-group" style="background:var(--navy-50);padding:12px;border-radius:var(--radius-lg);margin-bottom:16px;border:1px solid var(--navy-200);">
-                <label class="form-label" style="font-weight:600;">Product Image</label>
-                <div class="flex items-center gap-4">
-                    <div id="edit-image-preview" style="width:60px;height:60px;border-radius:8px;overflow:hidden;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">
-                        📦
-                    </div>
-                    <div class="flex-1">
-                        <input type="file" name="product_image" accept="image/*" class="form-input" style="font-size:12px;">
-                        <p class="text-xs text-gray-500 mt-1">Upload a new image to replace the current one. Leave empty to keep existing.</p>
-                    </div>
+                <label class="form-label" style="font-weight:600;">Product Images</label>
+                <div id="edit-image-gallery" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
+                <div class="flex-1">
+                    <input type="file" name="product_images" accept="image/*" multiple class="form-input" style="font-size:12px;">
+                    <p class="text-xs text-gray-500 mt-1">Upload multiple images (different angles). Existing images are shown above — click X to remove.</p>
                 </div>
             </div>
             <div class="form-group">
@@ -407,12 +409,23 @@
         document.getElementById('edit-new-qty').textContent = editCurrentQty;
         // For hire
         document.getElementById('edit-for-hire').checked = forHire || false;
-        // Image preview
-        var preview = document.getElementById('edit-image-preview');
-        if (imageUrl) {
-            preview.innerHTML = '<img src="' + imageUrl + '" style="width:60px;height:60px;object-fit:cover;">';
-        } else {
-            preview.innerHTML = '📦';
+        // Image gallery
+        var gallery = document.getElementById('edit-image-gallery');
+        gallery.innerHTML = '';
+        var imgData = document.getElementById('stock-images-' + id);
+        if (imgData) {
+            var images = JSON.parse(imgData.getAttribute('data-images'));
+            images.forEach(function(img) {
+                var div = document.createElement('div');
+                div.style.cssText = 'position:relative;width:60px;height:60px;border-radius:8px;overflow:hidden;border:1px solid #ddd;';
+                div.innerHTML = '<img src="' + img.url + '" style="width:100%;height:100%;object-fit:cover;">' +
+                    '<form method="POST" action="/boutique/stock/' + id + '/delete-image/' + img.id + '" style="position:absolute;top:-2px;right:-2px;" onsubmit="return confirm(\'Delete this image?\')">' +
+                    '<button type="submit" style="background:red;color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;">X</button></form>';
+                gallery.appendChild(div);
+            });
+        }
+        if (!gallery.children.length && imageUrl) {
+            gallery.innerHTML = '<div style="width:60px;height:60px;border-radius:8px;overflow:hidden;border:1px solid #ddd;"><img src="' + imageUrl + '" style="width:100%;height:100%;object-fit:cover;"></div>';
         }
         // Hide new category input when opening edit modal
         document.getElementById('edit-new-category-input').classList.add('hidden');

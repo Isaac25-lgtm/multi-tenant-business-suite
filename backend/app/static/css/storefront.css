@@ -1041,7 +1041,47 @@ img {
   background: linear-gradient(135deg, #8C8C8C, #BFBFBF)
 }
 
-.prod__img img {
+/* Carousel images: stacked absolutely, crossfade */
+.prod__carousel .carousel__img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity .8s ease, transform .5s var(--ease)
+}
+
+.prod__carousel .carousel__img.active {
+  opacity: 1
+}
+
+/* Dot indicators */
+.carousel__dots {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 3
+}
+
+.carousel__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.45);
+  transition: background .3s
+}
+
+.carousel__dot.active {
+  background: #fff
+}
+
+/* Fallback for single images (no carousel class) */
+.prod__img img:not(.carousel__img) {
   width: 100%;
   height: 100%;
   object-fit: cover;

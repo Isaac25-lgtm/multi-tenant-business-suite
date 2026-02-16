@@ -157,7 +157,12 @@ def stock():
         query = query.filter_by(is_active=True)
     items = query.order_by(HardwareStock.item_name).all()
     categories = HardwareCategory.query.order_by(HardwareCategory.name).all()
-    return render_template('hardware/stock.html', stock=items, categories=categories, show_inactive=show_inactive)
+    from app.models.website import ProductImage
+    product_images = {}
+    for item in items:
+        product_images[item.id] = ProductImage.get_images('hardware', item.id)
+    return render_template('hardware/stock.html', stock=items, categories=categories,
+                           show_inactive=show_inactive, product_images=product_images)
 
 
 @hardware_bp.route('/stock/add', methods=['POST'])
@@ -259,18 +264,30 @@ def edit_stock(id):
         item.max_selling_price = safe_decimal(request.form.get('max_selling_price'), str(item.max_selling_price))
         item.low_stock_threshold = request.form.get('low_stock_threshold', type=int) or item.low_stock_threshold
 
-        # Handle image upload
-        if 'product_image' in request.files:
-            file = request.files['product_image']
-            if file and file.filename != '':
-                filename = secure_filename(file.filename)
-                upload_dir = os.path.join(current_app.static_folder, 'uploads', 'products')
-                os.makedirs(upload_dir, exist_ok=True)
-                from datetime import datetime
-                timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-                filename = f"hardware_{id}_{timestamp}_{filename}"
-                file.save(os.path.join(upload_dir, filename))
-                item.image_url = f'/static/uploads/products/{filename}'
+        # Handle multiple image uploads
+        from app.models.website import ProductImage
+        files = request.files.getlist('product_images')
+        if files:
+            upload_dir = os.path.join(current_app.static_folder, 'uploads', 'products')
+            os.makedirs(upload_dir, exist_ok=True)
+            from datetime import datetime
+            existing_count = ProductImage.query.filter_by(
+                product_type='hardware', product_id=id
+            ).count()
+            for idx, file in enumerate(files):
+                if file and file.filename != '':
+                    filename = secure_filename(file.filename)
+                    timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+                    filename = f"hardware_{id}_{timestamp}_{idx}_{filename}"
+                    file.save(os.path.join(upload_dir, filename))
+                    image_url = f'/static/uploads/products/{filename}'
+                    pi = ProductImage(
+                        product_type='hardware', product_id=id,
+                        image_url=image_url, display_order=existing_count + idx
+                    )
+                    db.session.add(pi)
+                    if existing_count == 0 and idx == 0:
+                        item.image_url = image_url
 
         # Handle stock adjustment (add/subtract)
         adjustment = request.form.get('stock_adjustment', type=int, default=0)
@@ -385,6 +402,27 @@ def refresh_image(id):
         flash(f'Image refreshed for "{item.item_name}"', 'success')
     else:
         flash(f'No image found for "{item.item_name}"', 'warning')
+    return redirect(url_for('hardware.stock'))
+
+
+@hardware_bp.route('/stock/<int:id>/delete-image/<int:image_id>', methods=['POST'])
+@login_required('hardware')
+def delete_image(id, image_id):
+    """Delete a product image"""
+    from app.models.website import ProductImage
+    img = ProductImage.query.get_or_404(image_id)
+    if img.product_type != 'hardware' or img.product_id != id:
+        flash('Invalid image', 'error')
+        return redirect(url_for('hardware.stock'))
+    db.session.delete(img)
+    item = HardwareStock.query.get(id)
+    if item and item.image_url == img.image_url:
+        next_img = ProductImage.query.filter_by(
+            product_type='hardware', product_id=id
+        ).filter(ProductImage.id != image_id).order_by(ProductImage.display_order).first()
+        item.image_url = next_img.image_url if next_img else None
+    db.session.commit()
+    flash('Image deleted', 'success')
     return redirect(url_for('hardware.stock'))
 
 

@@ -204,6 +204,14 @@ class PublishedProduct(db.Model):
         else:
             availability = 'In Stock'
         
+        # Gather all images for this product
+        product_images = ProductImage.get_images(self.product_type, self.product_id)
+        image_urls = [img.image_url for img in product_images]
+        # Fallback: use the single image_url if no ProductImage rows
+        primary_image = self.image_url or getattr(item, 'image_url', None)
+        if not image_urls and primary_image:
+            image_urls = [primary_image]
+
         return {
             'id': self.id,
             'product_type': self.product_type,
@@ -214,9 +222,32 @@ class PublishedProduct(db.Model):
             'availability': availability,
             'in_stock': item.quantity > 0,
             'unit': item.unit,
-            'image_url': self.image_url or getattr(item, 'image_url', None),
+            'image_url': image_urls[0] if image_urls else primary_image,
+            'images': image_urls,
             'is_featured': self.is_featured
         }
+
+
+class ProductImage(db.Model):
+    """
+    Multiple images per product for showing different angles.
+    Links to inventory items via product_type + product_id.
+    """
+    __tablename__ = 'product_images'
+
+    id = db.Column(db.Integer, primary_key=True)
+    product_type = db.Column(db.String(20), nullable=False)  # 'boutique' or 'hardware'
+    product_id = db.Column(db.Integer, nullable=False)        # FK to stock item
+    image_url = db.Column(db.String(500), nullable=False)
+    display_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    @staticmethod
+    def get_images(product_type, product_id):
+        """Get all images for a product, ordered by display_order."""
+        return ProductImage.query.filter_by(
+            product_type=product_type, product_id=product_id
+        ).order_by(ProductImage.display_order).all()
 
 
 class WebsiteImage(db.Model):
