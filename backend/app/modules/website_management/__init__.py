@@ -29,24 +29,40 @@ def allowed_image(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
 
 
-def manager_required(f):
-    """Decorator to restrict access to managers only.
-    
-    Uses session['section'] to match the existing auth pattern.
+def staff_required(f):
+    """Decorator to require login for website management.
+
+    All authenticated staff can access, but views are filtered by section:
+    - Manager: full access to all products
+    - Boutique worker: boutique products only
+    - Hardware worker: hardware products only
+    - Finance worker: view-only (no products to publish)
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'username' not in session:
             flash('Please login to access this section', 'error')
             return redirect(url_for('auth.login', section='manager'))
-        
-        # Check session section - matches existing app pattern
-        if session.get('section') != 'manager':
-            flash('Access denied. Manager privileges required.', 'error')
-            return redirect(url_for('dashboard.index'))
-        
+
         return f(*args, **kwargs)
     return decorated_function
+
+
+def get_user_section():
+    """Get current user's section for filtering."""
+    return session.get('section', '')
+
+
+def can_publish_type(product_type):
+    """Check if current user can publish a given product type."""
+    section = get_user_section()
+    if section == 'manager':
+        return True
+    if section == 'boutique' and product_type == 'boutique':
+        return True
+    if section == 'hardware' and product_type == 'hardware':
+        return True
+    return False
 
 
 def log_action(action, details=None):
@@ -68,7 +84,7 @@ def log_action(action, details=None):
 # ============ DASHBOARD ============
 
 @website_bp.route('/')
-@manager_required
+@staff_required
 def dashboard():
     """Website Management Dashboard - Overview of website activity."""
     
@@ -94,30 +110,46 @@ def dashboard():
         pending_inquiries=pending_inquiries,
         pending_orders=pending_orders,
         recent_inquiries=recent_inquiries,
-        recent_orders=recent_orders
+        recent_orders=recent_orders,
+        user_section=get_user_section()
     )
 
 
 # ============ PRODUCT PUBLISHING ============
 
 @website_bp.route('/products')
-@manager_required
+@staff_required
 def products():
-    """Manage which products appear on public website."""
-    
-    # Get all published product records (both published and unpublished)
-    all_published = PublishedProduct.query.filter_by(is_active=True).all()
+    """Manage which products appear on public website.
+
+    Filtered by user section:
+    - Manager sees all products
+    - Boutique worker sees only boutique
+    - Hardware worker sees only hardware
+    """
+    section = get_user_section()
+
+    # Get published product records filtered by section
+    query = PublishedProduct.query.filter_by(is_active=True)
+    if section == 'boutique':
+        query = query.filter_by(product_type='boutique')
+    elif section == 'hardware':
+        query = query.filter_by(product_type='hardware')
+
+    all_published = query.all()
     published_ids = {(p.product_type, p.product_id) for p in all_published}
 
     # Split into live and removed
     live_products = [p for p in all_published if p.is_published]
     removed_products = [p for p in all_published if not p.is_published]
 
-    # Get all boutique items
-    boutique_items = BoutiqueStock.query.filter_by(is_active=True).all()
-
-    # Get all hardware items
-    hardware_items = HardwareStock.query.filter_by(is_active=True).all()
+    # Get inventory items filtered by section
+    boutique_items = []
+    hardware_items = []
+    if section in ('manager', 'boutique'):
+        boutique_items = BoutiqueStock.query.filter_by(is_active=True).all()
+    if section in ('manager', 'hardware'):
+        hardware_items = HardwareStock.query.filter_by(is_active=True).all()
 
     return render_template('website_management/products.html',
         published=all_published,
@@ -125,12 +157,13 @@ def products():
         removed_products=removed_products,
         published_ids=published_ids,
         boutique_items=boutique_items,
-        hardware_items=hardware_items
+        hardware_items=hardware_items,
+        user_section=section
     )
 
 
 @website_bp.route('/products/publish', methods=['POST'])
-@manager_required
+@staff_required
 def publish_product():
     """Publish or update a product for public visibility. Image comes from inventory."""
     product_type = request.form.get('product_type')
@@ -140,6 +173,10 @@ def publish_product():
 
     if not product_type or not product_id:
         flash('Invalid product selection', 'error')
+        return redirect(url_for('website.products'))
+
+    if not can_publish_type(product_type):
+        flash(f'You do not have permission to publish {product_type} products.', 'error')
         return redirect(url_for('website.products'))
 
     user = User.query.filter_by(username=session['username']).first()
@@ -175,10 +212,13 @@ def publish_product():
 
 
 @website_bp.route('/products/unpublish/<int:id>', methods=['POST'])
-@manager_required
+@staff_required
 def unpublish_product(id):
     """Remove product from public visibility."""
     published = PublishedProduct.query.get_or_404(id)
+    if not can_publish_type(published.product_type):
+        flash('You do not have permission to modify this product.', 'error')
+        return redirect(url_for('website.products'))
     published.is_published = False
     db.session.commit()
     
@@ -188,10 +228,13 @@ def unpublish_product(id):
 
 
 @website_bp.route('/products/republish/<int:id>', methods=['POST'])
-@manager_required
+@staff_required
 def republish_product(id):
     """Re-publish a previously unpublished product."""
     published = PublishedProduct.query.get_or_404(id)
+    if not can_publish_type(published.product_type):
+        flash('You do not have permission to modify this product.', 'error')
+        return redirect(url_for('website.products'))
     published.is_published = True
     published.published_at = datetime.utcnow()
     db.session.commit()
@@ -202,10 +245,13 @@ def republish_product(id):
 
 
 @website_bp.route('/products/edit/<int:id>', methods=['POST'])
-@manager_required
+@staff_required
 def edit_published_product(id):
-    """Edit a published product's price, featured status, or image."""
+    """Edit a published product's price, featured status."""
     published = PublishedProduct.query.get_or_404(id)
+    if not can_publish_type(published.product_type):
+        flash('You do not have permission to modify this product.', 'error')
+        return redirect(url_for('website.products'))
     user = User.query.filter_by(username=session['username']).first()
 
     is_featured = request.form.get('is_featured') == 'on'
@@ -228,10 +274,13 @@ def edit_published_product(id):
 
 
 @website_bp.route('/products/delete/<int:id>', methods=['POST'])
-@manager_required
+@staff_required
 def delete_published_product(id):
     """Permanently delete a published product record (does not affect inventory)."""
     published = PublishedProduct.query.get_or_404(id)
+    if not can_publish_type(published.product_type):
+        flash('You do not have permission to delete this product.', 'error')
+        return redirect(url_for('website.products'))
     product_info = f'{published.product_type}:{published.product_id}'
     db.session.delete(published)
     db.session.commit()
@@ -244,7 +293,7 @@ def delete_published_product(id):
 # ============ IMAGE MANAGEMENT ============
 
 @website_bp.route('/images')
-@manager_required
+@staff_required
 def images():
     """Manage website images."""
     all_images = WebsiteImage.query.filter_by(is_active=True)\
@@ -254,7 +303,7 @@ def images():
 
 
 @website_bp.route('/images/upload', methods=['POST'])
-@manager_required
+@staff_required
 def upload_image():
     """Upload a new website image."""
     if 'image' not in request.files:
@@ -300,7 +349,7 @@ def upload_image():
 
 
 @website_bp.route('/images/toggle/<int:id>', methods=['POST'])
-@manager_required
+@staff_required
 def toggle_image(id):
     """Toggle image active status."""
     image = WebsiteImage.query.get_or_404(id)
@@ -316,7 +365,7 @@ def toggle_image(id):
 # ============ LOAN INQUIRY INBOX ============
 
 @website_bp.route('/loan-inquiries')
-@manager_required
+@staff_required
 def loan_inquiries():
     """View and manage loan inquiries from website."""
     status_filter = request.args.get('status', 'all')
@@ -343,7 +392,7 @@ def loan_inquiries():
 
 
 @website_bp.route('/loan-inquiries/<int:id>')
-@manager_required
+@staff_required
 def view_loan_inquiry(id):
     """View single loan inquiry details."""
     inquiry = WebsiteLoanInquiry.query.get_or_404(id)
@@ -351,7 +400,7 @@ def view_loan_inquiry(id):
 
 
 @website_bp.route('/loan-inquiries/<int:id>/status', methods=['POST'])
-@manager_required
+@staff_required
 def update_inquiry_status(id):
     """Update loan inquiry status."""
     inquiry = WebsiteLoanInquiry.query.get_or_404(id)
@@ -378,7 +427,7 @@ def update_inquiry_status(id):
 # ============ ORDER REQUEST INBOX ============
 
 @website_bp.route('/order-requests')
-@manager_required
+@staff_required
 def order_requests():
     """View and manage order requests from website."""
     status_filter = request.args.get('status', 'all')
@@ -405,7 +454,7 @@ def order_requests():
 
 
 @website_bp.route('/order-requests/<int:id>')
-@manager_required
+@staff_required
 def view_order_request(id):
     """View single order request details."""
     order = WebsiteOrderRequest.query.get_or_404(id)
@@ -413,7 +462,7 @@ def view_order_request(id):
 
 
 @website_bp.route('/order-requests/<int:id>/status', methods=['POST'])
-@manager_required
+@staff_required
 def update_order_status(id):
     """Update order request status."""
     order = WebsiteOrderRequest.query.get_or_404(id)

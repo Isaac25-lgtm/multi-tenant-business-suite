@@ -75,7 +75,7 @@
                     <td style="white-space: nowrap;">
                         <a href="{{ url_for('finance.view_loan', id=loan.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
                         {% if loan.status == 'active' and loan.balance > 0 %}
-                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.total_amount - loan.principal }}, '{{ loan.duration_type or \"weeks\" }}')" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
+                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.total_amount - loan.principal }}, '{{ loan.duration_type or 'weeks' }}')" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
                         {% endif %}
                         {% if current_section == 'manager' %}
                         <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="text-green-600 hover:underline text-sm ml-2">Edit</a>
