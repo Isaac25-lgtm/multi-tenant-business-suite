@@ -169,7 +169,7 @@ def publish_product():
         db.session.add(published)
     
     db.session.commit()
-    log_action('publish_product', f'{product_type}:{product_id}' + (f' with image' if image_path else ''))
+    log_action('publish_product', f'{product_type}:{product_id}')
     flash('Product published successfully! It is now visible on your public website.', 'success')
     return redirect(url_for('website.products'))
 
