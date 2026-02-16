@@ -132,59 +132,30 @@ def products():
 @website_bp.route('/products/publish', methods=['POST'])
 @manager_required
 def publish_product():
-    """Publish or update a product for public visibility, with optional image upload."""
+    """Publish or update a product for public visibility. Image comes from inventory."""
     product_type = request.form.get('product_type')
     product_id = request.form.get('product_id', type=int)
     is_featured = request.form.get('is_featured') == 'on'
     public_price = request.form.get('public_price', type=float)
-    
+
     if not product_type or not product_id:
         flash('Invalid product selection', 'error')
         return redirect(url_for('website.products'))
-    
+
     user = User.query.filter_by(username=session['username']).first()
-    
-    # Handle image upload if provided
-    image_path = None
-    if 'product_image' in request.files:
-        file = request.files['product_image']
-        if file and file.filename != '' and allowed_image(file.filename):
-            # Create upload directory if needed
-            upload_dir = os.path.join(current_app.static_folder, 'uploads', 'products')
-            os.makedirs(upload_dir, exist_ok=True)
-            
-            # Save file with timestamp
-            filename = secure_filename(file.filename)
-            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-            filename = f"{product_type}_{product_id}_{timestamp}_{filename}"
-            file_path = os.path.join(upload_dir, filename)
-            file.save(file_path)
-            image_path = f'/static/uploads/products/{filename}'
-            
-            # Also create a WebsiteImage record for the image library
-            web_image = WebsiteImage(
-                image_type='product',
-                file_path=image_path,
-                alt_text=f'Product image for {product_type} {product_id}',
-                is_active=True,
-                uploaded_by=user.id
-            )
-            db.session.add(web_image)
-    
+
     # Check if already published
     existing = PublishedProduct.query.filter_by(
-        product_type=product_type, 
+        product_type=product_type,
         product_id=product_id
     ).first()
-    
+
     if existing:
         existing.is_published = True
         existing.is_featured = is_featured
         existing.public_price = public_price if public_price else None
         existing.published_at = datetime.utcnow()
         existing.published_by = user.id
-        if image_path:
-            existing.image_url = image_path
     else:
         published = PublishedProduct(
             product_type=product_type,
@@ -193,8 +164,7 @@ def publish_product():
             is_featured=is_featured,
             public_price=public_price if public_price else None,
             published_at=datetime.utcnow(),
-            published_by=user.id,
-            image_url=image_path
+            published_by=user.id
         )
         db.session.add(published)
     
@@ -244,29 +214,6 @@ def edit_published_product(id):
     published.is_featured = is_featured
     published.public_price = public_price if public_price else None
     published.updated_at = datetime.utcnow()
-
-    # Handle image upload if provided
-    if 'product_image' in request.files:
-        file = request.files['product_image']
-        if file and file.filename != '' and allowed_image(file.filename):
-            upload_dir = os.path.join(current_app.static_folder, 'uploads', 'products')
-            os.makedirs(upload_dir, exist_ok=True)
-
-            filename = secure_filename(file.filename)
-            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
-            filename = f"{published.product_type}_{published.product_id}_{timestamp}_{filename}"
-            file_path = os.path.join(upload_dir, filename)
-            file.save(file_path)
-            published.image_url = f'/static/uploads/products/{filename}'
-
-            web_image = WebsiteImage(
-                image_type='product',
-                file_path=published.image_url,
-                alt_text=f'Product image for {published.product_type} {published.product_id}',
-                is_active=True,
-                uploaded_by=user.id
-            )
-            db.session.add(web_image)
 
     # Republish if currently unpublished
     should_publish = request.form.get('republish') == 'on'
