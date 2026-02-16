@@ -1,4 +1,6 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, Response, current_app
+from werkzeug.utils import secure_filename
+import os
 from app.models.hardware import (
     HardwareCategory, HardwareStock, HardwareSale,
     HardwareSaleItem, HardwareCreditPayment
@@ -256,6 +258,19 @@ def edit_stock(id):
         item.min_selling_price = safe_decimal(request.form.get('min_selling_price'), str(item.min_selling_price))
         item.max_selling_price = safe_decimal(request.form.get('max_selling_price'), str(item.max_selling_price))
         item.low_stock_threshold = request.form.get('low_stock_threshold', type=int) or item.low_stock_threshold
+
+        # Handle image upload
+        if 'product_image' in request.files:
+            file = request.files['product_image']
+            if file and file.filename != '':
+                filename = secure_filename(file.filename)
+                upload_dir = os.path.join(current_app.static_folder, 'uploads', 'products')
+                os.makedirs(upload_dir, exist_ok=True)
+                from datetime import datetime
+                timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+                filename = f"hardware_{id}_{timestamp}_{filename}"
+                file.save(os.path.join(upload_dir, filename))
+                item.image_url = f'/static/uploads/products/{filename}'
 
         # Handle stock adjustment (add/subtract)
         adjustment = request.form.get('stock_adjustment', type=int, default=0)

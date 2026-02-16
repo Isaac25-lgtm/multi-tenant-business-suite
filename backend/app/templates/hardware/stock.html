@@ -80,7 +80,7 @@
                     {% endif %}
                 </div>
                 <div class="flex gap-2 items-center">
-                    <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }})" style="color:var(--terra-600);" class="hover:underline text-xs">Edit</button>
+                    <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, '{{ item.image_url or "" }}')" style="color:var(--terra-600);" class="hover:underline text-xs">Edit</button>
                     {% if item.is_active %}
                     <form method="POST" action="{{ url_for('hardware.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
                         <button type="submit" class="text-orange-600 hover:underline text-xs">Off</button>
@@ -155,7 +155,7 @@
                     {% endif %}
                 </td>
                 <td style="white-space: nowrap;">
-                    <button onclick="editStock({{ item.id }}, '{{ item.item_name }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }})" style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
+                    <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, '{{ item.image_url or "" }}')" style="color:var(--terra-600);" class="hover:underline text-sm">Edit</button>
                     {% if item.is_active %}
                     <form method="POST" action="{{ url_for('hardware.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
                         <button type="submit" class="text-orange-600 hover:underline text-sm ml-2">Deactivate</button>
@@ -257,7 +257,20 @@
 <div id="edit-stock-modal" class="modal">
     <div class="modal-content max-w-2xl">
         <h3 class="text-lg font-semibold mb-4">Edit Stock Item</h3>
-        <form id="edit-stock-form" method="POST">
+        <form id="edit-stock-form" method="POST" enctype="multipart/form-data">
+            <!-- Image Upload -->
+            <div class="form-group" style="background:var(--navy-50);padding:12px;border-radius:var(--radius-lg);margin-bottom:16px;border:1px solid var(--navy-200);">
+                <label class="form-label" style="font-weight:600;">Product Image</label>
+                <div class="flex items-center gap-4">
+                    <div id="edit-image-preview" style="width:60px;height:60px;border-radius:8px;overflow:hidden;background:#f3f4f6;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;">
+                        🔧
+                    </div>
+                    <div class="flex-1">
+                        <input type="file" name="product_image" accept="image/*" class="form-input" style="font-size:12px;">
+                        <p class="text-xs text-gray-500 mt-1">Upload a new image to replace the current one. Leave empty to keep existing.</p>
+                    </div>
+                </div>
+            </div>
             <div class="form-group">
                 <label class="form-label">Item Name *</label>
                 <input type="text" name="item_name" id="edit-item-name" required class="form-input">
@@ -335,7 +348,7 @@
 <script>
 var editCurrentQty = 0;
 
-function editStock(id, name, categoryId, unit, costPrice, minPrice, maxPrice, threshold, quantity) {
+function editStock(id, name, categoryId, unit, costPrice, minPrice, maxPrice, threshold, quantity, imageUrl) {
     document.getElementById('edit-stock-form').action = '/hardware/stock/' + id + '/edit';
     document.getElementById('edit-item-name').value = name;
     document.getElementById('edit-category-id').value = categoryId || '';
@@ -349,6 +362,13 @@ function editStock(id, name, categoryId, unit, costPrice, minPrice, maxPrice, th
     document.getElementById('edit-current-qty').textContent = editCurrentQty;
     document.getElementById('edit-stock-adjustment').value = 0;
     document.getElementById('edit-new-qty').textContent = editCurrentQty;
+    // Image preview
+    var preview = document.getElementById('edit-image-preview');
+    if (imageUrl) {
+        preview.innerHTML = '<img src="' + imageUrl + '" style="width:60px;height:60px;object-fit:cover;">';
+    } else {
+        preview.innerHTML = '🔧';
+    }
     // Hide new category input when opening edit modal
     document.getElementById('edit-new-category-input').classList.add('hidden');
     showModal('edit-stock-modal');
