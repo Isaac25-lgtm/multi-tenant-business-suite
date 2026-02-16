@@ -64,6 +64,7 @@
 
 <!-- Quick Stats -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    {% if user_section != 'finance' %}
     <a href="{{ url_for('website.products') }}" class="card"
         style="text-decoration: none; transition: transform 0.2s; border: 2px solid transparent;"
         onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='#0ea5e9'"
@@ -74,6 +75,8 @@
             <p style="color: #6b7280; font-size: 13px;">Products on Website</p>
         </div>
     </a>
+    {% endif %}
+    {% if user_section in ('manager', 'finance') %}
     <a href="{{ url_for('website.loan_inquiries', status='new') }}" class="card"
         style="text-decoration: none; transition: transform 0.2s; border: 2px solid transparent;"
         onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='#f59e0b'"
@@ -89,6 +92,8 @@
             {% endif %}
         </div>
     </a>
+    {% endif %}
+    {% if user_section != 'finance' %}
     <a href="{{ url_for('website.order_requests', status='new') }}" class="card"
         style="text-decoration: none; transition: transform 0.2s; border: 2px solid transparent;"
         onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='#8b5cf6'"
@@ -104,6 +109,7 @@
             {% endif %}
         </div>
     </a>
+    {% endif %}
     <a href="{{ url_for('website.images') }}" class="card"
         style="text-decoration: none; transition: transform 0.2s; border: 2px solid transparent;"
         onmouseover="this.style.transform='translateY(-2px)'; this.style.borderColor='#06b6d4'"
@@ -198,6 +204,7 @@
 
 <!-- Recent Activity -->
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    {% if user_section in ('manager', 'finance') %}
     <!-- Recent Loan Inquiries -->
     <div class="card">
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -236,6 +243,8 @@
         </div>
     </div>
 
+    {% endif %}
+    {% if user_section != 'finance' %}
     <!-- Recent Order Requests -->
     <div class="card">
         <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
@@ -273,6 +282,7 @@
             {% endif %}
         </div>
     </div>
+    {% endif %}
 </div>
 
 {% endblock %}

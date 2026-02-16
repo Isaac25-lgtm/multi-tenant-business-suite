@@ -350,18 +350,18 @@
     {% block extra_js %}{% endblock %}
 
     {% if current_user %}
-    <!-- ORDER NOTIFICATION POPUP -->
+    <!-- NOTIFICATION POPUP (orders for boutique/hardware, loan inquiries for finance, both for manager) -->
     <div id="order-notify-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;">
       <div id="order-notify-card" style="background:#fff;border-radius:16px;width:90%;max-width:560px;max-height:80vh;overflow-y:auto;padding:32px;box-shadow:0 25px 60px rgba(0,0,0,.3);animation:notifyPulse 2s infinite;position:relative;">
         <button onclick="dismissNotify()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:24px;cursor:pointer;color:#666;">&times;</button>
         <div style="text-align:center;margin-bottom:20px;">
           <div style="font-size:48px;margin-bottom:8px;">&#128276;</div>
-          <h2 id="notify-title" style="font-size:24px;font-weight:800;color:#dc2626;margin:0;">NEW ONLINE ORDER!</h2>
+          <h2 id="notify-title" style="font-size:24px;font-weight:800;color:#dc2626;margin:0;"></h2>
           <p id="notify-subtitle" style="color:#666;font-size:14px;margin-top:4px;"></p>
         </div>
         <div id="notify-orders-list"></div>
         <div style="display:flex;gap:12px;margin-top:20px;">
-          <a id="notify-view-btn" href="/website/order-requests" style="flex:1;text-align:center;padding:12px;background:#dc2626;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;">View Orders</a>
+          <a id="notify-view-btn" href="/website/order-requests" style="flex:1;text-align:center;padding:12px;background:#dc2626;color:#fff;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;">View Details</a>
           <button onclick="dismissNotify()" style="flex:1;padding:12px;background:#f3f4f6;color:#374151;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-size:15px;">Dismiss</button>
         </div>
       </div>
@@ -381,57 +381,46 @@
       .notify-order-item h4 { margin: 0 0 4px; font-size: 16px; color: #1f2937; }
       .notify-order-item p { margin: 2px 0; font-size: 13px; color: #6b7280; }
       .notify-order-item .notify-total { font-size: 18px; font-weight: 700; color: #dc2626; }
+      .notify-order-item.inquiry-item { background: #fffbeb; border-color: #fde68a; }
+      .notify-order-item.inquiry-item .notify-total { color: #d97706; }
     </style>
     <script>
     (function() {
       var POLL_INTERVAL = 15000;
-      var lastCheck = localStorage.getItem('_notifyLastCheck') || new Date().toISOString();
+      var section = '{{ current_section or "" }}';
+      var lastOrderCheck = localStorage.getItem('_notifyLastOrderCheck') || new Date().toISOString();
+      var lastInquiryCheck = localStorage.getItem('_notifyLastInquiryCheck') || new Date().toISOString();
       var notifyTimeout = null;
+
+      // Determine what to poll based on section
+      var pollOrders = (section === 'manager' || section === 'boutique' || section === 'hardware');
+      var pollInquiries = (section === 'manager' || section === 'finance');
 
       function playBeep() {
         try {
           var ctx = new (window.AudioContext || window.webkitAudioContext)();
           var osc = ctx.createOscillator();
           var gain = ctx.createGain();
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.frequency.value = 880;
-          osc.type = 'square';
-          gain.gain.value = 0.3;
-          osc.start();
-          osc.stop(ctx.currentTime + 0.2);
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = 880; osc.type = 'square'; gain.gain.value = 0.3;
+          osc.start(); osc.stop(ctx.currentTime + 0.2);
           setTimeout(function() {
-            var osc2 = ctx.createOscillator();
-            var gain2 = ctx.createGain();
-            osc2.connect(gain2);
-            gain2.connect(ctx.destination);
-            osc2.frequency.value = 1100;
-            osc2.type = 'square';
-            gain2.gain.value = 0.3;
-            osc2.start();
-            osc2.stop(ctx.currentTime + 0.3);
+            var o2 = ctx.createOscillator(); var g2 = ctx.createGain();
+            o2.connect(g2); g2.connect(ctx.destination);
+            o2.frequency.value = 1100; o2.type = 'square'; g2.gain.value = 0.3;
+            o2.start(); o2.stop(ctx.currentTime + 0.3);
           }, 250);
         } catch(e) {}
       }
 
-      function showNotifyPopup(orders) {
-        var overlay = document.getElementById('order-notify-overlay');
+      function showPopup(title, subtitle, items, viewUrl) {
+        document.getElementById('notify-title').textContent = title;
+        document.getElementById('notify-subtitle').textContent = subtitle;
+        document.getElementById('notify-view-btn').href = viewUrl;
         var list = document.getElementById('notify-orders-list');
-        var subtitle = document.getElementById('notify-subtitle');
-        subtitle.textContent = orders.length + ' new order' + (orders.length > 1 ? 's' : '') + ' received';
         list.innerHTML = '';
-        orders.forEach(function(o) {
-          var items = (o.items || []).map(function(i) { return i.name + ' x' + (i.quantity || 1); }).join(', ');
-          var total = Number(o.total_amount || 0).toLocaleString('en', {maximumFractionDigits: 0});
-          var div = document.createElement('div');
-          div.className = 'notify-order-item';
-          div.innerHTML = '<h4>' + (o.customer_name || 'Customer') + '</h4>' +
-            '<p>' + (o.customer_phone || '') + '</p>' +
-            '<p style="margin-top:4px;">' + items + '</p>' +
-            '<div class="notify-total" style="margin-top:6px;">UGX ' + total + '</div>';
-          list.appendChild(div);
-        });
-        overlay.style.display = 'flex';
+        items.forEach(function(html) { list.innerHTML += html; });
+        document.getElementById('order-notify-overlay').style.display = 'flex';
         playBeep();
         clearTimeout(notifyTimeout);
         notifyTimeout = setTimeout(dismissNotify, 60000);
@@ -442,22 +431,55 @@
         clearTimeout(notifyTimeout);
       };
 
-      function pollOrders() {
-        fetch('/website/api/new-orders?since=' + encodeURIComponent(lastCheck))
+      function checkOrders() {
+        if (!pollOrders) return;
+        fetch('/website/api/new-orders?since=' + encodeURIComponent(lastOrderCheck))
           .then(function(r) { return r.ok ? r.json() : null; })
           .then(function(data) {
             if (data && data.count > 0) {
-              showNotifyPopup(data.orders);
+              var cards = data.orders.map(function(o) {
+                var items = (o.items || []).map(function(i) { return i.name + ' x' + (i.quantity || 1); }).join(', ');
+                var total = Number(o.total_amount || 0).toLocaleString('en', {maximumFractionDigits: 0});
+                return '<div class="notify-order-item"><h4>' + (o.customer_name || 'Customer') + '</h4>' +
+                  '<p>' + (o.customer_phone || '') + '</p>' +
+                  '<p style="margin-top:4px;">' + items + '</p>' +
+                  '<div class="notify-total" style="margin-top:6px;">UGX ' + total + '</div></div>';
+              });
+              showPopup('NEW ONLINE ORDER!',
+                data.count + ' new order' + (data.count > 1 ? 's' : '') + ' received',
+                cards, '/website/order-requests');
             }
-            lastCheck = new Date().toISOString();
-            localStorage.setItem('_notifyLastCheck', lastCheck);
-          })
-          .catch(function() {});
+            lastOrderCheck = new Date().toISOString();
+            localStorage.setItem('_notifyLastOrderCheck', lastOrderCheck);
+          }).catch(function() {});
       }
 
+      function checkInquiries() {
+        if (!pollInquiries) return;
+        fetch('/website/api/new-inquiries?since=' + encodeURIComponent(lastInquiryCheck))
+          .then(function(r) { return r.ok ? r.json() : null; })
+          .then(function(data) {
+            if (data && data.count > 0) {
+              var cards = data.inquiries.map(function(i) {
+                return '<div class="notify-order-item inquiry-item"><h4>' + (i.full_name || 'Applicant') + '</h4>' +
+                  '<p>' + (i.phone || '') + '</p>' +
+                  '<p style="margin-top:4px;">Loan type: ' + (i.loan_type || 'N/A') + '</p>' +
+                  '<div class="notify-total" style="margin-top:6px;">' + (i.requested_amount || '') + '</div></div>';
+              });
+              showPopup('NEW LOAN INQUIRY!',
+                data.count + ' new inquiry' + (data.count > 1 ? 'ies' : '') + ' received',
+                cards, '/website/loan-inquiries');
+            }
+            lastInquiryCheck = new Date().toISOString();
+            localStorage.setItem('_notifyLastInquiryCheck', lastInquiryCheck);
+          }).catch(function() {});
+      }
+
+      function doPoll() { checkOrders(); checkInquiries(); }
+
       // Start polling
-      setTimeout(pollOrders, 3000);
-      setInterval(pollOrders, POLL_INTERVAL);
+      setTimeout(doPoll, 3000);
+      setInterval(doPoll, POLL_INTERVAL);
     })();
     </script>
     {% endif %}

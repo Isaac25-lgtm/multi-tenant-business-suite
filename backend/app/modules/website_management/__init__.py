@@ -54,7 +54,13 @@ def get_user_section():
 
 
 def can_publish_type(product_type):
-    """Check if current user can publish a given product type."""
+    """Check if current user can publish a given product type.
+
+    - Manager: can publish any type
+    - Boutique worker: boutique only
+    - Hardware worker: hardware only
+    - Finance worker: cannot publish products (only handles loan inquiries)
+    """
     section = get_user_section()
     if section == 'manager':
         return True
@@ -63,6 +69,36 @@ def can_publish_type(product_type):
     if section == 'hardware' and product_type == 'hardware':
         return True
     return False
+
+
+def can_view_orders_for_type(product_type):
+    """Check if user should see orders containing a given product type."""
+    section = get_user_section()
+    if section == 'manager':
+        return True
+    if section == 'boutique' and product_type == 'boutique':
+        return True
+    if section == 'hardware' and product_type == 'hardware':
+        return True
+    return False
+
+
+def filter_orders_by_section(orders):
+    """Filter order list so workers only see orders containing their product types."""
+    section = get_user_section()
+    if section == 'manager':
+        return orders
+    if section == 'finance':
+        return []  # Finance doesn't handle product orders
+    # For boutique/hardware, only show orders that contain items of their type
+    filtered = []
+    for order in orders:
+        if order.items:
+            for item in order.items:
+                if item.get('type') == section or item.get('product_type') == section:
+                    filtered.append(order)
+                    break
+    return filtered
 
 
 def log_action(action, details=None):
@@ -86,32 +122,56 @@ def log_action(action, details=None):
 @website_bp.route('/')
 @staff_required
 def dashboard():
-    """Website Management Dashboard - Overview of website activity."""
-    
-    # Count published products
-    published_count = PublishedProduct.query.filter_by(is_published=True, is_active=True).count()
-    
-    # Count pending loan inquiries
-    pending_inquiries = WebsiteLoanInquiry.query.filter_by(status='new', is_active=True).count()
-    
-    # Count pending order requests
-    pending_orders = WebsiteOrderRequest.query.filter_by(status='new', is_active=True).count()
-    
-    # Recent inquiries
-    recent_inquiries = WebsiteLoanInquiry.query.filter_by(is_active=True)\
-        .order_by(WebsiteLoanInquiry.submitted_at.desc()).limit(5).all()
-    
-    # Recent orders
-    recent_orders = WebsiteOrderRequest.query.filter_by(is_active=True)\
-        .order_by(WebsiteOrderRequest.submitted_at.desc()).limit(5).all()
-    
+    """Website Management Dashboard - Overview of website activity.
+
+    Filtered by section:
+    - Manager: sees everything
+    - Boutique: published boutique products + boutique order requests
+    - Hardware: published hardware products + hardware order requests
+    - Finance: loan inquiries only (no products, no product orders)
+    """
+    section = get_user_section()
+
+    # Count published products (filtered by section)
+    pub_query = PublishedProduct.query.filter_by(is_published=True, is_active=True)
+    if section == 'boutique':
+        pub_query = pub_query.filter_by(product_type='boutique')
+    elif section == 'hardware':
+        pub_query = pub_query.filter_by(product_type='hardware')
+    elif section == 'finance':
+        pub_query = pub_query.filter(db.false())  # Finance sees no products
+    published_count = pub_query.count()
+
+    # Count pending loan inquiries (only finance + manager)
+    if section in ('manager', 'finance'):
+        pending_inquiries = WebsiteLoanInquiry.query.filter_by(status='new', is_active=True).count()
+    else:
+        pending_inquiries = 0
+
+    # Count pending order requests (filtered by section)
+    all_new_orders = WebsiteOrderRequest.query.filter_by(status='new', is_active=True).all()
+    filtered_new_orders = filter_orders_by_section(all_new_orders)
+    pending_orders = len(filtered_new_orders)
+
+    # Recent inquiries (only finance + manager)
+    if section in ('manager', 'finance'):
+        recent_inquiries = WebsiteLoanInquiry.query.filter_by(is_active=True)\
+            .order_by(WebsiteLoanInquiry.submitted_at.desc()).limit(5).all()
+    else:
+        recent_inquiries = []
+
+    # Recent orders (filtered by section)
+    all_recent = WebsiteOrderRequest.query.filter_by(is_active=True)\
+        .order_by(WebsiteOrderRequest.submitted_at.desc()).limit(20).all()
+    recent_orders = filter_orders_by_section(all_recent)[:5]
+
     return render_template('website_management/dashboard.html',
         published_count=published_count,
         pending_inquiries=pending_inquiries,
         pending_orders=pending_orders,
         recent_inquiries=recent_inquiries,
         recent_orders=recent_orders,
-        user_section=get_user_section()
+        user_section=section
     )
 
 
@@ -143,13 +203,18 @@ def products():
     live_products = [p for p in all_published if p.is_published]
     removed_products = [p for p in all_published if not p.is_published]
 
-    # Get inventory items filtered by section
+    # Get inventory items filtered by section (finance has no products)
     boutique_items = []
     hardware_items = []
     if section in ('manager', 'boutique'):
         boutique_items = BoutiqueStock.query.filter_by(is_active=True).all()
     if section in ('manager', 'hardware'):
         hardware_items = HardwareStock.query.filter_by(is_active=True).all()
+
+    # Finance workers should not see the products page at all
+    if section == 'finance':
+        flash('Finance workers manage loan inquiries, not products.', 'info')
+        return redirect(url_for('website.loan_inquiries'))
 
     return render_template('website_management/products.html',
         published=all_published,
@@ -367,7 +432,16 @@ def toggle_image(id):
 @website_bp.route('/loan-inquiries')
 @staff_required
 def loan_inquiries():
-    """View and manage loan inquiries from website."""
+    """View and manage loan inquiries from website.
+
+    Only accessible to finance workers and managers.
+    Boutique/hardware workers are redirected to order requests.
+    """
+    section = get_user_section()
+    if section in ('boutique', 'hardware'):
+        flash('Loan inquiries are handled by finance staff.', 'info')
+        return redirect(url_for('website.order_requests'))
+
     status_filter = request.args.get('status', 'all')
     
     query = WebsiteLoanInquiry.query.filter_by(is_active=True)
@@ -429,23 +503,35 @@ def update_inquiry_status(id):
 @website_bp.route('/order-requests')
 @staff_required
 def order_requests():
-    """View and manage order requests from website."""
+    """View and manage order requests from website.
+
+    Filtered by section: boutique workers see orders with boutique items,
+    hardware workers see orders with hardware items, finance sees none.
+    """
+    section = get_user_section()
+
+    # Finance workers don't handle product orders
+    if section == 'finance':
+        flash('Finance workers manage loan inquiries, not product orders.', 'info')
+        return redirect(url_for('website.loan_inquiries'))
+
     status_filter = request.args.get('status', 'all')
-    
+
     query = WebsiteOrderRequest.query.filter_by(is_active=True)
     if status_filter != 'all':
         query = query.filter_by(status=status_filter)
-    
-    orders = query.order_by(WebsiteOrderRequest.submitted_at.desc()).all()
-    
-    # Count by status
-    status_counts = {
-        'new': WebsiteOrderRequest.query.filter_by(status='new', is_active=True).count(),
-        'contacted': WebsiteOrderRequest.query.filter_by(status='contacted', is_active=True).count(),
-        'fulfilled': WebsiteOrderRequest.query.filter_by(status='fulfilled', is_active=True).count(),
-        'cancelled': WebsiteOrderRequest.query.filter_by(status='cancelled', is_active=True).count(),
-    }
-    
+
+    all_orders = query.order_by(WebsiteOrderRequest.submitted_at.desc()).all()
+    orders = filter_orders_by_section(all_orders)
+
+    # Count by status (also filtered by section)
+    all_active = WebsiteOrderRequest.query.filter_by(is_active=True).all()
+    section_orders = filter_orders_by_section(all_active)
+    status_counts = {'new': 0, 'contacted': 0, 'fulfilled': 0, 'cancelled': 0}
+    for o in section_orders:
+        if o.status in status_counts:
+            status_counts[o.status] += 1
+
     return render_template('website_management/order_requests.html',
         orders=orders,
         status_filter=status_filter,
@@ -494,7 +580,15 @@ def update_order_status(id):
 @website_bp.route('/api/new-orders')
 @staff_required
 def check_new_orders():
-    """Check for new orders since a given timestamp. Used by polling notifications."""
+    """Check for new orders since a given timestamp. Used by polling notifications.
+
+    Filtered by section: boutique workers see boutique orders only, etc.
+    Finance workers get empty (they poll /api/new-inquiries instead).
+    """
+    section = get_user_section()
+    if section == 'finance':
+        return jsonify({'orders': [], 'count': 0})
+
     since = request.args.get('since')
     query = WebsiteOrderRequest.query.filter_by(status='new', is_active=True)
     if since:
@@ -503,7 +597,8 @@ def check_new_orders():
             query = query.filter(WebsiteOrderRequest.submitted_at > since_dt)
         except (ValueError, TypeError):
             pass
-    orders = query.order_by(WebsiteOrderRequest.submitted_at.desc()).all()
+    all_orders = query.order_by(WebsiteOrderRequest.submitted_at.desc()).all()
+    orders = filter_orders_by_section(all_orders)
     return jsonify({
         'orders': [{
             'id': o.id,
@@ -521,7 +616,14 @@ def check_new_orders():
 @website_bp.route('/api/new-inquiries')
 @staff_required
 def check_new_inquiries():
-    """Check for new loan inquiries since a given timestamp."""
+    """Check for new loan inquiries since a given timestamp.
+
+    Only finance workers and managers get loan inquiry notifications.
+    """
+    section = get_user_section()
+    if section in ('boutique', 'hardware'):
+        return jsonify({'inquiries': [], 'count': 0})
+
     since = request.args.get('since')
     query = WebsiteLoanInquiry.query.filter_by(status='new', is_active=True)
     if since:
