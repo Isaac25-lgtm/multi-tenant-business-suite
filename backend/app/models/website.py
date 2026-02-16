@@ -155,6 +155,9 @@ class PublishedProduct(db.Model):
     
     # Price Override (optional - if null, uses inventory price)
     public_price = db.Column(db.Numeric(12, 2), nullable=True)
+
+    # Image override (optional - if null, uses inventory image)
+    image_url = db.Column(db.String(500), nullable=True)
     
     # Timestamps
     published_at = db.Column(db.DateTime, nullable=True)
@@ -211,7 +214,7 @@ class PublishedProduct(db.Model):
             'availability': availability,
             'in_stock': item.quantity > 0,
             'unit': item.unit,
-            'image_url': getattr(item, 'image_url', None),
+            'image_url': self.image_url or getattr(item, 'image_url', None),
             'is_featured': self.is_featured
         }
 
