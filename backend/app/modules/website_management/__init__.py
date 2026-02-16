@@ -105,18 +105,24 @@ def dashboard():
 def products():
     """Manage which products appear on public website."""
     
-    # Get all published products
-    published = PublishedProduct.query.filter_by(is_active=True).all()
-    published_ids = {(p.product_type, p.product_id) for p in published}
-    
+    # Get all published product records (both published and unpublished)
+    all_published = PublishedProduct.query.filter_by(is_active=True).all()
+    published_ids = {(p.product_type, p.product_id) for p in all_published}
+
+    # Split into live and removed
+    live_products = [p for p in all_published if p.is_published]
+    removed_products = [p for p in all_published if not p.is_published]
+
     # Get all boutique items
     boutique_items = BoutiqueStock.query.filter_by(is_active=True).all()
-    
+
     # Get all hardware items
     hardware_items = HardwareStock.query.filter_by(is_active=True).all()
-    
+
     return render_template('website_management/products.html',
-        published=published,
+        published=all_published,
+        live_products=live_products,
+        removed_products=removed_products,
         published_ids=published_ids,
         boutique_items=boutique_items,
         hardware_items=hardware_items
@@ -207,7 +213,84 @@ def unpublish_product(id):
     db.session.commit()
     
     log_action('unpublish_product', f'{published.product_type}:{published.product_id}')
-    flash('Product unpublished', 'success')
+    flash('Product removed from website. You can republish, edit, or delete it below.', 'success')
+    return redirect(url_for('website.products'))
+
+
+@website_bp.route('/products/republish/<int:id>', methods=['POST'])
+@manager_required
+def republish_product(id):
+    """Re-publish a previously unpublished product."""
+    published = PublishedProduct.query.get_or_404(id)
+    published.is_published = True
+    published.published_at = datetime.utcnow()
+    db.session.commit()
+
+    log_action('republish_product', f'{published.product_type}:{published.product_id}')
+    flash('Product republished to website!', 'success')
+    return redirect(url_for('website.products'))
+
+
+@website_bp.route('/products/edit/<int:id>', methods=['POST'])
+@manager_required
+def edit_published_product(id):
+    """Edit a published product's price, featured status, or image."""
+    published = PublishedProduct.query.get_or_404(id)
+    user = User.query.filter_by(username=session['username']).first()
+
+    is_featured = request.form.get('is_featured') == 'on'
+    public_price = request.form.get('public_price', type=float)
+
+    published.is_featured = is_featured
+    published.public_price = public_price if public_price else None
+    published.updated_at = datetime.utcnow()
+
+    # Handle image upload if provided
+    if 'product_image' in request.files:
+        file = request.files['product_image']
+        if file and file.filename != '' and allowed_image(file.filename):
+            upload_dir = os.path.join(current_app.static_folder, 'uploads', 'products')
+            os.makedirs(upload_dir, exist_ok=True)
+
+            filename = secure_filename(file.filename)
+            timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+            filename = f"{published.product_type}_{published.product_id}_{timestamp}_{filename}"
+            file_path = os.path.join(upload_dir, filename)
+            file.save(file_path)
+            published.image_url = f'/static/uploads/products/{filename}'
+
+            web_image = WebsiteImage(
+                image_type='product',
+                file_path=published.image_url,
+                alt_text=f'Product image for {published.product_type} {published.product_id}',
+                is_active=True,
+                uploaded_by=user.id
+            )
+            db.session.add(web_image)
+
+    # Republish if currently unpublished
+    should_publish = request.form.get('republish') == 'on'
+    if should_publish and not published.is_published:
+        published.is_published = True
+        published.published_at = datetime.utcnow()
+
+    db.session.commit()
+    log_action('edit_published_product', f'{published.product_type}:{published.product_id}')
+    flash('Product updated successfully!', 'success')
+    return redirect(url_for('website.products'))
+
+
+@website_bp.route('/products/delete/<int:id>', methods=['POST'])
+@manager_required
+def delete_published_product(id):
+    """Permanently delete a published product record (does not affect inventory)."""
+    published = PublishedProduct.query.get_or_404(id)
+    product_info = f'{published.product_type}:{published.product_id}'
+    db.session.delete(published)
+    db.session.commit()
+
+    log_action('delete_published_product', product_info)
+    flash('Product record deleted. You can re-publish it from the inventory below.', 'success')
     return redirect(url_for('website.products'))
 
 

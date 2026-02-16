@@ -42,41 +42,46 @@
     </div>
 </div>
 
-<!-- Currently Published Products -->
+<!-- Currently Published Products (LIVE) -->
 <div class="card mb-8">
     <div class="card-header" style="background: #f0fdf4; border-bottom: 1px solid #86efac;">
-        <h3 style="color: #166534;">✅ Currently Published ({{ published|selectattr('is_published')|list|length }}
-            products)</h3>
+        <h3 style="color: #166534;">✅ Live on Website ({{ live_products|length }} products)</h3>
     </div>
     <div class="card-body p-0">
-        {% set published_items = published|selectattr('is_published')|list %}
-        {% if published_items %}
-        <p
-            style="padding: 12px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 13px; color: #6b7280;">
-            <strong>These products are visible on your public website.</strong> Customers can see them, add to cart, and
-            inquire.
+        {% if live_products %}
+        <p style="padding: 12px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 13px; color: #6b7280;">
+            <strong>These products are visible on your public website.</strong> Customers can see them, add to cart, and inquire.
         </p>
         <table class="table">
             <thead>
                 <tr>
-                    <th>Product Name</th>
+                    <th>Product</th>
                     <th>Type</th>
+                    <th>Image</th>
                     <th>Website Price</th>
-                    <th>Featured?</th>
-                    <th>Action</th>
+                    <th>Featured</th>
+                    <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
-                {% for item in published_items %}
+                {% for item in live_products %}
                 {% set inventory = item.get_inventory_item() %}
                 <tr>
                     <td class="font-medium">{{ inventory.item_name if inventory else 'Unknown' }}</td>
-                    <td><span class="badge badge-{{ 'primary' if item.product_type == 'boutique' else 'secondary' }}">{{
-                            item.product_type|title }}</span></td>
+                    <td><span class="badge badge-{{ 'primary' if item.product_type == 'boutique' else 'secondary' }}">{{ item.product_type|title }}</span></td>
+                    <td>
+                        {% if item.image_url %}
+                        <img src="{{ item.image_url }}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">
+                        {% elif inventory and inventory.image_url %}
+                        <img src="{{ inventory.image_url }}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">
+                        {% else %}
+                        <span style="color:#9ca3af;font-size:11px;">No image</span>
+                        {% endif %}
+                    </td>
                     <td>
                         {% if item.public_price %}
                         UGX {{ "{:,.0f}".format(item.public_price) }}
-                        <span style="font-size: 11px; color: #9ca3af;">(custom)</span>
+                        <span style="font-size:11px;color:#9ca3af;">(custom)</span>
                         {% elif inventory %}
                         UGX {{ "{:,.0f}".format(inventory.min_selling_price) }}
                         {% endif %}
@@ -88,13 +93,16 @@
                         <span class="text-gray-400">—</span>
                         {% endif %}
                     </td>
-                    <td>
-                        <form action="{{ url_for('website.unpublish_product', id=item.id) }}" method="POST"
-                            class="inline">
-                            <button type="submit" class="btn btn-sm btn-danger"
-                                onclick="return confirm('Remove this product from the public website?')">
-                                Remove from Website
-                            </button>
+                    <td style="white-space:nowrap;">
+                        <button type="button" class="text-blue-600 hover:underline text-sm"
+                            onclick="openEditModal({{ item.id }}, '{{ (inventory.item_name if inventory else 'Unknown')|replace("'", "\\'") }}', '{{ item.product_type }}', {{ item.public_price or (inventory.min_selling_price if inventory else 0) }}, {{ 'true' if item.is_featured else 'false' }}, true)">Edit</button>
+                        <form action="{{ url_for('website.unpublish_product', id=item.id) }}" method="POST" class="inline">
+                            <button type="submit" class="text-orange-600 hover:underline text-sm ml-2"
+                                onclick="return confirm('Remove this product from the public website?')">Remove</button>
+                        </form>
+                        <form action="{{ url_for('website.delete_published_product', id=item.id) }}" method="POST" class="inline">
+                            <button type="submit" class="text-red-600 hover:underline text-sm ml-2"
+                                onclick="return confirm('Permanently delete this published record? The inventory item will NOT be affected.')">Delete</button>
                         </form>
                     </td>
                 </tr>
@@ -105,12 +113,70 @@
         <div style="padding: 40px; text-align: center;">
             <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
             <p style="font-weight: 600; margin-bottom: 8px;">No Products Published Yet</p>
-            <p style="color: #6b7280;">Select products from your inventory below to make them visible on your website
-            </p>
+            <p style="color: #6b7280;">Select products from your inventory below to make them visible on your website</p>
         </div>
         {% endif %}
     </div>
 </div>
+
+<!-- Removed / Unpublished Products -->
+{% if removed_products %}
+<div class="card mb-8">
+    <div class="card-header" style="background: #fefce8; border-bottom: 1px solid #fcd34d;">
+        <h3 style="color: #854d0e;">⏸ Removed from Website ({{ removed_products|length }})</h3>
+    </div>
+    <div class="card-body p-0">
+        <p style="padding: 12px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; font-size: 13px; color: #6b7280;">
+            <strong>These products were previously published but are currently hidden.</strong> You can republish, edit, or permanently delete them.
+        </p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Type</th>
+                    <th>Image</th>
+                    <th>Last Price</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in removed_products %}
+                {% set inventory = item.get_inventory_item() %}
+                <tr>
+                    <td class="font-medium">{{ inventory.item_name if inventory else 'Unknown' }}</td>
+                    <td><span class="badge badge-{{ 'primary' if item.product_type == 'boutique' else 'secondary' }}">{{ item.product_type|title }}</span></td>
+                    <td>
+                        {% if item.image_url %}
+                        <img src="{{ item.image_url }}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:6px;">
+                        {% else %}
+                        <span style="color:#9ca3af;font-size:11px;">No image</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if item.public_price %}
+                        UGX {{ "{:,.0f}".format(item.public_price) }}
+                        {% elif inventory %}
+                        UGX {{ "{:,.0f}".format(inventory.min_selling_price) }}
+                        {% endif %}
+                    </td>
+                    <td style="white-space:nowrap;">
+                        <form action="{{ url_for('website.republish_product', id=item.id) }}" method="POST" class="inline">
+                            <button type="submit" class="text-green-600 hover:underline text-sm font-semibold">Republish</button>
+                        </form>
+                        <button type="button" class="text-blue-600 hover:underline text-sm ml-2"
+                            onclick="openEditModal({{ item.id }}, '{{ (inventory.item_name if inventory else 'Unknown')|replace("'", "\\'") }}', '{{ item.product_type }}', {{ item.public_price or (inventory.min_selling_price if inventory else 0) }}, {{ 'true' if item.is_featured else 'false' }}, false)">Edit</button>
+                        <form action="{{ url_for('website.delete_published_product', id=item.id) }}" method="POST" class="inline">
+                            <button type="submit" class="text-red-600 hover:underline text-sm ml-2"
+                                onclick="return confirm('Permanently delete this record? You can always re-publish from inventory.')">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 
 <!-- Boutique Inventory -->
 <div class="card mb-8">
@@ -156,7 +222,7 @@
                             📤 Publish
                         </button>
                         {% else %}
-                        <span style="color: #9ca3af; font-size: 12px;">Already published</span>
+                        <span class="text-green-600 text-xs font-semibold">✓ Published</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -215,7 +281,7 @@
                             📤 Publish
                         </button>
                         {% else %}
-                        <span style="color: #9ca3af; font-size: 12px;">Already published</span>
+                        <span class="text-green-600 text-xs font-semibold">✓ Published</span>
                         {% endif %}
                     </td>
                 </tr>
@@ -300,6 +366,67 @@
     </div>
 </div>
 
+<!-- Edit Published Product Modal -->
+<div id="editModal" class="modal-overlay" style="display:none;">
+    <div class="modal-content" style="max-width: 560px;">
+        <div class="modal-header">
+            <h3>✏️ Edit Published Product</h3>
+            <button onclick="closeEditModal()" class="modal-close">&times;</button>
+        </div>
+        <form id="editForm" method="POST" enctype="multipart/form-data">
+            <div class="modal-body">
+                <div style="background: #f0f9ff; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                    <p style="font-size: 13px; color: #0369a1; margin-bottom: 4px;">Editing:</p>
+                    <p style="font-size: 18px; font-weight: 600;" id="edit_product_name"></p>
+                </div>
+
+                <!-- Image Upload -->
+                <div class="form-group" style="background: #fffbeb; padding: 16px; border-radius: 8px; border: 1px solid #fcd34d; margin-bottom: 20px;">
+                    <label class="form-label" style="color: #92400e; font-weight: 600;">
+                        📸 Replace Image <span style="font-weight: normal; color: #b45309;">(Optional)</span>
+                    </label>
+                    <input type="file" name="product_image" class="form-input" accept="image/*" style="margin-top: 8px;">
+                    <p style="font-size: 12px; color: #78716c; margin-top: 8px;">Leave empty to keep current image.</p>
+                </div>
+
+                <!-- Price -->
+                <div class="form-group">
+                    <label class="form-label" style="font-weight: 600;">💵 Website Price</label>
+                    <input type="number" name="public_price" id="edit_public_price" class="form-input" step="100"
+                        placeholder="Leave empty to use internal price">
+                </div>
+
+                <!-- Featured -->
+                <div class="form-group" style="background: #fefce8; padding: 16px; border-radius: 8px; margin-top: 20px;">
+                    <label class="flex items-center gap-3" style="cursor: pointer;">
+                        <input type="checkbox" name="is_featured" id="edit_is_featured" style="width: 20px; height: 20px;">
+                        <div>
+                            <span style="font-weight: 600;">⭐ Mark as Featured Product</span>
+                            <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">Featured products appear prominently on the homepage</p>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Republish option (shown only for removed items) -->
+                <div id="edit_republish_section" class="form-group" style="background: #f0fdf4; padding: 16px; border-radius: 8px; margin-top: 20px; display:none;">
+                    <label class="flex items-center gap-3" style="cursor: pointer;">
+                        <input type="checkbox" name="republish" id="edit_republish" style="width: 20px; height: 20px;" checked>
+                        <div>
+                            <span style="font-weight: 600; color: #166534;">🔄 Also republish to website</span>
+                            <p style="font-size: 12px; color: #6b7280; margin-top: 4px;">This item is currently removed. Check to make it live again.</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -315,6 +442,27 @@
 
     function closePublishModal() {
         document.getElementById('publishModal').style.display = 'none';
+    }
+
+    function openEditModal(id, name, type, price, isFeatured, isLive) {
+        document.getElementById('editForm').action = '/website/products/edit/' + id;
+        document.getElementById('edit_product_name').textContent = name;
+        document.getElementById('edit_public_price').value = price > 0 ? price : '';
+        document.getElementById('edit_is_featured').checked = isFeatured;
+
+        // Show republish option only for removed items
+        var republishSection = document.getElementById('edit_republish_section');
+        if (isLive) {
+            republishSection.style.display = 'none';
+        } else {
+            republishSection.style.display = 'block';
+        }
+
+        document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
     }
 </script>
 <style>
