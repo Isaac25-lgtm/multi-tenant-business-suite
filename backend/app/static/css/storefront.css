@@ -352,15 +352,266 @@ img {
 @media(max-width:900px) {
 
   .nav__links,
-  .nav__cart,
   .nav__call,
   .nav__staff {
     display: none
   }
 
+  .nav__cart {
+    padding: 6px;
+    border: none;
+    background: none;
+    position: relative
+  }
+
+  .nav__cart svg {
+    width: 22px;
+    height: 22px
+  }
+
+  .nav__cart-label {
+    display: none
+  }
+
+  .nav__cart-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: var(--terra);
+    color: var(--white);
+    font-size: 10px;
+    font-weight: 800;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center
+  }
+
   .nav__burger {
     display: flex
   }
+}
+
+/* Mobile menu drawer */
+.mobile-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(13,13,13,.5);
+  backdrop-filter: blur(6px);
+  z-index: 200;
+  display: none;
+  opacity: 0;
+  transition: opacity .3s var(--ease)
+}
+
+.mobile-menu.open {
+  display: block;
+  opacity: 1
+}
+
+.mobile-menu__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 280px;
+  max-width: 85vw;
+  height: 100%;
+  background: var(--white);
+  padding: 24px;
+  transform: translateX(100%);
+  transition: transform .3s var(--ease);
+  overflow-y: auto
+}
+
+.mobile-menu.open .mobile-menu__panel {
+  transform: translateX(0)
+}
+
+.mobile-menu__close {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-full);
+  background: var(--ink-02);
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px
+}
+
+.mobile-menu__link {
+  display: block;
+  padding: 14px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  border-bottom: 1px solid var(--ink-05);
+  text-decoration: none
+}
+
+.mobile-menu__link:last-child {
+  border-bottom: none
+}
+
+/* Add-to-cart toast */
+.cart-toast {
+  position: fixed;
+  bottom: -200px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--white);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-xl);
+  padding: 16px 20px;
+  z-index: 150;
+  width: calc(100% - 32px);
+  max-width: 420px;
+  transition: bottom .4s var(--ease);
+  border: 1px solid var(--ink-05)
+}
+
+.cart-toast.show {
+  bottom: 90px
+}
+
+@media(min-width:901px) {
+  .cart-toast.show {
+    bottom: 24px
+  }
+}
+
+.cart-toast__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px
+}
+
+.cart-toast__check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--forest-pale);
+  color: var(--forest);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0
+}
+
+.cart-toast__check svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.5
+}
+
+.cart-toast__name {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1
+}
+
+.cart-toast__count {
+  font-size: 12px;
+  color: var(--ink-50);
+  margin-bottom: 14px
+}
+
+.cart-toast__btns {
+  display: flex;
+  gap: 10px
+}
+
+.cart-toast__btn {
+  flex: 1;
+  padding: 11px 8px;
+  border-radius: var(--r-md);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+  transition: all .2s
+}
+
+.cart-toast__btn--cart {
+  background: var(--ink);
+  color: var(--white)
+}
+
+.cart-toast__btn--cart:hover {
+  background: var(--ink-80)
+}
+
+.cart-toast__btn--continue {
+  background: var(--ink-02);
+  color: var(--ink)
+}
+
+.cart-toast__btn--continue:hover {
+  background: var(--ink-05)
+}
+
+.cart-toast__btn--wa {
+  background: #25D366;
+  color: var(--white);
+  flex: 0 0 auto;
+  padding: 11px 14px
+}
+
+.cart-toast__btn--wa:hover {
+  background: #20BD5A
+}
+
+.cart-toast__btn--wa svg {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle
+}
+
+/* Cart modal mobile improvements */
+@media(max-width:600px) {
+  .modal-content {
+    padding: 20px 16px;
+    border-radius: var(--r-lg) var(--r-lg) 0 0;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 100%;
+    animation: slideUp .3s var(--ease)
+  }
+
+  .modal {
+    align-items: flex-end
+  }
+
+  .cart-actions {
+    flex-direction: column
+  }
+
+  .cart-actions .hero__btn {
+    text-align: center;
+    justify-content: center
+  }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%) }
+  to { transform: translateY(0) }
 }
 
 /* Hero */
