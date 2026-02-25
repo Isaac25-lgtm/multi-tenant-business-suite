@@ -1,12 +1,12 @@
 services:
   - type: web
-    name: denove-aps
+    name: devs-aps
     runtime: python
     plan: starter
     region: oregon
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 4 -b 0.0.0.0:$PORT run:app
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT --timeout 120 run:app
     envVars:
       - key: FLASK_ENV
         value: production

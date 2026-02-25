@@ -17,7 +17,7 @@ def get_database_url():
             url = url.replace('postgres://', 'postgresql://', 1)
         return url
     # Local development: SQLite
-    return 'sqlite:///denove.db'
+    return 'sqlite:///devs.db'
 
 
 class Config:
@@ -28,20 +28,23 @@ class Config:
     SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # PostgreSQL Connection Pool Settings (for production stability)
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_pre_ping': True,  # Check connection health before using
-        'pool_recycle': 300,    # Recycle connections every 5 minutes
-        'pool_size': 5,         # Number of connections to maintain
-        'max_overflow': 10,     # Max connections beyond pool_size
-        'connect_args': {
-            'connect_timeout': 10,
-            'keepalives': 1,
-            'keepalives_idle': 30,
-            'keepalives_interval': 10,
-            'keepalives_count': 5,
-        } if os.getenv('DATABASE_URL') else {}  # Only for PostgreSQL
-    }
+    # Database engine options - PostgreSQL pool settings for production only
+    if os.getenv('DATABASE_URL'):
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            'pool_pre_ping': True,
+            'pool_recycle': 300,
+            'pool_size': 5,
+            'max_overflow': 10,
+            'connect_args': {
+                'connect_timeout': 10,
+                'keepalives': 1,
+                'keepalives_idle': 30,
+                'keepalives_interval': 10,
+                'keepalives_count': 5,
+            }
+        }
+    else:
+        SQLALCHEMY_ENGINE_OPTIONS = {}
 
     # File Upload
     UPLOAD_FOLDER = os.getenv('UPLOAD_FOLDER', 'uploads')

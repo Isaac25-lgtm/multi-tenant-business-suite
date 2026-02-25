@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Loans - Denove APS{% endblock %}
+{% block title %}Loans - Devs APS{% endblock %}
 
 {% block page_header %}
 <h2>Individual Loans</h2>
@@ -74,7 +74,7 @@
                     </td>
                     <td style="white-space: nowrap;">
                         <a href="{{ url_for('finance.view_loan', id=loan.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
-                        {% if loan.status == 'active' and loan.balance > 0 %}
+                        {% if loan.status in ['active', 'overdue'] and loan.balance > 0 %}
                         <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.total_amount - loan.principal }}, '{{ loan.duration_type or 'weeks' }}')" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
                         {% endif %}
                         {% if current_section == 'manager' %}

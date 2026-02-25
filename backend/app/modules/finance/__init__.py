@@ -298,11 +298,16 @@ def renew_loan(id):
         new_interest = new_principal * new_rate / Decimal('100')
         new_total = new_principal + new_interest
 
-        # Calculate due date based on duration type
+        # Renewal preserves original cycle dates:
+        # New issue_date = old due_date (not today), so the loan cycle stays aligned.
+        # E.g. loan issued 14/01 due 14/02, renewed on 22/02 → new issue 14/02, new due 14/03
+        new_issue_date = old_loan.due_date
+
+        # Calculate due date based on duration type from the original due date
         if new_duration_type == 'months':
-            new_due_date = get_local_today() + timedelta(days=new_weeks * 30)
+            new_due_date = new_issue_date + timedelta(days=new_weeks * 30)
         else:
-            new_due_date = get_local_today() + timedelta(weeks=new_weeks)
+            new_due_date = new_issue_date + timedelta(weeks=new_weeks)
 
         # Create new loan with (possibly revised) terms
         new_loan = Loan(
@@ -313,7 +318,7 @@ def renew_loan(id):
             duration_weeks=new_weeks,
             duration_type=new_duration_type,
             total_amount=new_total,
-            issue_date=get_local_today(),
+            issue_date=new_issue_date,
             due_date=new_due_date,
             amount_paid=0,
             balance=new_total,

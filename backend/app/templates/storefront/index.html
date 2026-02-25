@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Denove — Fashion · Hardware · Finance | Kapchorwa & Mbale</title>
+  <title>Devs — Fashion · Hardware · Finance | Kapchorwa & Mbale</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -34,7 +34,7 @@
     <div class="nav__inner container">
       <a href="{{ url_for('storefront.home') }}" class="nav__brand">
         <div class="nav__mark">D</div>
-        <div class="nav__name">Denove</div>
+        <div class="nav__name">Devs</div>
       </a>
       <div class="nav__links">
         <a href="#boutique" class="nav__link active">Boutique</a>
@@ -336,7 +336,7 @@
           </div>
         </div>
         <div class="loan__info reveal">
-          <div class="sec__tag">Denove Microfinance</div>
+          <div class="sec__tag">Devs Microfinance</div>
           <h2 class="sec__title" style="font-size:clamp(26px,3.2vw,40px);text-align:left">Get the capital you need to
             grow</h2>
           <p class="sec__desc" style="text-align:left;margin-top:8px">Quick, affordable loans for individuals and
@@ -407,7 +407,7 @@
       <div class="testi">
         <div class="test reveal">
           <div class="test__stars">★★★★★</div>
-          <div class="test__text">"I got a loan from Denove to expand my produce stall. The process was simple and the
+          <div class="test__text">"I got a loan from Devs to expand my produce stall. The process was simple and the
             repayment plan very manageable. Now my business has doubled."</div>
           <div class="test__author">
             <div class="test__av test__av--1"></div>
@@ -420,7 +420,7 @@
         <div class="test reveal">
           <div class="test__stars">★★★★★</div>
           <div class="test__text">"Best hardware prices in Kapchorwa. I built my entire house with materials from
-            Denove. They even delivered to my site for free. Highly recommended."</div>
+            Devs. They even delivered to my site for free. Highly recommended."</div>
           <div class="test__author">
             <div class="test__av test__av--2"></div>
             <div>
@@ -469,7 +469,7 @@
         <div class="footer__brand">
           <div class="footer__brand-top">
             <div class="footer__brand-mk">D</div>
-            <div class="footer__brand-nm">Denove</div>
+            <div class="footer__brand-nm">Devs</div>
           </div>
           <p>Your one-stop shop for fashion, building materials, and financial services in Eastern Uganda. Quality
             products, fair prices, trusted service.</p>
@@ -496,7 +496,7 @@
         </div>
       </div>
       <div class="footer__bottom">
-        <div class="footer__copy">© 2026 Denove APS. All rights reserved.</div>
+        <div class="footer__copy">© 2026 Devs APS. All rights reserved.</div>
         <a href="{{ url_for('auth.login') }}" class="footer__staff"><svg viewBox="0 0 24 24" fill="none"
             stroke="currentColor">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -541,7 +541,7 @@
 
   <script>
     // CLIENT-SIDE CART - No server mutations
-    let cart = JSON.parse(localStorage.getItem('denove_cart') || '[]');
+    let cart = JSON.parse(localStorage.getItem('devs_cart') || '[]');
 
     function updateCartDisplay() {
       const count = cart.length;
@@ -555,7 +555,7 @@
 
     function addToCart(id, type, name, price) {
       cart.push({ id, type, name, price, qty: 1 });
-      localStorage.setItem('denove_cart', JSON.stringify(cart));
+      localStorage.setItem('devs_cart', JSON.stringify(cart));
       updateCartDisplay();
       showCartToast(name);
     }
@@ -615,7 +615,7 @@
 
     function removeFromCart(index) {
       cart.splice(index, 1);
-      localStorage.setItem('denove_cart', JSON.stringify(cart));
+      localStorage.setItem('devs_cart', JSON.stringify(cart));
       updateCartDisplay();
       showCart();
     }
@@ -655,7 +655,7 @@
             alert('Thank you! Your order request has been submitted. Our team will contact you to confirm.');
             // Clear cart
             cart = [];
-            localStorage.setItem('denove_cart', JSON.stringify(cart));
+            localStorage.setItem('devs_cart', JSON.stringify(cart));
             updateCartDisplay();
             closeCartModal();
           } else {
@@ -669,7 +669,7 @@
 
     function checkoutWhatsApp() {
       if (cart.length === 0) { alert('Cart is empty'); return; }
-      let msg = 'Hello Denove! I would like to order:\n\n';
+      let msg = 'Hello Devs! I would like to order:\n\n';
       let total = 0;
       cart.forEach(item => {
         msg += `• ${item.name} - UGX ${item.price.toLocaleString()}\n`;
@@ -680,7 +680,7 @@
     }
 
     function contactWhatsApp(productName) {
-      const msg = `Hello Denove! I'm interested in: ${productName}. Please provide more details.`;
+      const msg = `Hello Devs! I'm interested in: ${productName}. Please provide more details.`;
       window.open('https://wa.me/256788066808?text=' + encodeURIComponent(msg), '_blank');
     }
 

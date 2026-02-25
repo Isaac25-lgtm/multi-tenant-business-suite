@@ -10,7 +10,7 @@ import io
 import os
 
 LOGO_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', 'static', 'images', 'denovo.png')
+    os.path.join(os.path.dirname(__file__), '..', 'static', 'images', 'devs.png')
 )
 
 
@@ -51,7 +51,7 @@ def _draw_logo_image(c, x, y, size):
 
 
 def draw_logo_header(c, width, y):
-    """Draw the Denove logo header on PDF"""
+    """Draw the Devs logo header on PDF"""
     logo_size = 72
     start_x = (width - logo_size) / 2
     logo_y = y - logo_size

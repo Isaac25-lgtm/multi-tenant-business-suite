@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏪 Denove APS
+# 🏪 Devs APS
 
 ### Multi-Tenant Business Management Suite
 
@@ -12,7 +12,7 @@ A production-ready, full-stack business management platform powering retail oper
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.0-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
-[Live Demo](https://denove-aps.onrender.com) · [Report Bug](https://github.com/Isaac25-lgtm/multi-tenant-business-suite/issues) · [Request Feature](https://github.com/Isaac25-lgtm/multi-tenant-business-suite/issues)
+[Live Demo](https://devs-aps.onrender.com) · [Report Bug](https://github.com/Isaac25-lgtm/multi-tenant-business-suite/issues) · [Request Feature](https://github.com/Isaac25-lgtm/multi-tenant-business-suite/issues)
 
 </div>
 
@@ -35,7 +35,7 @@ A production-ready, full-stack business management platform powering retail oper
 
 ## 🎯 About The Project
 
-**Denove APS** addresses the critical need for affordable, integrated business management software tailored for small and medium enterprises in emerging markets. Many SMEs in East Africa operate multiple business lines—retail shops, hardware stores, and microfinance services—yet struggle to find unified systems that don't require expensive subscriptions or complex infrastructure.
+**Devs APS** addresses the critical need for affordable, integrated business management software tailored for small and medium enterprises in emerging markets. Many SMEs in East Africa operate multiple business lines—retail shops, hardware stores, and microfinance services—yet struggle to find unified systems that don't require expensive subscriptions or complex infrastructure.
 
 ### The Problem
 - SMEs manage inventory, sales, credits, and loans across disconnected spreadsheets

@@ -61,3 +61,5 @@ htmlcov/
 *.tmp
 *.temp
 .cache/
+venv_local/
+.claude/

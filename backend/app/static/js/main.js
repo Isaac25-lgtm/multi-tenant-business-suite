@@ -1,4 +1,4 @@
-// ============ DENOVE APS - MAIN JS ============
+// ============ DEVS APS - MAIN JS ============
 
 // ============ SIDEBAR TOGGLE (MOBILE) ============
 function toggleSidebar() {
@@ -167,7 +167,7 @@ function previewLoanAgreement(loanType, loanData) {
 
 function populateAgreementPreview(loanType, data) {
     const fields = {
-        'agreement-company-name': 'DENOVE APS',
+        'agreement-company-name': 'DEVS APS',
         'agreement-client-name': data.clientName || data.groupName || '',
         'agreement-principal': formatCurrency(data.principal || 0),
         'agreement-interest-rate': (data.interestRate || 0) + '%',
