@@ -48,9 +48,7 @@ Denove APS is a full-stack Flask application built for a multi-section retail an
 ## Getting Started
 
 ```bash
-# Clone & enter project
-git clone https://github.com/Isaac25-lgtm/multi-tenant-business-suite.git
-cd multi-tenant-business-suite/backend
+cd backend
 
 # Set up environment
 python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
@@ -156,5 +154,5 @@ MIT — see [LICENSE](LICENSE) for details.
 
 <p align="center">
   Built with &#9749; in Kampala, Uganda<br/>
-  <a href="https://locusanalytics.co.ug">Locus Analytics</a>
+  <a href="https://locusanalytics.tech">Locus Analytics</a>
 </p>
