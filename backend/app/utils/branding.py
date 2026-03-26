@@ -18,7 +18,7 @@ DEFAULT_SITE_SETTINGS = {
     'service_area': 'Uganda',
     'loan_min_amount': Decimal('200000'),
     'loan_max_amount': Decimal('5000000'),
-    'loan_interest_rate': Decimal('10.00'),
+    'loan_interest_rate': Decimal('15.00'),
     'loan_interest_rate_label': 'interest per month',
     'loan_repayment_note': 'Flexible weekly or monthly repayment',
     'loan_approval_hours': 48,
