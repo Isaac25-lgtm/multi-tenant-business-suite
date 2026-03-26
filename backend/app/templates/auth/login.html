@@ -4,25 +4,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - {{ section|title }} - Devs APS</title>
+    <title>Login - {% if section %}{{ section|title }}{% else %}Staff{% endif %} - {{ brand_display_name }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 
-<body class="auth-page" data-section="{{ section }}">
+<body class="auth-page" data-section="{{ section or 'staff' }}">
     <div class="auth-card">
         <div class="auth-header">
             <div class="auth-brand">
                 <div class="brand-lockup">
-                    <img src="{{ url_for('static', filename='images/devs.png') }}" alt="Devs" class="brand-logo">
+                    <img src="{{ url_for('static', filename=site_settings.logo_path) }}" alt="{{ site_settings.company_name }}" class="brand-logo">
                     <div class="brand-stack">
-                        <h1 class="brand-name">Devs</h1>
-                        <span class="brand-tag">Premium</span>
+                        <h1 class="brand-name">{{ site_settings.company_name }}</h1>
+                        <span class="brand-tag">{{ site_settings.tagline or 'Staff Portal' }}</span>
                     </div>
                 </div>
-                <p class="auth-subtitle">Secure access for {{ section|title }} operations</p>
+                <p class="auth-subtitle">{% if section %}Secure access for {{ section|title }} operations{% else %}Sign in to continue{% endif %}</p>
             </div>
-            <div class="auth-tag">{{ section|title }} Portal</div>
+            <div class="auth-tag">{% if section %}{{ section|title }} Portal{% else %}Staff Login{% endif %}</div>
         </div>
 
         <div class="auth-body">
@@ -36,55 +36,35 @@
             {% endif %}
             {% endwith %}
 
-            <form method="POST" action="{{ url_for('auth.do_login', section=section) }}" id="login-form">
-                <input type="hidden" name="user_id" id="selected-user-id" value="">
-
-                {% if existing_users %}
-                <div class="form-group">
-                    <label class="form-label">Existing Accounts</label>
-                    <div>
-                        <select id="account-select" onchange="onAccountSelect(this)" class="form-select">
-                            <option value="">Select account</option>
-                            {% for user in existing_users %}
-                            <option value="{{ user.id }}" data-username="{{ user.username }}"
-                                data-fullname="{{ user.full_name or user.username }}"
-                                data-has-password="{{ 'true' if user.password_hash else 'false' }}"
-                                data-profile-picture="{{ user.profile_picture or '' }}">
-                                {{ user.full_name or user.username }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div id="selected-user-preview" class="auth-preview hidden">
-                    <div class="auth-preview-row">
-                        <div id="preview-avatar" class="auth-avatar">
-                            <span id="preview-avatar-letter"></span>
-                            <img id="preview-avatar-image" src="" alt="" class="auth-avatar-image hidden">
-                        </div>
-                        <div class="auth-preview-info">
-                            <p id="preview-fullname" class="auth-preview-name"></p>
-                            <p id="preview-username" class="auth-preview-username"></p>
-                        </div>
-                        <span id="preview-badge" class="auth-status"></span>
-                    </div>
-                </div>
-
-                <div class="auth-divider">or enter manually</div>
+            <form method="POST" action="{% if section %}{{ url_for('auth.do_login', section=section) }}{% else %}{{ url_for('auth.do_login') }}{% endif %}" id="login-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {% if request.args.get('next') %}
+                <input type="hidden" name="next" value="{{ request.args.get('next') }}">
                 {% endif %}
-
                 <div class="form-group">
-                    <label class="form-label">Username</label>
-                    <input type="text" name="username" id="username-input" class="form-input"
-                        placeholder="Enter your username">
+                    <label class="form-label">Account</label>
+                    <select name="username" id="username-input" class="form-input" required autocomplete="username">
+                        <option value="">Select your account</option>
+                        {% for login_user in login_users %}
+                        <option value="{{ login_user.username }}" {% if selected_username == login_user.username %}selected{% endif %}>
+                            {{ login_user.full_name or login_user.username }}{% if login_user.full_name and login_user.full_name != login_user.username %} ({{ login_user.username }}){% endif %}{% if not login_user.password_hash %} - needs password setup{% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Choose your account, then enter your password.</p>
                 </div>
 
-                <div class="form-group" id="password-field" style="display: none;">
+                <div class="form-group">
                     <label class="form-label">Password</label>
                     <input type="password" name="password" id="password-input" class="form-input"
-                        placeholder="Enter your password">
+                        placeholder="Enter your password" required autocomplete="current-password">
                 </div>
+
+                {% if not login_users %}
+                <div class="flash-message flash-error">
+                    <span>No active accounts are available for this section yet.</span>
+                </div>
+                {% endif %}
 
                 <button type="submit" id="login-button" class="btn btn-primary w-full">Sign In</button>
             </form>
@@ -121,143 +101,6 @@
             </div>
         </div>
     </div>
-
-    <div id="password-modal" class="auth-modal hidden">
-        <div class="auth-modal-card">
-            <div style="text-align:center;margin-bottom:16px;">
-                <div id="modal-avatar" class="auth-avatar auth-avatar-lg" style="margin:0 auto 12px;">
-                    <span id="modal-avatar-letter"></span>
-                    <img id="modal-avatar-image" src="" alt="" class="auth-avatar-image hidden">
-                </div>
-                <h3 id="modal-fullname" style="font-size:16px;font-weight:700;color:var(--navy-900);"></h3>
-                <p id="modal-username" style="color:var(--navy-400);font-size:12px;"></p>
-            </div>
-
-            <form method="POST" action="{{ url_for('auth.do_login', section=section) }}" id="modal-form">
-                <input type="hidden" name="user_id" id="modal-user-id" value="">
-                <input type="hidden" name="username" id="modal-username-input" value="">
-
-                <div class="form-group">
-                    <input type="password" name="password" id="modal-password-input" required class="form-input"
-                        style="text-align:center;letter-spacing:0.2em;" placeholder="Enter password">
-                </div>
-
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-                    <button type="button" onclick="closeModal()" class="btn btn-secondary w-full">Cancel</button>
-                    <button type="submit" class="btn btn-primary w-full">Login</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        function onAccountSelect(select) {
-            const option = select.options[select.selectedIndex];
-            const preview = document.getElementById('selected-user-preview');
-
-            if (!option.value) {
-                preview.classList.add('hidden');
-                document.getElementById('selected-user-id').value = '';
-                return;
-            }
-
-            const userId = option.value;
-            const username = option.dataset.username;
-            const fullname = option.dataset.fullname;
-            const hasPassword = option.dataset.hasPassword === 'true';
-            const profilePicture = option.dataset.profilePicture;
-
-            document.getElementById('preview-fullname').textContent = fullname;
-            document.getElementById('preview-username').textContent = '@' + username;
-
-            const avatarLetter = document.getElementById('preview-avatar-letter');
-            const avatarImage = document.getElementById('preview-avatar-image');
-            const badge = document.getElementById('preview-badge');
-
-            if (profilePicture) {
-                avatarImage.src = '/static/' + profilePicture;
-                avatarImage.classList.remove('hidden');
-                avatarLetter.classList.add('hidden');
-            } else {
-                avatarLetter.textContent = fullname.charAt(0).toUpperCase();
-                avatarLetter.classList.remove('hidden');
-                avatarImage.classList.add('hidden');
-            }
-
-            if (hasPassword) {
-                badge.textContent = 'Secured';
-                badge.className = 'auth-status auth-status-locked';
-            } else {
-                badge.textContent = 'Open';
-                badge.className = 'auth-status auth-status-open';
-            }
-
-            preview.classList.remove('hidden');
-            document.getElementById('selected-user-id').value = userId;
-            document.getElementById('username-input').value = username;
-
-            if (hasPassword) {
-                showPasswordModal(userId, username, fullname, profilePicture);
-            }
-        }
-
-        function showPasswordModal(userId, username, fullname, profilePicture) {
-            const modal = document.getElementById('password-modal');
-            const avatarLetter = document.getElementById('modal-avatar-letter');
-            const avatarImage = document.getElementById('modal-avatar-image');
-
-            document.getElementById('modal-user-id').value = userId;
-            document.getElementById('modal-username-input').value = username;
-            document.getElementById('modal-fullname').textContent = fullname;
-            document.getElementById('modal-username').textContent = '@' + username;
-
-            if (profilePicture) {
-                avatarImage.src = '/static/' + profilePicture;
-                avatarImage.classList.remove('hidden');
-                avatarLetter.classList.add('hidden');
-            } else {
-                avatarLetter.textContent = fullname.charAt(0).toUpperCase();
-                avatarLetter.classList.remove('hidden');
-                avatarImage.classList.add('hidden');
-            }
-
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            setTimeout(() => document.getElementById('modal-password-input').focus(), 100);
-        }
-
-        function closeModal() {
-            const modal = document.getElementById('password-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-            document.getElementById('modal-password-input').value = '';
-            const select = document.getElementById('account-select');
-            if (select) {
-                select.value = '';
-            }
-            document.getElementById('selected-user-preview').classList.add('hidden');
-            document.getElementById('selected-user-id').value = '';
-        }
-
-        document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                closeModal();
-            }
-        });
-
-        document.getElementById('password-modal').addEventListener('click', function (e) {
-            if (e.target === this) {
-                closeModal();
-            }
-        });
-
-        document.getElementById('username-input').addEventListener('input', function () {
-            const passwordField = document.getElementById('password-field');
-            if (this.value.trim()) {
-                passwordField.style.display = 'block';
-            }
-        });
-    </script>
 </body>
 
 </html>

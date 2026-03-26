@@ -111,6 +111,7 @@
                 {% if hire.status in ('active', 'overdue') %}
                 <!-- Extend -->
                 <form method="POST" action="{{ url_for('boutique.extend_hire', id=hire.id) }}" class="flex gap-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="date" name="new_return_date" required class="form-input flex-1" min="{{ today }}">
                     <button type="submit" class="btn btn-outline">Extend</button>
                 </form>
@@ -119,6 +120,7 @@
                 {% if hire.balance > 0 %}
                 <!-- Payment -->
                 <form method="POST" action="{{ url_for('boutique.pay_hire', id=hire.id) }}" class="flex gap-2">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="number" name="amount" min="1" step="0.01" required class="form-input flex-1" placeholder="Amount">
                     <input type="hidden" name="payment_date" value="{{ today }}">
                     <button type="submit" class="btn btn-primary">Pay</button>
@@ -127,6 +129,7 @@
 
                 <!-- Delete -->
                 <form method="POST" action="{{ url_for('boutique.delete_hire', id=hire.id) }}" onsubmit="return confirm('Delete this hire record?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-secondary w-full text-red-600">Delete Hire</button>
                 </form>
             </div>
@@ -139,6 +142,7 @@
 <div class="section-card mt-6" id="return">
     <h3 class="font-semibold mb-4" style="color:var(--navy-800);">Process Return</h3>
     <form method="POST" action="{{ url_for('boutique.return_hire', id=hire.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="grid grid-cols-2 gap-4">
             <div class="form-group">
                 <label class="form-label">Return Date *</label>

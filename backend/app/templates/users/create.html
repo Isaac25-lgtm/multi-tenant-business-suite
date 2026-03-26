@@ -14,6 +14,7 @@
 
 <div class="max-w-2xl">
     <form method="POST" action="{{ url_for('dashboard.create_user') }}" enctype="multipart/form-data" class="section-card">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <!-- Profile Picture -->
         <div class="form-group mb-6">
             <label class="form-label">Profile Picture</label>
@@ -75,9 +76,9 @@
         </div>
 
         <div class="form-group">
-            <label class="form-label">Password (Optional)</label>
-            <input type="password" name="password" class="form-input" placeholder="Leave empty for open access">
-            <p class="text-xs text-gray-500 mt-1">If left empty, the employee can log in without a password (open access mode).</p>
+            <label class="form-label">Password *</label>
+            <input type="password" name="password" class="form-input" placeholder="Minimum 8 characters" required minlength="8">
+            <p class="text-xs text-gray-500 mt-1">Every employee account now requires a password to sign in.</p>
         </div>
 
         <div class="form-group">

@@ -7,8 +7,8 @@ They capture demand signals (loan inquiries, order requests) and control public 
 CRITICAL: These tables store website-related data only.
 They do NOT replace or duplicate core business tables.
 """
-from datetime import datetime
 from app.extensions import db
+from app.utils.timezone import get_local_now
 
 
 class WebsiteLoanInquiry(db.Model):
@@ -34,19 +34,21 @@ class WebsiteLoanInquiry(db.Model):
     status = db.Column(db.String(20), default='new')  # new, reviewed, approved, rejected
     
     # Timestamps
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    submitted_at = db.Column(db.DateTime, default=get_local_now)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, default=get_local_now, onupdate=get_local_now)
     
     # Manager Review
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     reviewed_at = db.Column(db.DateTime, nullable=True)
     notes = db.Column(db.Text, nullable=True)  # Manager notes
+    finance_client_id = db.Column(db.Integer, db.ForeignKey('loan_clients.id'), nullable=True)
     
     # Soft delete
     is_active = db.Column(db.Boolean, default=True)
     
     reviewer = db.relationship('User', foreign_keys=[reviewed_by])
+    finance_client = db.relationship('LoanClient', foreign_keys=[finance_client_id])
     
     def to_dict(self):
         return {
@@ -61,7 +63,8 @@ class WebsiteLoanInquiry(db.Model):
             'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
             'reviewed_by': self.reviewer.full_name if self.reviewer else None,
             'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
-            'notes': self.notes
+            'notes': self.notes,
+            'finance_client_id': self.finance_client_id,
         }
 
 
@@ -88,9 +91,9 @@ class WebsiteOrderRequest(db.Model):
     status = db.Column(db.String(20), default='new')  # new, contacted, fulfilled, cancelled
     
     # Timestamps
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    submitted_at = db.Column(db.DateTime, default=get_local_now)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, default=get_local_now, onupdate=get_local_now)
     fulfilled_at = db.Column(db.DateTime, nullable=True)
     
     # Manager/Staff Assignment
@@ -161,8 +164,8 @@ class PublishedProduct(db.Model):
     
     # Timestamps
     published_at = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, default=get_local_now, onupdate=get_local_now)
     
     # Manager Control
     published_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
@@ -228,6 +231,41 @@ class PublishedProduct(db.Model):
         }
 
 
+class WebsiteSettings(db.Model):
+    """Global website content and branding controls."""
+    __tablename__ = 'website_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    company_name = db.Column(db.String(120), nullable=False, default='Denove')
+    company_suffix = db.Column(db.String(40), nullable=True, default='APS')
+    tagline = db.Column(db.String(255), nullable=True, default='Fashion, Hardware & Finance')
+    announcement_text = db.Column(db.String(255), nullable=True)
+    hero_title = db.Column(db.String(255), nullable=True)
+    hero_description = db.Column(db.Text, nullable=True)
+    contact_phone = db.Column(db.String(50), nullable=True)
+    whatsapp_number = db.Column(db.String(50), nullable=True)
+    contact_email = db.Column(db.String(120), nullable=True)
+    headquarters = db.Column(db.String(120), nullable=True)
+    service_area = db.Column(db.String(120), nullable=True)
+    loan_min_amount = db.Column(db.Numeric(12, 2), nullable=True)
+    loan_max_amount = db.Column(db.Numeric(12, 2), nullable=True)
+    loan_interest_rate = db.Column(db.Numeric(5, 2), nullable=True)
+    loan_interest_rate_label = db.Column(db.String(80), nullable=True)
+    loan_repayment_note = db.Column(db.String(255), nullable=True)
+    loan_approval_hours = db.Column(db.Integer, nullable=True, default=48)
+    footer_description = db.Column(db.Text, nullable=True)
+    logo_path = db.Column(db.String(255), nullable=True, default='images/denove.jpg')
+    updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, default=get_local_now, onupdate=get_local_now)
+
+    editor = db.relationship('User', foreign_keys=[updated_by])
+
+    @classmethod
+    def get_settings(cls):
+        return cls.query.first() or cls()
+
+
 class ProductImage(db.Model):
     """
     Multiple images per product for showing different angles.
@@ -240,7 +278,7 @@ class ProductImage(db.Model):
     product_id = db.Column(db.Integer, nullable=False)        # FK to stock item
     image_url = db.Column(db.String(500), nullable=False)
     display_order = db.Column(db.Integer, default=0)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=get_local_now)
 
     @staticmethod
     def get_images(product_type, product_id):
@@ -273,9 +311,9 @@ class WebsiteImage(db.Model):
     linked_product_id = db.Column(db.Integer, db.ForeignKey('published_products.id'), nullable=True)
     
     # Timestamps
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=get_local_now)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, default=get_local_now, onupdate=get_local_now)
     
     # Manager Control
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)

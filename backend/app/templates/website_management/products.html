@@ -97,10 +97,12 @@
                         <button type="button" class="text-blue-600 hover:underline text-sm"
                             onclick="openEditModal({{ item.id }}, '{{ (inventory.item_name if inventory else 'Unknown')|replace("'", "\\'") }}', '{{ item.product_type }}', {{ item.public_price or (inventory.min_selling_price if inventory else 0) }}, {{ 'true' if item.is_featured else 'false' }}, true)">Edit</button>
                         <form action="{{ url_for('website.unpublish_product', id=item.id) }}" method="POST" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-orange-600 hover:underline text-sm ml-2"
                                 onclick="return confirm('Remove this product from the public website?')">Remove</button>
                         </form>
                         <form action="{{ url_for('website.delete_published_product', id=item.id) }}" method="POST" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-red-600 hover:underline text-sm ml-2"
                                 onclick="return confirm('Permanently delete this published record? The inventory item will NOT be affected.')">Delete</button>
                         </form>
@@ -161,11 +163,13 @@
                     </td>
                     <td style="white-space:nowrap;">
                         <form action="{{ url_for('website.republish_product', id=item.id) }}" method="POST" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-green-600 hover:underline text-sm font-semibold">Republish</button>
                         </form>
                         <button type="button" class="text-blue-600 hover:underline text-sm ml-2"
                             onclick="openEditModal({{ item.id }}, '{{ (inventory.item_name if inventory else 'Unknown')|replace("'", "\\'") }}', '{{ item.product_type }}', {{ item.public_price or (inventory.min_selling_price if inventory else 0) }}, {{ 'true' if item.is_featured else 'false' }}, false)">Edit</button>
                         <form action="{{ url_for('website.delete_published_product', id=item.id) }}" method="POST" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-red-600 hover:underline text-sm ml-2"
                                 onclick="return confirm('Permanently delete this record? You can always re-publish from inventory.')">Delete</button>
                         </form>
@@ -303,6 +307,7 @@
             <button onclick="closePublishModal()" class="modal-close">&times;</button>
         </div>
         <form action="{{ url_for('website.publish_product') }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="product_type" id="modal_product_type">
             <input type="hidden" name="product_id" id="modal_product_id">
 
@@ -359,6 +364,7 @@
             <button onclick="closeEditModal()" class="modal-close">&times;</button>
         </div>
         <form id="editForm" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="modal-body">
                 <div style="background: #f0f9ff; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
                     <p style="font-size: 13px; color: #0369a1; margin-bottom: 4px;">Editing:</p>

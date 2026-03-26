@@ -14,6 +14,7 @@
 
 <div class="max-w-2xl">
     <form method="POST" action="{{ url_for('dashboard.edit_user', id=user.id) }}" enctype="multipart/form-data" class="section-card">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <!-- Profile Picture -->
         <div class="form-group mb-6">
             <label class="form-label">Profile Picture</label>
@@ -92,12 +93,12 @@
         <!-- Password -->
         <div class="form-group">
             <label class="form-label">New Password</label>
-            <input type="password" name="password" class="form-input" placeholder="Leave empty to keep current password">
+            <input type="password" name="password" class="form-input" minlength="8" placeholder="Leave empty to keep current password">
             <p class="text-xs text-gray-500 mt-1">
                 {% if user.password_hash %}
                 Password is currently set. Enter a new password to change it.
                 {% else %}
-                No password set (open access mode). Set a password to require login.
+                This account still needs a password before it can be used.
                 {% endif %}
             </p>
         </div>
@@ -147,6 +148,7 @@
         <p class="text-gray-600 text-sm mb-4">Permanently delete this account. This action cannot be undone.</p>
         <form method="POST" action="{{ url_for('dashboard.delete_user', id=user.id) }}"
               onsubmit="return confirm('Are you sure you want to permanently delete this account?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger">Delete Account</button>
         </form>
     </div>

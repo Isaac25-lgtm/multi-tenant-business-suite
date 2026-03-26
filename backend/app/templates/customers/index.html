@@ -21,7 +21,7 @@
                 <option value="">All Types</option>
                 <option value="boutique" {% if business_type == 'boutique' %}selected{% endif %}>Boutique</option>
                 <option value="hardware" {% if business_type == 'hardware' %}selected{% endif %}>Hardware</option>
-                <option value="finances" {% if business_type == 'finances' %}selected{% endif %}>Finance</option>
+                <option value="finance" {% if business_type == 'finance' %}selected{% endif %}>Finance</option>
             </select>
         </div>
         <a href="{{ url_for('customers.index') }}" class="btn btn-secondary">Clear Filter</a>
@@ -75,6 +75,7 @@
     <div class="modal-content">
         <h3 class="text-lg font-semibold mb-4">Add Customer</h3>
         <form method="POST" action="{{ url_for('customers.add') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Name *</label>
                 <input type="text" name="name" required class="form-input">
@@ -97,7 +98,7 @@
                     <option value="">-- Select --</option>
                     <option value="boutique">Boutique</option>
                     <option value="hardware">Hardware</option>
-                    <option value="finances">Finance</option>
+                    <option value="finance">Finance</option>
                 </select>
             </div>
             <div class="flex justify-end gap-2 mt-4">
@@ -113,6 +114,7 @@
     <div class="modal-content">
         <h3 class="text-lg font-semibold mb-4">Edit Customer</h3>
         <form id="edit-customer-form" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Name *</label>
                 <input type="text" name="name" id="edit-name" required class="form-input">

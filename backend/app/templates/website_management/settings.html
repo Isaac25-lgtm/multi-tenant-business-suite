@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}Website Settings - {{ brand_display_name }}{% endblock %}
+
+{% block page_header %}
+<h1 class="page-title">Website Settings</h1>
+<p class="page-subtitle">Control the public Denove website, branding, contact details, and public loan messaging.</p>
+{% endblock %}
+
+{% block content %}
+<div class="mb-6">
+    <a href="{{ url_for('website.dashboard') }}" class="text-primary text-sm">&larr; Back to Website Management</a>
+</div>
+
+<form method="POST" action="{{ url_for('website.website_settings') }}" enctype="multipart/form-data" class="space-y-6">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 space-y-6">
+            <section class="section-card">
+                <div class="mb-4">
+                    <h3 class="font-semibold text-lg">Branding</h3>
+                    <p class="text-sm text-gray-500">These details appear on the public website and across printed documents.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label class="form-label">Company Name</label>
+                        <input type="text" name="company_name" value="{{ settings.company_name }}" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Company Suffix</label>
+                        <input type="text" name="company_suffix" value="{{ settings.company_suffix }}" class="form-input" placeholder="APS">
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">Tagline</label>
+                        <input type="text" name="tagline" value="{{ settings.tagline }}" class="form-input" placeholder="Fashion, Hardware &amp; Finance">
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">Announcement Bar Text</label>
+                        <input type="text" name="announcement_text" value="{{ settings.announcement_text }}" class="form-input" placeholder="Trusted products, practical finance, and dependable service across Uganda.">
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">Hero Title</label>
+                        <input type="text" name="hero_title" value="{{ settings.hero_title }}" class="form-input" placeholder="Fashion, hardware and financial freedom">
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">Hero Description</label>
+                        <textarea name="hero_description" class="form-input" rows="4" placeholder="Describe what the public should understand about Denove.">{{ settings.hero_description }}</textarea>
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">Footer Description</label>
+                        <textarea name="footer_description" class="form-input" rows="3" placeholder="Short footer summary for the public website.">{{ settings.footer_description }}</textarea>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section-card">
+                <div class="mb-4">
+                    <h3 class="font-semibold text-lg">Contact And Coverage</h3>
+                    <p class="text-sm text-gray-500">Customers see these details in the storefront, footer, and call-to-action blocks.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label class="form-label">Phone Number</label>
+                        <input type="text" name="contact_phone" value="{{ settings.contact_phone }}" class="form-input" placeholder="+256 788 066 808">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">WhatsApp Number</label>
+                        <input type="text" name="whatsapp_number" value="{{ settings.whatsapp_number }}" class="form-input" placeholder="256788066808">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Email Address</label>
+                        <input type="email" name="contact_email" value="{{ settings.contact_email }}" class="form-input" placeholder="hello@denove.ug">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Headquarters</label>
+                        <input type="text" name="headquarters" value="{{ settings.headquarters }}" class="form-input" placeholder="Kapchorwa">
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">Service Area</label>
+                        <input type="text" name="service_area" value="{{ settings.service_area }}" class="form-input" placeholder="Uganda">
+                    </div>
+                </div>
+            </section>
+
+            <section class="section-card">
+                <div class="mb-4">
+                    <h3 class="font-semibold text-lg">Public Loan Offer</h3>
+                    <p class="text-sm text-gray-500">Website Management can now change the public interest rate, labels, and range shown on the loan section.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="form-group">
+                        <label class="form-label">Interest Rate</label>
+                        <input type="number" name="loan_interest_rate" min="0" max="100" step="0.01" value="{{ settings.loan_interest_rate }}" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Interest Label</label>
+                        <input type="text" name="loan_interest_rate_label" value="{{ settings.loan_interest_rate_label }}" class="form-input" placeholder="interest per month">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Minimum Loan Amount</label>
+                        <input type="number" name="loan_min_amount" min="0" step="1000" value="{{ settings.loan_min_amount }}" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Maximum Loan Amount</label>
+                        <input type="number" name="loan_max_amount" min="0" step="1000" value="{{ settings.loan_max_amount }}" class="form-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Approval Turnaround (Hours)</label>
+                        <input type="number" name="loan_approval_hours" min="1" max="720" step="1" value="{{ settings.loan_approval_hours }}" class="form-input" required>
+                    </div>
+                    <div class="form-group md:col-span-2">
+                        <label class="form-label">Repayment Note</label>
+                        <input type="text" name="loan_repayment_note" value="{{ settings.loan_repayment_note }}" class="form-input" placeholder="Flexible weekly or monthly repayment">
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <div class="space-y-6">
+            <section class="section-card">
+                <h3 class="font-semibold text-lg mb-4">Logo</h3>
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-5 text-center">
+                    <img src="{{ url_for('static', filename=settings.logo_path) }}" alt="{{ brand_display_name }}" style="max-width: 220px; width: 100%; height: auto; margin: 0 auto;">
+                </div>
+                <div class="form-group mt-4">
+                    <label class="form-label">Upload New Logo</label>
+                    <input type="file" name="logo_file" accept=".png,.jpg,.jpeg,.gif" class="form-input">
+                    <p class="text-xs text-gray-500 mt-2">Use a clean PNG or JPG-style horizontal logo for the most reliable website and document rendering.</p>
+                </div>
+            </section>
+
+            <section class="section-card">
+                <h3 class="font-semibold text-lg mb-4">Live Website Summary</h3>
+                <div class="space-y-3 text-sm text-gray-600">
+                    <div class="rounded-lg bg-slate-50 p-3">
+                        <div class="text-xs uppercase tracking-wide text-gray-400">Public Brand</div>
+                        <div class="font-semibold text-slate-900">{{ brand_display_name }}</div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 p-3">
+                        <div class="text-xs uppercase tracking-wide text-gray-400">Public Loan Message</div>
+                        <div class="font-semibold text-slate-900">{{ settings.loan_interest_rate }}% {{ settings.loan_interest_rate_label }}</div>
+                        <div>UGX {{ "{:,.0f}".format(settings.loan_min_amount) }} to UGX {{ "{:,.0f}".format(settings.loan_max_amount) }}</div>
+                    </div>
+                    <div class="rounded-lg bg-slate-50 p-3">
+                        <div class="text-xs uppercase tracking-wide text-gray-400">Contact</div>
+                        <div>{{ settings.contact_phone }}</div>
+                        <div>{{ settings.contact_email }}</div>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <a href="{{ url_for('storefront.home') }}" target="_blank" class="btn btn-outline w-full">Preview Public Website</a>
+                </div>
+            </section>
+
+            <section class="section-card">
+                <h3 class="font-semibold text-lg mb-2">What Changes Here</h3>
+                <ul class="list-disc list-inside text-sm text-gray-600 space-y-1">
+                    <li>Public website branding and contact details</li>
+                    <li>Loan interest rate shown to visitors</li>
+                    <li>Hero content, footer copy, and marketing text</li>
+                    <li>Logo used on the website and generated documents</li>
+                </ul>
+            </section>
+        </div>
+    </div>
+
+    <div class="flex gap-3">
+        <button type="submit" class="btn btn-primary">Save Website Settings</button>
+        <a href="{{ url_for('website.dashboard') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Receipt Preview {{ sale.reference_number }} - Devs APS{% endblock %}
+{% block title %}Receipt Preview {{ sale.reference_number }} - Denove APS{% endblock %}
 
 {% block page_header %}
 <h2>Receipt Preview</h2>
@@ -9,16 +9,17 @@
 
 {% block content %}
 <form method="POST" action="{{ url_for('hardware.download_receipt', id=sale.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Receipt Preview -->
         <div class="lg:col-span-2">
             <div class="agreement-preview section-card receipt-preview">
                 <div class="agreement-header">
                     <div class="brand-lockup brand-lockup--center">
-                        <img src="{{ url_for('static', filename='images/devs.png') }}" alt="Devs" class="brand-logo">
+                        <img src="{{ url_for('static', filename=site_settings.logo_path) }}" alt="{{ site_settings.company_name }}" class="brand-logo">
                         <div class="brand-stack">
-                            <h1 class="brand-name">Devs</h1>
-                            <span class="brand-tag">Premium</span>
+                            <h1 class="brand-name">{{ site_settings.company_name }}</h1>
+                            <span class="brand-tag">{{ site_settings.tagline or 'Premium' }}</span>
                         </div>
                     </div>
                     <h2 class="agreement-title">{{ business_name }} Receipt</h2>

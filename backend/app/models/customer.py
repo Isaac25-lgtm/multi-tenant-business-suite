@@ -1,4 +1,5 @@
 from app.extensions import db
+from app.utils.pii import decrypt_value, encrypt_value
 from app.utils.timezone import get_local_now
 
 
@@ -9,9 +10,30 @@ class Customer(db.Model):
     name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), nullable=False)
     address = db.Column(db.String(255), nullable=True)
-    nin = db.Column(db.String(20), nullable=True)
+    _nin_plaintext = db.Column('nin', db.String(255), nullable=True)
+    nin_encrypted = db.Column(db.Text, nullable=True)
     business_type = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=get_local_now)
+
+    @property
+    def nin(self):
+        if self.nin_encrypted:
+            return decrypt_value(self.nin_encrypted)
+        return self._nin_plaintext
+
+    @nin.setter
+    def nin(self, value):
+        normalized = str(value or '').strip()
+        if not normalized:
+            self.nin_encrypted = None
+            self._nin_plaintext = None
+            return
+        self.nin_encrypted = encrypt_value(normalized)
+        self._nin_plaintext = None
+
+    def ensure_nin_encrypted(self):
+        if self._nin_plaintext and not self.nin_encrypted:
+            self.nin = self._nin_plaintext
 
     def to_dict(self):
         return {

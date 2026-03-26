@@ -1,0 +1,8 @@
+<svg width="420" height="128" viewBox="0 0 420 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="420" height="128" rx="24" fill="#FFF9F5"/>
+  <rect x="18" y="18" width="92" height="92" rx="24" fill="#0F172A"/>
+  <path d="M46 78L66 58H54L72 38H92L72 58H84L64 78H46Z" fill="#D4663E"/>
+  <circle cx="87" cy="42" r="11" fill="#F0C04A"/>
+  <text x="136" y="60" fill="#0F172A" font-family="Georgia, 'Times New Roman', serif" font-size="38" font-weight="700">Denove</text>
+  <text x="138" y="90" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" letter-spacing="4">APS</text>
+</svg>

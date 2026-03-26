@@ -53,6 +53,17 @@
                             </span>
                         </p>
                     </div>
+                    <div>
+                        <label class="text-sm text-gray-500">Finance Client</label>
+                        <p class="font-medium text-lg">
+                            {% if inquiry.finance_client %}
+                            {{ inquiry.finance_client.name }}
+                            <span class="badge badge-success ml-2">Added To Client List</span>
+                            {% else %}
+                            Not added yet
+                            {% endif %}
+                        </p>
+                    </div>
                 </div>
 
                 {% if inquiry.message %}
@@ -73,6 +84,7 @@
             </div>
             <div class="card-body">
                 <form action="{{ url_for('website.update_inquiry_status', id=inquiry.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="form-group">
                         <label class="form-label">Status</label>
                         <select name="status" class="form-input">
@@ -87,6 +99,12 @@
                         <textarea name="notes" class="form-input" rows="4"
                             placeholder="Add notes about this inquiry...">{{ inquiry.notes or '' }}</textarea>
                     </div>
+                    <label class="flex items-center gap-2 mb-4">
+                        <input type="checkbox" name="add_to_client_list" checked class="form-checkbox">
+                        <span class="text-sm">
+                            When approving, add or link this applicant to the Finance client list
+                        </span>
+                    </label>
                     <button type="submit" class="btn btn-primary w-full">Update Status</button>
                 </form>
             </div>
@@ -102,6 +120,20 @@
                     'Unknown' }}</p>
                 <p class="text-sm text-gray-500">{{ inquiry.reviewed_at.strftime('%b %d, %Y at %H:%M') if
                     inquiry.reviewed_at else '' }}</p>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if inquiry.finance_client %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3>Finance Link</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-sm text-gray-600 mb-3">
+                    This applicant is already available in Finance as <strong>{{ inquiry.finance_client.name }}</strong>.
+                </p>
+                <a href="{{ url_for('finance.clients') }}" class="btn btn-secondary w-full">Open Finance Clients</a>
             </div>
         </div>
         {% endif %}

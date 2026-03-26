@@ -1,4 +1,7 @@
+import json
+
 from app.extensions import db
+from app.utils.pii import decrypt_value, encrypt_value
 from app.utils.timezone import get_local_now
 
 
@@ -8,13 +11,42 @@ class LoanClient(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    nin = db.Column(db.String(20), nullable=True)
+    _nin_plaintext = db.Column('nin', db.String(255), nullable=True)
+    nin_encrypted = db.Column(db.Text, nullable=True)
     phone = db.Column(db.String(20), nullable=False)
     address = db.Column(db.String(200), nullable=True)
+    payer_status = db.Column(db.String(20), nullable=False, default='neutral')
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
 
     loans = db.relationship('Loan', backref='client', lazy='dynamic')
+
+    @property
+    def payer_status_label(self):
+        return {
+            'good': 'Good Payer',
+            'bad': 'Poor Payer',
+        }.get(self.payer_status or 'neutral', 'Unmarked')
+
+    @property
+    def nin(self):
+        if self.nin_encrypted:
+            return decrypt_value(self.nin_encrypted)
+        return self._nin_plaintext
+
+    @nin.setter
+    def nin(self, value):
+        normalized = str(value or '').strip()
+        if not normalized:
+            self.nin_encrypted = None
+            self._nin_plaintext = None
+            return
+        self.nin_encrypted = encrypt_value(normalized)
+        self._nin_plaintext = None
+
+    def ensure_nin_encrypted(self):
+        if self._nin_plaintext and not self.nin_encrypted:
+            self.nin = self._nin_plaintext
 
     def to_dict(self):
         return {
@@ -23,6 +55,8 @@ class LoanClient(db.Model):
             'nin': self.nin,
             'phone': self.phone,
             'address': self.address,
+            'payer_status': self.payer_status or 'neutral',
+            'payer_status_label': self.payer_status_label,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
@@ -36,6 +70,8 @@ class Loan(db.Model):
     client_id = db.Column(db.Integer, db.ForeignKey('loan_clients.id'), nullable=False)
     principal = db.Column(db.Numeric(12, 2), nullable=False)
     interest_rate = db.Column(db.Numeric(5, 2), nullable=False)
+    interest_mode = db.Column(db.String(30), default='flat_rate')
+    monthly_interest_amount = db.Column(db.Numeric(12, 2), nullable=True)
     interest_amount = db.Column(db.Numeric(12, 2), nullable=False)
     total_amount = db.Column(db.Numeric(12, 2), nullable=False)
     amount_paid = db.Column(db.Numeric(12, 2), default=0)
@@ -61,6 +97,8 @@ class Loan(db.Model):
             'client': self.client.to_dict() if self.client else None,
             'principal': float(self.principal),
             'interest_rate': float(self.interest_rate),
+            'interest_mode': self.interest_mode or 'flat_rate',
+            'monthly_interest_amount': float(self.monthly_interest_amount or 0),
             'interest_amount': float(self.interest_amount),
             'total_amount': float(self.total_amount),
             'amount_paid': float(self.amount_paid),
@@ -135,13 +173,31 @@ class GroupLoan(db.Model):
     @property
     def members(self):
         """Return parsed members data"""
-        import json
         if self.members_json:
             try:
-                return json.loads(self.members_json)
-            except:
+                raw_members = json.loads(self.members_json)
+                members = []
+                for member in raw_members:
+                    member_copy = dict(member)
+                    encrypted_nin = member_copy.get('nin_encrypted')
+                    if encrypted_nin:
+                        member_copy['nin'] = decrypt_value(encrypted_nin)
+                    else:
+                        member_copy['nin'] = member_copy.get('nin')
+                    members.append(member_copy)
+                return members
+            except (TypeError, ValueError, json.JSONDecodeError):
                 return []
         return []
+
+    def set_members(self, members):
+        serialized_members = []
+        for member in members or []:
+            member_copy = dict(member)
+            nin = str(member_copy.pop('nin', '') or '').strip()
+            member_copy['nin_encrypted'] = encrypt_value(nin) if nin else None
+            serialized_members.append(member_copy)
+        self.members_json = json.dumps(serialized_members)
 
     def to_dict(self, include_payments=False, include_documents=False):
         data = {

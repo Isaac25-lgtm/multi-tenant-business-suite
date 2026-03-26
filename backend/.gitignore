@@ -12,6 +12,6 @@ build/
 *.db
 .env
 uploads/
-migrations/versions/*.py
-!migrations/versions/__init__.py
+app/static/uploads/*
+!app/static/uploads/.gitkeep
 .DS_Store

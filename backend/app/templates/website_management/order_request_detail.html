@@ -104,6 +104,7 @@
             </div>
             <div class="card-body">
                 <form action="{{ url_for('website.update_order_status', id=order.id) }}" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="form-group">
                         <label class="form-label">Status</label>
                         <select name="status" class="form-input">

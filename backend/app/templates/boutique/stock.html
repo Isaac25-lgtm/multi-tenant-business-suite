@@ -12,6 +12,7 @@
     <div class="flex gap-2 items-center">
         <button onclick="showModal('add-stock-modal')" class="btn btn-primary">Add Stock Item</button>
         <form method="POST" action="{{ url_for('boutique.fetch_all_images') }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-outline" title="Fetch images for items without photos">
                 <svg style="width:16px;height:16px;display:inline;vertical-align:middle;margin-right:4px;" fill="none"
                     stroke="currentColor" viewBox="0 0 24 24">
@@ -96,23 +97,27 @@
                 </div>
                 <div class="flex gap-2 items-center">
                     <button
-                        onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }}, '{{ item.image_url or "" }}')"
+                        onclick="editStock({{ item.id }}, {{ item.item_name|tojson }}, {{ item.category_id or 'null' }}, {{ item.unit|tojson }}, {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }}, {{ (item.image_url or '')|tojson }})"
                         style="color:var(--terra-600);" class="hover:underline text-xs">Edit</button>
                     {% if item.is_active %}
                     <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate this item?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="text-orange-600 hover:underline text-xs">Off</button>
                     </form>
                     {% else %}
                     <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="text-green-600 hover:underline text-xs">On</button>
                     </form>
                     {% endif %}
                     {% if current_section == 'manager' %}
                     <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('PERMANENTLY DELETE this item?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="text-red-600 hover:underline text-xs">Del</button>
                     </form>
                     {% endif %}
                     <form method="POST" action="{{ url_for('boutique.refresh_image', id=item.id) }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" style="color:var(--navy-400);" class="hover:underline text-xs"
                             title="Refresh image">🔄</button>
                     </form>
@@ -129,7 +134,7 @@
 <!-- Hidden image data for edit modals -->
 {% for item in stock %}
 {% if product_images.get(item.id) %}
-<div id="stock-images-{{ item.id }}" style="display:none;" data-images='[{% for img in product_images[item.id] %}{"id":{{ img.id }},"url":"{{ img.image_url }}"}{% if not loop.last %},{% endif %}{% endfor %}]'></div>
+<div id="stock-images-{{ item.id }}" style="display:none;" data-images='[{% for img in product_images[item.id] %}{"id":{{ img.id }},"url":{{ img.image_url|tojson }}}{% if not loop.last %},{% endif %}{% endfor %}]'></div>
 {% endif %}
 {% endfor %}
 
@@ -178,18 +183,21 @@
                         {% if item.for_hire %}<span class="badge" style="background:#7c3aed;color:white;font-size:10px;padding:1px 6px;">Hire</span>{% endif %}
                     </td>
                     <td style="white-space:nowrap;font-size:11px;">
-                        <button onclick="editStock({{ item.id }}, '{{ item.item_name|e }}', {{ item.category_id or 'null' }}, '{{ item.unit }}', {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }}, '{{ item.image_url or "" }}')" style="color:var(--terra-600);" class="hover:underline">Edit</button>
+                        <button onclick="editStock({{ item.id }}, {{ item.item_name|tojson }}, {{ item.category_id or 'null' }}, {{ item.unit|tojson }}, {{ item.cost_price }}, {{ item.min_selling_price }}, {{ item.max_selling_price }}, {{ item.low_stock_threshold }}, {{ item.quantity }}, {{ 'true' if item.for_hire else 'false' }}, {{ (item.image_url or '')|tojson }})" style="color:var(--terra-600);" class="hover:underline">Edit</button>
                         {% if item.is_active %}
                         <form method="POST" action="{{ url_for('boutique.delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('Deactivate?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-orange-600 hover:underline ml-1">Off</button>
                         </form>
                         {% else %}
                         <form method="POST" action="{{ url_for('boutique.reactivate_stock', id=item.id) }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-green-600 hover:underline ml-1">On</button>
                         </form>
                         {% endif %}
                         {% if current_section == 'manager' %}
                         <form method="POST" action="{{ url_for('boutique.permanent_delete_stock', id=item.id) }}" class="inline" onsubmit="return confirm('PERMANENTLY DELETE this item?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-red-600 hover:underline ml-1">Del</button>
                         </form>
                         {% endif %}
@@ -212,6 +220,7 @@
         <p class="text-sm text-gray-600 mb-4">Fill in all details to add stock. A product image will be fetched
             automatically.</p>
         <form method="POST" action="{{ url_for('boutique.add_stock') }}" id="add-stock-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Item Name *</label>
                 <input type="text" name="item_name" required class="form-input"
@@ -297,6 +306,7 @@
     <div class="modal-content max-w-2xl">
         <h3 class="text-lg font-semibold mb-4">Edit Stock Item</h3>
         <form id="edit-stock-form" method="POST" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <!-- Image Gallery + Upload -->
             <div class="form-group" style="background:var(--navy-50);padding:12px;border-radius:var(--radius-lg);margin-bottom:16px;border:1px solid var(--navy-200);">
                 <label class="form-label" style="font-weight:600;">Product Images</label>
@@ -412,20 +422,42 @@
         // Image gallery
         var gallery = document.getElementById('edit-image-gallery');
         gallery.innerHTML = '';
+        var csrfToken = '{{ csrf_token() }}';
         var imgData = document.getElementById('stock-images-' + id);
         if (imgData) {
             var images = JSON.parse(imgData.getAttribute('data-images'));
             images.forEach(function(img) {
                 var div = document.createElement('div');
                 div.style.cssText = 'position:relative;width:60px;height:60px;border-radius:8px;overflow:hidden;border:1px solid #ddd;';
-                div.innerHTML = '<img src="' + img.url + '" style="width:100%;height:100%;object-fit:cover;">' +
-                    '<form method="POST" action="/boutique/stock/' + id + '/delete-image/' + img.id + '" style="position:absolute;top:-2px;right:-2px;" onsubmit="return confirm(\'Delete this image?\')">' +
-                    '<button type="submit" style="background:red;color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;">X</button></form>';
+                var imgEl = document.createElement('img');
+                imgEl.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+                if (/^(\/|https?:\/\/)/.test(img.url)) imgEl.src = img.url;
+                div.appendChild(imgEl);
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/boutique/stock/' + id + '/delete-image/' + img.id;
+                form.style.cssText = 'position:absolute;top:-2px;right:-2px;';
+                form.onsubmit = function() { return confirm('Delete this image?'); };
+                var hidden = document.createElement('input');
+                hidden.type = 'hidden'; hidden.name = 'csrf_token'; hidden.value = csrfToken;
+                form.appendChild(hidden);
+                var btn = document.createElement('button');
+                btn.type = 'submit';
+                btn.style.cssText = 'background:red;color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:1;';
+                btn.textContent = 'X';
+                form.appendChild(btn);
+                div.appendChild(form);
                 gallery.appendChild(div);
             });
         }
         if (!gallery.children.length && imageUrl) {
-            gallery.innerHTML = '<div style="width:60px;height:60px;border-radius:8px;overflow:hidden;border:1px solid #ddd;"><img src="' + imageUrl + '" style="width:100%;height:100%;object-fit:cover;"></div>';
+            var wrap = document.createElement('div');
+            wrap.style.cssText = 'width:60px;height:60px;border-radius:8px;overflow:hidden;border:1px solid #ddd;';
+            var fallbackImg = document.createElement('img');
+            fallbackImg.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+            if (/^(\/|https?:\/\/)/.test(imageUrl)) fallbackImg.src = imageUrl;
+            wrap.appendChild(fallbackImg);
+            gallery.appendChild(wrap);
         }
         // Hide new category input when opening edit modal
         document.getElementById('edit-new-category-input').classList.add('hidden');
