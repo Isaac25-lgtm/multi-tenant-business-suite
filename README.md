@@ -29,66 +29,20 @@ Denove APS is a full-stack Flask application built for a multi-section retail an
 | Module | Highlights |
 |--------|-----------|
 | **Point of Sale** | Multi-line item sales, full & credit payment modes, branded PDF receipts, day-over-day revenue tracking |
-| **Inventory** | Multi-branch stock management, low-stock alerts, cost/selling price controls, auto-fetched product images |
+| **Inventory** | Multi-branch stock management, low-stock alerts, cost/selling price controls, product images |
 | **Equipment Hire** | Deposit & daily rate tracking, return condition logging, hire payment history |
-| **Microfinance** | Individual & group loans, flat-rate or monthly-accrual interest, payment schedules, PDF loan agreements, collateral document uploads |
-| **Customer Registry** | Shared across all sections, NIN encrypted at rest (Fernet/AES-128-CBC), business-type scoping |
-| **Public Storefront** | Product showcase, featured items, loan inquiry & cart-based order submissions, rate-limited APIs |
-| **Website CMS** | Publish/unpublish products, manage banners & branding, loan inquiry inbox with one-click conversion to real loans |
+| **Microfinance** | Individual & group loans, flexible interest models, payment schedules, PDF loan agreements, collateral document uploads |
+| **Customer Registry** | Shared across all sections, sensitive data encrypted at rest, business-type scoping |
+| **Public Storefront** | Product showcase, featured items, loan inquiry & order submissions |
+| **Website CMS** | Publish/unpublish products, manage banners & branding, inquiry inbox with one-click conversion to real loans |
 | **Manager Dashboard** | Real-time KPIs across all sections — sales, credits, loans, inventory value — with day-over-day comparisons |
 
 ## Tech Stack
 
-- **Backend:** Flask 3.0 · SQLAlchemy · Alembic (Flask-Migrate)
-- **Database:** SQLite (dev) · PostgreSQL (prod)
-- **PDF:** ReportLab + Pillow
-- **Security:** Fernet PII encryption · Flask-WTF CSRF · DB-backed rate limiting · audit trail
-- **Deployment:** Render Blueprint · Gunicorn · persistent upload disk
-
-## Getting Started
-
-```bash
-cd backend
-
-# Set up environment
-python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
-
-# Initialize database & create admin
-flask --app run:app db upgrade
-flask --app run:app create-admin
-
-# Run
-python run.py
-```
-
-Open **http://127.0.0.1:5000** — the public storefront loads at `/`, admin login at `/auth/login`.
-
-## Architecture
-
-```
-backend/
-├── app/
-│   ├── __init__.py          # App factory & blueprint registration
-│   ├── config.py            # Dev/prod configuration
-│   ├── models/              # SQLAlchemy models (24 tables)
-│   ├── modules/             # Feature blueprints
-│   │   ├── auth/            # Login, rate limiting, role decorators
-│   │   ├── dashboard/       # Manager KPI dashboard
-│   │   ├── boutique/        # Fashion stock, sales, hires, credits
-│   │   ├── hardware/        # Hardware stock, sales, credits
-│   │   ├── finance/         # Loan clients, loans, payments
-│   │   ├── customers/       # Shared customer registry
-│   │   ├── website_management/  # CMS & inquiry inbox
-│   │   └── storefront/      # Public-facing pages & APIs
-│   ├── templates/           # Jinja2 templates (50+)
-│   ├── static/              # CSS, JS, uploads
-│   └── utils/               # PII encryption, PDF gen, rate limiting, etc.
-├── migrations/              # Alembic version scripts
-├── run.py                   # WSGI entry point
-└── gunicorn.conf.py         # Production server config
-```
+- **Backend:** Flask · SQLAlchemy · Alembic
+- **Database:** PostgreSQL
+- **Security:** Encrypted PII · CSRF protection · rate limiting · comprehensive audit trail
+- **Deployment:** Render · Gunicorn
 
 ## Roles & Access Control
 
@@ -99,52 +53,21 @@ backend/
 | **Hardware** | Hardware inventory & sales, customers (if enabled) |
 | **Finance** | Loan administration, customers (if enabled) |
 
-- Login rate-limited: **5 attempts / 5 min**, 15-minute lockout
-- Sessions validated against the database on every request
-- Deactivating a user takes effect immediately
-
 ## Security
 
-| Layer | Implementation |
-|-------|---------------|
-| Authentication | Werkzeug password hashing; null hashes rejected |
-| PII Protection | National IDs encrypted at rest (Fernet / AES-128-CBC) |
-| CSRF | Flask-WTF on all forms; public APIs exempt but rate-limited |
-| Sessions | HTTPOnly, SameSite=Lax, Secure in production |
-| Audit Trail | Every CUD operation logged with user, section, IP, and details |
-| File Uploads | Extension whitelist + content-type verification (Pillow/header), 5 MB limit |
-| Data Integrity | Soft deletes on sales, loans, and payments |
-| Secret Key | Production refuses to start with weak or missing key (32+ chars required) |
-
-## Deployment
-
-One-click deployment via the included `render.yaml` Blueprint:
-
-| Setting | Value |
-|---------|-------|
-| Runtime | Python 3.11 |
-| Server | Gunicorn (1 worker, 4 threads, 120s timeout) |
-| Health check | `GET /healthz` |
-| Persistent disk | 5 GB for uploads |
-| Database | PostgreSQL (external — configure `DATABASE_URL`) |
-
-See the full [Render Deployment Guide →](docs/RENDER_DEPLOY.md)
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SECRET_KEY` | **Yes** (prod) | Encryption & session key (32+ characters) |
-| `DATABASE_URL` | No | PostgreSQL connection string (defaults to SQLite) |
-| `FLASK_ENV` | No | `development` or `production` |
-| `FLASK_DEBUG` | No | `1` for hot reload |
-| `SESSION_COOKIE_SECURE` | No | `1` in production (requires HTTPS) |
+- Password hashing with industry-standard algorithms
+- Sensitive personal data encrypted at rest
+- CSRF protection on all state-changing operations
+- Rate limiting on authentication and public endpoints
+- Comprehensive audit trail on all operations
+- Secure session management
+- File upload validation and size restrictions
+- Soft deletes for data integrity
 
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md) — How to use the application
-- [Render Deployment Guide](docs/RENDER_DEPLOY.md) — Step-by-step production setup
-- [Environment Example](backend/.env.example) — Local dev template
+- [Render Deployment Guide](docs/RENDER_DEPLOY.md) — Production setup
 
 ## License
 
