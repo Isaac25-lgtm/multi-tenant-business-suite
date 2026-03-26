@@ -28,6 +28,7 @@
 
         <!-- Payment Form -->
         <form method="POST" action="{{ url_for('hardware.pay_credit', id=credit.id) }}" class="mt-4 pt-4 flex" style="border-top:1px solid var(--border); flex-wrap items-end gap-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div>
                 <label class="form-label">Payment Amount</label>
                 <input type="number" name="amount" min="1" max="{{ credit.balance }}" required class="form-input w-40" placeholder="Amount">

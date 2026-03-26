@@ -7,13 +7,19 @@ No authentication required.
 ALLOWED WRITES: WebsiteLoanInquiry, WebsiteOrderRequest (demand capture only)
 FORBIDDEN: Inventory, Sales, Loans, Finance tables
 """
-from flask import Blueprint, render_template, request, jsonify
+import re
+
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for
+from app.extensions import csrf
 from app.extensions import db
 from app.models.boutique import BoutiqueStock, BoutiqueCategory
 from app.models.hardware import HardwareStock, HardwareCategory
 from app.models.website import PublishedProduct, WebsiteLoanInquiry, WebsiteOrderRequest
+from app.utils.branding import get_site_settings
+from app.utils.rate_limit import consume_limit
 
 storefront_bp = Blueprint('storefront', __name__, template_folder='../../templates/storefront')
+EMAIL_PATTERN = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 
 def get_published_products(product_type=None, limit=None, featured_only=False):
@@ -61,6 +67,45 @@ def get_safe_hardware_products(limit=None):
     return get_published_products(product_type='hardware', limit=limit)
 
 
+def _client_ip():
+    forwarded_for = request.headers.get('X-Forwarded-For', '')
+    if forwarded_for:
+        return forwarded_for.split(',')[0].strip()
+    return request.remote_addr or 'unknown'
+
+
+def _is_valid_phone(value):
+    digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
+    return 9 <= len(digits) <= 15
+
+
+def _is_valid_email(value):
+    return bool(EMAIL_PATTERN.match(str(value or '').strip()))
+
+
+def _order_items_are_valid(items):
+    if not isinstance(items, list) or not items:
+        return False
+
+    for item in items:
+        if not isinstance(item, dict):
+            return False
+        if (item.get('product_type') or item.get('type')) not in ('boutique', 'hardware'):
+            return False
+        try:
+            quantity = int(item.get('quantity', 1))
+            price = float(item.get('price', 0))
+        except (TypeError, ValueError):
+            return False
+        if quantity <= 0 or quantity > 100:
+            return False
+        if price < 0 or price > 1_000_000_000:
+            return False
+        if not str(item.get('name', '')).strip():
+            return False
+    return True
+
+
 # ============ PUBLIC ROUTES (READ-ONLY) ============
 
 @storefront_bp.route('/')
@@ -72,11 +117,13 @@ def home():
     boutique_products = get_safe_boutique_products(limit=4)
     hardware_products = get_safe_hardware_products(limit=4)
     featured_products = get_published_products(featured_only=True, limit=6)
+    settings = get_site_settings()
     
     return render_template('storefront/index.html',
         boutique_products=boutique_products,
         hardware_products=hardware_products,
-        featured_products=featured_products
+        featured_products=featured_products,
+        settings=settings,
     )
 
 
@@ -86,11 +133,7 @@ def hardware():
     Public hardware listing page.
     Displays ONLY hardware items published by managers.
     """
-    products = get_safe_hardware_products()
-    
-    return render_template('storefront/hardware.html',
-        products=products
-    )
+    return redirect(f"{url_for('storefront.home')}#hardware")
 
 
 @storefront_bp.route('/boutique')
@@ -99,11 +142,7 @@ def boutique():
     Public boutique listing page.
     Displays ONLY boutique items published by managers.
     """
-    products = get_safe_boutique_products()
-    
-    return render_template('storefront/boutique.html',
-        products=products
-    )
+    return redirect(f"{url_for('storefront.home')}#boutique")
 
 
 @storefront_bp.route('/shop')
@@ -114,11 +153,13 @@ def shop():
     """
     boutique_products = get_safe_boutique_products()
     hardware_products = get_safe_hardware_products()
+    settings = get_site_settings()
     
     return render_template('storefront/index.html',
         boutique_products=boutique_products,
         hardware_products=hardware_products,
-        show_all=True
+        show_all=True,
+        settings=settings,
     )
 
 
@@ -128,7 +169,7 @@ def loans():
     Public loan inquiry page.
     Displays form to capture loan interest.
     """
-    return render_template('storefront/loans.html')
+    return redirect(f"{url_for('storefront.home')}#loans")
 
 
 @storefront_bp.route('/contact')
@@ -136,12 +177,13 @@ def contact():
     """
     Public contact page.
     """
-    return render_template('storefront/contact.html')
+    return redirect(f"{url_for('storefront.home')}#contact")
 
 
 # ============ DEMAND CAPTURE ROUTES ============
 
 @storefront_bp.route('/api/loan-inquiry', methods=['POST'])
+@csrf.exempt
 def submit_loan_inquiry():
     """
     Capture loan interest from public website.
@@ -150,20 +192,33 @@ def submit_loan_inquiry():
     DOES NOT create actual loan records - that's done by managers.
     """
     try:
+        allowed, retry_after = consume_limit('public_loan_inquiry', _client_ip(), 5, 900, 1800)
+        if not allowed:
+            return jsonify({
+                'success': False,
+                'error': f'Too many submissions. Please try again in about {max((retry_after + 59) // 60, 1)} minute(s).'
+            }), 429
+
         data = request.get_json()
         
         # Validate required fields
         if not data.get('full_name') or not data.get('phone') or not data.get('email'):
             return jsonify({'success': False, 'error': 'Name, phone, and email are required'}), 400
+        if not _is_valid_phone(data.get('phone')):
+            return jsonify({'success': False, 'error': 'Please enter a valid phone number'}), 400
+        if not _is_valid_email(data.get('email')):
+            return jsonify({'success': False, 'error': 'Please enter a valid email address'}), 400
+        if data.get('loan_type') not in (None, '', 'individual', 'group'):
+            return jsonify({'success': False, 'error': 'Invalid loan type selected'}), 400
         
         # Create inquiry record (demand signal, not a loan)
         inquiry = WebsiteLoanInquiry(
             full_name=data.get('full_name', '').strip(),
             phone=data.get('phone', '').strip(),
             email=data.get('email', '').strip(),
-            requested_amount=data.get('requested_amount', ''),
+            requested_amount=str(data.get('requested_amount', '')).strip()[:100],
             loan_type=data.get('loan_type', 'individual'),
-            message=data.get('message', ''),
+            message=str(data.get('message', '') or '').strip()[:1000],
             status='new'
         )
         
@@ -181,6 +236,7 @@ def submit_loan_inquiry():
 
 
 @storefront_bp.route('/api/order-request', methods=['POST'])
+@csrf.exempt
 def submit_order_request():
     """
     Capture cart checkout intent from public website.
@@ -190,14 +246,25 @@ def submit_order_request():
     Staff converts to POS sale after confirmation.
     """
     try:
+        allowed, retry_after = consume_limit('public_order_request', _client_ip(), 5, 900, 1800)
+        if not allowed:
+            return jsonify({
+                'success': False,
+                'error': f'Too many submissions. Please try again in about {max((retry_after + 59) // 60, 1)} minute(s).'
+            }), 429
+
         data = request.get_json()
         
         # Validate required fields
         if not data.get('customer_name') or not data.get('customer_phone'):
             return jsonify({'success': False, 'error': 'Name and phone are required'}), 400
-        
-        if not data.get('items') or not isinstance(data['items'], list) or len(data['items']) == 0:
-            return jsonify({'success': False, 'error': 'Cart is empty'}), 400
+        if not _is_valid_phone(data.get('customer_phone')):
+            return jsonify({'success': False, 'error': 'Please enter a valid phone number'}), 400
+        if data.get('customer_email') and not _is_valid_email(data.get('customer_email')):
+            return jsonify({'success': False, 'error': 'Please enter a valid email address'}), 400
+
+        if not _order_items_are_valid(data.get('items')):
+            return jsonify({'success': False, 'error': 'Cart items are invalid'}), 400
         
         # Create order request (demand signal, not a sale)
         order = WebsiteOrderRequest(

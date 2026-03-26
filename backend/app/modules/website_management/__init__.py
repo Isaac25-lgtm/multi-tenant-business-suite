@@ -9,24 +9,31 @@ This module provides managers with full control over:
 
 CRITICAL: This module is accessible ONLY to managers.
 """
-from functools import wraps
 from datetime import datetime
+from functools import wraps
+from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, current_app
 from werkzeug.utils import secure_filename
 from app.extensions import db
-from app.models.user import User, AuditLog
-from app.models.website import WebsiteLoanInquiry, WebsiteOrderRequest, PublishedProduct, WebsiteImage
+from app.models.user import User
+from app.models.website import (
+    WebsiteLoanInquiry,
+    WebsiteOrderRequest,
+    PublishedProduct,
+    WebsiteImage,
+    WebsiteSettings,
+)
+from app.models.finance import LoanClient
 from app.models.boutique import BoutiqueStock, BoutiqueCategory
 from app.models.hardware import HardwareStock, HardwareCategory
+from app.modules.auth import get_session_user, log_action as audit_log_action
+from app.utils.branding import get_site_settings
+from app.utils.timezone import get_local_now
 import os
 
 website_bp = Blueprint('website', __name__, template_folder='../../templates/website_management')
 
-ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
-
-
-def allowed_image(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+from app.utils.uploads import allowed_image, validate_and_save_image
 
 
 def staff_required(f):
@@ -40,17 +47,45 @@ def staff_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'username' not in session:
-            flash('Please login to access this section', 'error')
-            return redirect(url_for('auth.login', section='manager'))
+        user = get_session_user()
+        requested_section = session.get('section')
+
+        if not user:
+            session.clear()
+            flash('Please login to access the website controls.', 'error')
+            return redirect(url_for('auth.login', next=request.path))
+
+        if not user.is_active:
+            session.clear()
+            flash('Your account is inactive. Contact your manager.', 'error')
+            return redirect(url_for('auth.login'))
+
+        if requested_section and not user.has_access_to(requested_section):
+            flash('Your current session no longer has access to this area.', 'error')
+            return redirect(url_for('auth.login'))
 
         return f(*args, **kwargs)
     return decorated_function
 
 
+def safe_decimal(value, default='0'):
+    normalized = str(value or '').strip()
+    if not normalized:
+        return Decimal(default)
+    try:
+        return Decimal(normalized)
+    except (InvalidOperation, ValueError):
+        return Decimal(default)
+
+
+def get_current_website_user():
+    return get_session_user()
+
+
 def get_user_section():
     """Get current user's section for filtering."""
-    return session.get('section', '')
+    user = get_current_website_user()
+    return session.get('section') or (user.role if user else '')
 
 
 def can_publish_type(product_type):
@@ -83,6 +118,22 @@ def can_view_orders_for_type(product_type):
     return False
 
 
+def can_manage_loan_inquiries():
+    return get_user_section() in ('manager', 'finance')
+
+
+def can_access_order(order):
+    if get_user_section() == 'manager':
+        return True
+    if get_user_section() == 'finance':
+        return False
+    for item in order.items or []:
+        item_type = item.get('type') or item.get('product_type')
+        if item_type == get_user_section():
+            return True
+    return False
+
+
 def filter_orders_by_section(orders):
     """Filter order list so workers only see orders containing their product types."""
     section = get_user_section()
@@ -101,20 +152,46 @@ def filter_orders_by_section(orders):
     return filtered
 
 
-def log_action(action, details=None):
-    """Log manager actions for audit trail."""
-    try:
-        user = User.query.filter_by(username=session.get('username')).first()
-        log = AuditLog(
-            user_id=user.id if user else None,
-            action=action,
-            details=details,
-            ip_address=request.remote_addr
-        )
-        db.session.add(log)
-        db.session.commit()
-    except Exception as e:
-        current_app.logger.error(f"Audit log error: {e}")
+def log_website_action(action, entity, entity_id=None, details=None):
+    user = get_current_website_user()
+    if not user:
+        return
+    audit_log_action(
+        user.username,
+        session.get('section') or user.role,
+        action,
+        entity,
+        entity_id,
+        details,
+    )
+
+
+def ensure_finance_client_for_inquiry(inquiry):
+    if inquiry.finance_client_id and inquiry.finance_client:
+        if not inquiry.finance_client.is_active:
+            inquiry.finance_client.is_active = True
+        return inquiry.finance_client, False
+
+    existing = LoanClient.query.filter_by(phone=(inquiry.phone or '').strip()).first()
+    if existing:
+        if not existing.is_active:
+            existing.is_active = True
+        if not existing.name:
+            existing.name = inquiry.full_name.strip()
+        inquiry.finance_client_id = existing.id
+        return existing, False
+
+    client = LoanClient(
+        name=(inquiry.full_name or '').strip(),
+        phone=(inquiry.phone or '').strip(),
+        payer_status='neutral',
+        address='',
+        is_active=True,
+    )
+    db.session.add(client)
+    db.session.flush()
+    inquiry.finance_client_id = client.id
+    return client, True
 
 
 # ============ DASHBOARD ============
@@ -171,8 +248,86 @@ def dashboard():
         pending_orders=pending_orders,
         recent_inquiries=recent_inquiries,
         recent_orders=recent_orders,
-        user_section=section
+        user_section=section,
+        website_settings=WebsiteSettings.get_settings(),
     )
+
+
+@website_bp.route('/settings', methods=['GET', 'POST'])
+@staff_required
+def website_settings():
+    """Global website branding and public loan settings."""
+    settings = WebsiteSettings.query.first()
+    user = get_current_website_user()
+
+    if request.method == 'POST':
+        if not settings:
+            settings = WebsiteSettings()
+            db.session.add(settings)
+
+        loan_interest_rate = safe_decimal(request.form.get('loan_interest_rate', '0'))
+        loan_min_amount = safe_decimal(request.form.get('loan_min_amount', '0'))
+        loan_max_amount = safe_decimal(request.form.get('loan_max_amount', '0'))
+        loan_approval_hours = request.form.get('loan_approval_hours', type=int) or 48
+
+        if loan_interest_rate < 0 or loan_interest_rate > Decimal('100'):
+            flash('Public interest rate must be between 0 and 100.', 'error')
+            return redirect(url_for('website.website_settings'))
+        if loan_min_amount < 0 or loan_max_amount < 0:
+            flash('Loan amounts cannot be negative.', 'error')
+            return redirect(url_for('website.website_settings'))
+        if loan_max_amount and loan_min_amount and loan_max_amount < loan_min_amount:
+            flash('Maximum loan amount must be greater than or equal to the minimum amount.', 'error')
+            return redirect(url_for('website.website_settings'))
+        if loan_approval_hours <= 0 or loan_approval_hours > 720:
+            flash('Approval turnaround must be between 1 and 720 hours.', 'error')
+            return redirect(url_for('website.website_settings'))
+
+        settings.company_name = request.form.get('company_name', 'Denove').strip() or 'Denove'
+        settings.company_suffix = request.form.get('company_suffix', 'APS').strip() or 'APS'
+        settings.tagline = request.form.get('tagline', '').strip() or None
+        settings.announcement_text = request.form.get('announcement_text', '').strip() or None
+        settings.hero_title = request.form.get('hero_title', '').strip() or None
+        settings.hero_description = request.form.get('hero_description', '').strip() or None
+        settings.contact_phone = request.form.get('contact_phone', '').strip() or None
+        settings.whatsapp_number = request.form.get('whatsapp_number', '').strip() or None
+        settings.contact_email = request.form.get('contact_email', '').strip() or None
+        settings.headquarters = request.form.get('headquarters', '').strip() or None
+        settings.service_area = request.form.get('service_area', '').strip() or None
+        settings.loan_interest_rate = loan_interest_rate
+        settings.loan_interest_rate_label = request.form.get('loan_interest_rate_label', '').strip() or 'interest per month'
+        settings.loan_min_amount = loan_min_amount
+        settings.loan_max_amount = loan_max_amount
+        settings.loan_repayment_note = request.form.get('loan_repayment_note', '').strip() or None
+        settings.loan_approval_hours = loan_approval_hours
+        settings.footer_description = request.form.get('footer_description', '').strip() or None
+        settings.updated_by = user.id if user else None
+
+        logo_file = request.files.get('logo_file')
+        if logo_file and logo_file.filename:
+            if not allowed_image(logo_file.filename):
+                flash('Invalid logo file. Please upload PNG, JPG, JPEG, or GIF.', 'error')
+                return redirect(url_for('website.website_settings'))
+
+            upload_dir = os.path.join(current_app.static_folder, 'uploads', 'website')
+            os.makedirs(upload_dir, exist_ok=True)
+            extension = logo_file.filename.rsplit('.', 1)[1].lower()
+            if extension not in {'png', 'jpg', 'jpeg', 'gif'}:
+                flash('Please upload a PNG, JPG, JPEG, or GIF logo so it can appear correctly on documents too.', 'error')
+                return redirect(url_for('website.website_settings'))
+            filename = f'logo_{get_local_now().strftime("%Y%m%d%H%M%S")}.{extension}'
+            file_path = os.path.join(upload_dir, filename)
+            if not validate_and_save_image(logo_file, file_path):
+                flash('The selected logo file is not a valid image.', 'error')
+                return redirect(url_for('website.website_settings'))
+            settings.logo_path = f'uploads/website/{filename}'
+
+        db.session.commit()
+        log_website_action('update', 'website_settings', settings.id, {'company_name': settings.company_name})
+        flash('Website settings updated successfully.', 'success')
+        return redirect(url_for('website.website_settings'))
+
+    return render_template('website_management/settings.html', settings=get_site_settings())
 
 
 # ============ PRODUCT PUBLISHING ============
@@ -256,7 +411,7 @@ def publish_product():
         existing.is_published = True
         existing.is_featured = is_featured
         existing.public_price = public_price if public_price else None
-        existing.published_at = datetime.utcnow()
+        existing.published_at = get_local_now()
         existing.published_by = user.id
     else:
         published = PublishedProduct(
@@ -265,13 +420,16 @@ def publish_product():
             is_published=True,
             is_featured=is_featured,
             public_price=public_price if public_price else None,
-            published_at=datetime.utcnow(),
+            published_at=get_local_now(),
             published_by=user.id
         )
         db.session.add(published)
     
     db.session.commit()
-    log_action('publish_product', f'{product_type}:{product_id}')
+    log_website_action('publish', 'published_product', existing.id if existing else published.id, {
+        'product_type': product_type,
+        'product_id': product_id,
+    })
     flash('Product published successfully! It is now visible on your public website.', 'success')
     return redirect(url_for('website.products'))
 
@@ -287,7 +445,10 @@ def unpublish_product(id):
     published.is_published = False
     db.session.commit()
     
-    log_action('unpublish_product', f'{published.product_type}:{published.product_id}')
+    log_website_action('unpublish', 'published_product', published.id, {
+        'product_type': published.product_type,
+        'product_id': published.product_id,
+    })
     flash('Product removed from website. You can republish, edit, or delete it below.', 'success')
     return redirect(url_for('website.products'))
 
@@ -301,10 +462,13 @@ def republish_product(id):
         flash('You do not have permission to modify this product.', 'error')
         return redirect(url_for('website.products'))
     published.is_published = True
-    published.published_at = datetime.utcnow()
+    published.published_at = get_local_now()
     db.session.commit()
 
-    log_action('republish_product', f'{published.product_type}:{published.product_id}')
+    log_website_action('republish', 'published_product', published.id, {
+        'product_type': published.product_type,
+        'product_id': published.product_id,
+    })
     flash('Product republished to website!', 'success')
     return redirect(url_for('website.products'))
 
@@ -317,23 +481,26 @@ def edit_published_product(id):
     if not can_publish_type(published.product_type):
         flash('You do not have permission to modify this product.', 'error')
         return redirect(url_for('website.products'))
-    user = User.query.filter_by(username=session['username']).first()
-
     is_featured = request.form.get('is_featured') == 'on'
     public_price = request.form.get('public_price', type=float)
 
     published.is_featured = is_featured
     published.public_price = public_price if public_price else None
-    published.updated_at = datetime.utcnow()
+    published.updated_at = get_local_now()
 
     # Republish if currently unpublished
     should_publish = request.form.get('republish') == 'on'
     if should_publish and not published.is_published:
         published.is_published = True
-        published.published_at = datetime.utcnow()
+        published.published_at = get_local_now()
 
     db.session.commit()
-    log_action('edit_published_product', f'{published.product_type}:{published.product_id}')
+    log_website_action('update', 'published_product', published.id, {
+        'product_type': published.product_type,
+        'product_id': published.product_id,
+        'is_featured': published.is_featured,
+        'public_price': float(published.public_price) if published.public_price else None,
+    })
     flash('Product updated successfully!', 'success')
     return redirect(url_for('website.products'))
 
@@ -350,7 +517,7 @@ def delete_published_product(id):
     db.session.delete(published)
     db.session.commit()
 
-    log_action('delete_published_product', product_info)
+    log_website_action('delete', 'published_product', id, {'product_info': product_info})
     flash('Product record deleted. You can re-publish it from the inventory below.', 'success')
     return redirect(url_for('website.products'))
 
@@ -388,13 +555,15 @@ def upload_image():
     upload_dir = os.path.join(current_app.static_folder, 'uploads', 'website')
     os.makedirs(upload_dir, exist_ok=True)
     
-    # Save file
+    # Validate and save file
     filename = secure_filename(file.filename)
-    timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+    timestamp = get_local_now().strftime('%Y%m%d%H%M%S')
     filename = f"{timestamp}_{filename}"
     file_path = os.path.join(upload_dir, filename)
-    file.save(file_path)
-    
+    if not validate_and_save_image(file, file_path):
+        flash('Invalid image file. The file appears corrupted or is not a real image.', 'error')
+        return redirect(url_for('website.images'))
+
     # Create database record
     user = User.query.filter_by(username=session['username']).first()
     image = WebsiteImage(
@@ -408,7 +577,7 @@ def upload_image():
     db.session.add(image)
     db.session.commit()
     
-    log_action('upload_image', filename)
+    log_website_action('upload', 'website_image', image.id, {'filename': filename})
     flash('Image uploaded successfully', 'success')
     return redirect(url_for('website.images'))
 
@@ -422,7 +591,7 @@ def toggle_image(id):
     db.session.commit()
     
     status = 'activated' if image.is_active else 'deactivated'
-    log_action('toggle_image', f'{id}: {status}')
+    log_website_action('toggle', 'website_image', image.id, {'status': status})
     flash(f'Image {status}', 'success')
     return redirect(url_for('website.images'))
 
@@ -469,6 +638,9 @@ def loan_inquiries():
 @staff_required
 def view_loan_inquiry(id):
     """View single loan inquiry details."""
+    if not can_manage_loan_inquiries():
+        flash('Loan inquiries are handled by finance staff.', 'error')
+        return redirect(url_for('website.order_requests'))
     inquiry = WebsiteLoanInquiry.query.get_or_404(id)
     return render_template('website_management/loan_inquiry_detail.html', inquiry=inquiry)
 
@@ -477,9 +649,14 @@ def view_loan_inquiry(id):
 @staff_required
 def update_inquiry_status(id):
     """Update loan inquiry status."""
+    if not can_manage_loan_inquiries():
+        flash('Loan inquiries are handled by finance staff.', 'error')
+        return redirect(url_for('website.order_requests'))
+
     inquiry = WebsiteLoanInquiry.query.get_or_404(id)
     new_status = request.form.get('status')
     notes = request.form.get('notes', '')
+    add_to_client_list = request.form.get('add_to_client_list') == 'on'
     
     if new_status not in ['new', 'reviewed', 'approved', 'rejected']:
         flash('Invalid status', 'error')
@@ -490,11 +667,25 @@ def update_inquiry_status(id):
     inquiry.status = new_status
     inquiry.notes = notes
     inquiry.reviewed_by = user.id
-    inquiry.reviewed_at = datetime.utcnow()
+    inquiry.reviewed_at = get_local_now()
+    linked_client = None
+    client_created = False
+    if new_status == 'approved' and add_to_client_list:
+        linked_client, client_created = ensure_finance_client_for_inquiry(inquiry)
     db.session.commit()
     
-    log_action('update_inquiry_status', f'{id}: {new_status}')
-    flash(f'Inquiry marked as {new_status}', 'success')
+    log_details = {'status': new_status}
+    if linked_client:
+        log_details['finance_client_id'] = linked_client.id
+        log_details['finance_client_created'] = client_created
+    log_website_action('update', 'website_loan_inquiry', inquiry.id, log_details)
+
+    if linked_client and client_created:
+        flash(f'Inquiry marked as {new_status} and added to Finance clients.', 'success')
+    elif linked_client:
+        flash(f'Inquiry marked as {new_status} and linked to an existing Finance client.', 'success')
+    else:
+        flash(f'Inquiry marked as {new_status}', 'success')
     return redirect(url_for('website.loan_inquiries'))
 
 
@@ -544,6 +735,9 @@ def order_requests():
 def view_order_request(id):
     """View single order request details."""
     order = WebsiteOrderRequest.query.get_or_404(id)
+    if not can_access_order(order):
+        flash('You do not have permission to view this order request.', 'error')
+        return redirect(url_for('website.order_requests'))
     return render_template('website_management/order_request_detail.html', order=order)
 
 
@@ -552,6 +746,9 @@ def view_order_request(id):
 def update_order_status(id):
     """Update order request status."""
     order = WebsiteOrderRequest.query.get_or_404(id)
+    if not can_access_order(order):
+        flash('You do not have permission to update this order request.', 'error')
+        return redirect(url_for('website.order_requests'))
     new_status = request.form.get('status')
     notes = request.form.get('notes', '')
     
@@ -566,11 +763,11 @@ def update_order_status(id):
     order.reviewed_by = user.id
     
     if new_status == 'fulfilled':
-        order.fulfilled_at = datetime.utcnow()
+        order.fulfilled_at = get_local_now()
     
     db.session.commit()
     
-    log_action('update_order_status', f'{id}: {new_status}')
+    log_website_action('update', 'website_order_request', order.id, {'status': new_status})
     flash(f'Order marked as {new_status}', 'success')
     return redirect(url_for('website.order_requests'))
 

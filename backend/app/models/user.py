@@ -9,7 +9,7 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
-    password_hash = db.Column(db.String(256), nullable=True)  # Nullable for open access mode
+    password_hash = db.Column(db.String(256), nullable=True)
     role = db.Column(db.String(20), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
@@ -35,15 +35,17 @@ class User(db.Model):
 
     def set_password(self, password):
         """Set hashed password"""
-        if password:
-            self.password_hash = generate_password_hash(password)
-        else:
-            self.password_hash = None
+        normalized = (password or '').strip()
+        if not normalized:
+            raise ValueError('Password is required.')
+        if len(normalized) < 8:
+            raise ValueError('Password must be at least 8 characters.')
+        self.password_hash = generate_password_hash(normalized)
 
     def check_password(self, password):
         """Check if password matches"""
         if not self.password_hash:
-            return True  # Open access mode
+            return False
         return check_password_hash(self.password_hash, password)
 
     def has_access_to(self, section):
@@ -105,3 +107,21 @@ class AuditLog(db.Model):
             'ip_address': self.ip_address,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+
+class RateLimitState(db.Model):
+    """Persistent throttle state for login and public endpoints."""
+    __tablename__ = 'rate_limit_states'
+
+    id = db.Column(db.Integer, primary_key=True)
+    scope = db.Column(db.String(50), nullable=False)
+    identifier = db.Column(db.String(255), nullable=False)
+    request_count = db.Column(db.Integer, default=0, nullable=False)
+    window_started_at = db.Column(db.DateTime, default=get_local_now, nullable=False)
+    blocked_until = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    updated_at = db.Column(db.DateTime, default=get_local_now, onupdate=get_local_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('scope', 'identifier', name='uq_rate_limit_scope_identifier'),
+    )

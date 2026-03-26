@@ -71,6 +71,7 @@
             <div class="mt-6 pt-4 flex flex-col gap-2" style="border-top:1px solid var(--border);">
                 <a href="{{ url_for('dashboard.edit_user', id=user.id) }}" class="btn btn-primary w-full">Edit Profile</a>
                 <form method="POST" action="{{ url_for('dashboard.toggle_user_active', id=user.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn {{ 'btn-danger' if user.is_active else 'btn-success' }} w-full">
                         {{ 'Deactivate Account' if user.is_active else 'Activate Account' }}
                     </button>

@@ -81,6 +81,7 @@
             <a href="{{ url_for('dashboard.view_user', id=user.id) }}" style="color:var(--terra-600);" class="hover:underline text-sm">View</a>
             <a href="{{ url_for('dashboard.edit_user', id=user.id) }}" style="color:var(--terra-600);" class="hover:underline text-sm">Edit</a>
             <form method="POST" action="{{ url_for('dashboard.toggle_user_active', id=user.id) }}" class="inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="text-{{ 'red' if user.is_active else 'green' }}-600 hover:underline text-sm">
                     {{ 'Deactivate' if user.is_active else 'Activate' }}
                 </button>

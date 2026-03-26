@@ -274,12 +274,14 @@ def edit_stock(id):
             existing_count = ProductImage.query.filter_by(
                 product_type='hardware', product_id=id
             ).count()
+            from app.utils.uploads import allowed_image as is_allowed_img, validate_and_save_image
             for idx, file in enumerate(files):
-                if file and file.filename != '':
+                if file and file.filename != '' and is_allowed_img(file.filename):
                     filename = secure_filename(file.filename)
-                    timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S')
+                    timestamp = get_local_now().strftime('%Y%m%d%H%M%S')
                     filename = f"hardware_{id}_{timestamp}_{idx}_{filename}"
-                    file.save(os.path.join(upload_dir, filename))
+                    if not validate_and_save_image(file, os.path.join(upload_dir, filename)):
+                        continue
                     image_url = f'/static/uploads/products/{filename}'
                     pi = ProductImage(
                         product_type='hardware', product_id=id,
@@ -510,11 +512,19 @@ def create_sale():
 
             subtotal = qty * price
             total_amount += subtotal
-            stock_item = HardwareStock.query.get(int(item_id))
+            stock_item = db.session.query(HardwareStock).filter_by(
+                id=int(item_id),
+                is_active=True
+            ).with_for_update().first()
             if stock_item:
+                if qty > stock_item.quantity:
+                    flash(f'Not enough stock for "{stock_item.item_name}". Available: {stock_item.quantity}.', 'error')
+                    db.session.rollback()
+                    return redirect(url_for('hardware.new_sale'))
                 items_data.append({
                     'stock_id': stock_item.id, 'item_name': stock_item.item_name,
-                    'quantity': qty, 'unit_price': price, 'subtotal': subtotal
+                    'quantity': qty, 'unit_price': price, 'subtotal': subtotal,
+                    'stock': stock_item,
                 })
 
         if not items_data:
@@ -550,7 +560,7 @@ def create_sale():
                 unit_price=item_data['unit_price'], subtotal=item_data['subtotal']
             )
             db.session.add(sale_item)
-            stock = HardwareStock.query.get(item_data['stock_id'])
+            stock = item_data.get('stock')
             if stock:
                 stock.quantity -= item_data['quantity']
 
@@ -702,6 +712,9 @@ def pay_credit(id):
 
         if amount <= 0:
             flash('Amount must be greater than 0', 'error')
+            return redirect(url_for('hardware.credits'))
+        if amount > sale.balance:
+            flash(f'Payment cannot exceed the balance of UGX {sale.balance:,.0f}.', 'error')
             return redirect(url_for('hardware.credits'))
 
         sale.amount_paid += amount

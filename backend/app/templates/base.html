@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Denove APS{% endblock %}</title>
+    <title>{% block title %}{{ brand_display_name }}{% endblock %}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     {% block extra_css %}{% endblock %}
@@ -27,11 +27,11 @@
                             {% else %}
                             <a href="{{ url_for('auth.login') }}" class="brand-link brand-lockup">
                                 {% endif %}
-                                <img src="{{ url_for('static', filename='images/denovo.png') }}" alt="Denove"
+                                <img src="{{ url_for('static', filename=site_settings.logo_path) }}" alt="{{ site_settings.company_name }}"
                                     class="brand-logo">
                                 <div class="brand-stack">
-                                    <h1 class="brand-name">Denove</h1>
-                                    <span class="brand-tag">Premium</span>
+                                    <h1 class="brand-name">{{ site_settings.company_name }}</h1>
+                                    <span class="brand-tag">{{ site_settings.tagline or 'Business Suite' }}</span>
                                 </div>
                             </a>
         </div>
@@ -269,13 +269,16 @@
                     <span class="role">{{ current_section|title }}</span>
                 </div>
             </div>
-            <a href="{{ url_for('auth.logout') }}" class="sidebar-logout">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                </svg>
-                Logout
-            </a>
+            <form method="POST" action="{{ url_for('auth.logout') }}" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="sidebar-logout" style="width:100%;border:none;background:none;cursor:pointer;text-align:left;">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                    Logout
+                </button>
+            </form>
         </div>
     </aside>
 
@@ -342,7 +345,7 @@
 
         <!-- Footer -->
         <footer class="footer-main">
-            <p>Denove APS &mdash; Premium Business Suite</p>
+            <p>{{ brand_display_name }} &mdash; {{ site_settings.tagline or 'Business Suite' }}</p>
         </footer>
     </main>
 
@@ -413,13 +416,25 @@
         } catch(e) {}
       }
 
-      function showPopup(title, subtitle, items, viewUrl) {
+      function buildCard(fields) {
+        var card = document.createElement('div');
+        card.className = 'notify-order-item' + (fields.cls ? ' ' + fields.cls : '');
+        var h4 = document.createElement('h4');
+        h4.textContent = fields.title || '';
+        card.appendChild(h4);
+        if (fields.subtitle) { var p1 = document.createElement('p'); p1.textContent = fields.subtitle; card.appendChild(p1); }
+        if (fields.detail) { var p2 = document.createElement('p'); p2.style.marginTop = '4px'; p2.textContent = fields.detail; card.appendChild(p2); }
+        if (fields.total) { var d = document.createElement('div'); d.className = 'notify-total'; d.style.marginTop = '6px'; d.textContent = fields.total; card.appendChild(d); }
+        return card;
+      }
+
+      function showPopup(title, subtitle, cards, viewUrl) {
         document.getElementById('notify-title').textContent = title;
         document.getElementById('notify-subtitle').textContent = subtitle;
         document.getElementById('notify-view-btn').href = viewUrl;
         var list = document.getElementById('notify-orders-list');
         list.innerHTML = '';
-        items.forEach(function(html) { list.innerHTML += html; });
+        cards.forEach(function(card) { list.appendChild(card); });
         document.getElementById('order-notify-overlay').style.display = 'flex';
         playBeep();
         clearTimeout(notifyTimeout);
@@ -440,10 +455,7 @@
               var cards = data.orders.map(function(o) {
                 var items = (o.items || []).map(function(i) { return i.name + ' x' + (i.quantity || 1); }).join(', ');
                 var total = Number(o.total_amount || 0).toLocaleString('en', {maximumFractionDigits: 0});
-                return '<div class="notify-order-item"><h4>' + (o.customer_name || 'Customer') + '</h4>' +
-                  '<p>' + (o.customer_phone || '') + '</p>' +
-                  '<p style="margin-top:4px;">' + items + '</p>' +
-                  '<div class="notify-total" style="margin-top:6px;">UGX ' + total + '</div></div>';
+                return buildCard({title: o.customer_name || 'Customer', subtitle: o.customer_phone || '', detail: items, total: 'UGX ' + total});
               });
               showPopup('NEW ONLINE ORDER!',
                 data.count + ' new order' + (data.count > 1 ? 's' : '') + ' received',
@@ -461,10 +473,7 @@
           .then(function(data) {
             if (data && data.count > 0) {
               var cards = data.inquiries.map(function(i) {
-                return '<div class="notify-order-item inquiry-item"><h4>' + (i.full_name || 'Applicant') + '</h4>' +
-                  '<p>' + (i.phone || '') + '</p>' +
-                  '<p style="margin-top:4px;">Loan type: ' + (i.loan_type || 'N/A') + '</p>' +
-                  '<div class="notify-total" style="margin-top:6px;">' + (i.requested_amount || '') + '</div></div>';
+                return buildCard({cls: 'inquiry-item', title: i.full_name || 'Applicant', subtitle: i.phone || '', detail: 'Loan type: ' + (i.loan_type || 'N/A'), total: i.requested_amount || ''});
               });
               showPopup('NEW LOAN INQUIRY!',
                 data.count + ' new inquiry' + (data.count > 1 ? 'ies' : '') + ' received',

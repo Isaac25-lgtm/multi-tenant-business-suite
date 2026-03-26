@@ -11,6 +11,7 @@
 
 <div class="max-w-2xl">
     <form method="POST" action="{{ url_for('finance.edit_loan', id=loan.id) }}" class="section-card">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <h2 class="font-semibold text-lg mb-4">Loan Information</h2>
 
         <!-- Client Info (Read-only) -->

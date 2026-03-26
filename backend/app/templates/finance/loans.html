@@ -23,7 +23,7 @@
     <div class="font-semibold text-gray-700 mb-2">Data Entry Guide - Individual Loans</div>
     <ul class="list-disc list-inside space-y-1 text-sm">
         <li><strong>Step 1:</strong> Click "New Loan" to start - select a client from the list</li>
-        <li><strong>Step 2:</strong> Enter principal amount, interest rate (%), and duration in weeks or months</li>
+        <li><strong>Step 2:</strong> Choose a flat rate or a monthly accrual plan, then enter the duration</li>
         <li><strong>Step 3:</strong> Click "Preview Agreement" to review all calculations before issuing</li>
         <li><strong>Step 4:</strong> Upload any collateral documents in the preview screen</li>
         <li><strong>Step 5:</strong> Click "Issue Loan" to finalize</li>
@@ -46,8 +46,8 @@
                 <tr>
                     <th>Client</th>
                     <th class="text-right">Principal</th>
-                    <th class="text-right">Interest</th>
-                    <th class="text-right">Total</th>
+                    <th>Interest Plan</th>
+                    <th class="text-right">Current Due</th>
                     <th class="text-right">Balance</th>
                     <th>Due Date</th>
                     <th>Status</th>
@@ -56,10 +56,26 @@
             </thead>
             <tbody>
                 {% for loan in loans %}
-                <tr>
-                    <td class="font-medium">{{ loan.client.name }}</td>
+                <tr style="{% if loan.client and loan.client.payer_status == 'bad' %}background:#fef2f2;{% elif loan.client and loan.client.payer_status == 'good' %}background:#f0fdf4;{% endif %}">
+                    <td class="font-medium">
+                        {{ loan.client.name }}
+                        {% if loan.client and loan.client.payer_status != 'neutral' %}
+                        <div class="mt-1">
+                            <span class="badge badge-{{ 'success' if loan.client.payer_status == 'good' else 'danger' }}">
+                                {{ loan.client.payer_status_label }}
+                            </span>
+                        </div>
+                        {% endif %}
+                    </td>
                     <td class="text-right">{{ "{:,.0f}".format(loan.principal) }}</td>
-                    <td class="text-right">{{ "{:.1f}".format(loan.interest_rate) }}%</td>
+                    <td>
+                        {% if loan.interest_mode == 'monthly_accrual' %}
+                        <div class="font-medium">UGX {{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }}/month</div>
+                        <div class="text-xs text-gray-500">Accrued: UGX {{ "{:,.0f}".format(loan.interest_amount) }}</div>
+                        {% else %}
+                        <div class="font-medium">{{ "{:.1f}".format(loan.interest_rate) }}% flat</div>
+                        {% endif %}
+                    </td>
                     <td class="text-right">{{ "{:,.0f}".format(loan.total_amount) }}</td>
                     <td class="text-right {% if loan.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">{{ "{:,.0f}".format(loan.balance) }}</td>
                     <td>{{ loan.due_date.strftime('%Y-%m-%d') }}</td>
@@ -75,12 +91,13 @@
                     <td style="white-space: nowrap;">
                         <a href="{{ url_for('finance.view_loan', id=loan.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
                         {% if loan.status == 'active' and loan.balance > 0 %}
-                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.total_amount - loan.principal }}, '{{ loan.duration_type or 'weeks' }}')" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
+                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.interest_amount }}, '{{ loan.duration_type or 'weeks' }}', '{{ loan.interest_mode or 'flat_rate' }}', {{ loan.monthly_interest_amount or 0 }})" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
                         {% endif %}
                         {% if current_section == 'manager' %}
                         <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="text-green-600 hover:underline text-sm ml-2">Edit</a>
                         {% endif %}
                         <form method="POST" action="{{ url_for('finance.delete_loan', id=loan.id) }}" class="inline" onsubmit="return confirm('Delete this loan?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
                         </form>
                     </td>
@@ -109,15 +126,16 @@
         <button type="button" onclick="hideModal('add-loan-modal')" class="btn btn-secondary w-full">Close</button>
         {% else %}
         <div class="guideline mb-4">
-            <strong>Required:</strong> Select a client, enter principal amount, interest rate, and loan duration.
+            <strong>Required:</strong> Select a client, enter principal, choose an interest plan, and set the duration.
         </div>
         <form method="POST" action="{{ url_for('finance.preview_loan_agreement') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Client *</label>
                 <select name="client_id" required class="form-select searchable-select">
                     <option value="">-- Select Client --</option>
                     {% for client in clients %}
-                    <option value="{{ client.id }}">{{ client.name }} ({{ client.phone }})</option>
+                    <option value="{{ client.id }}">{{ client.name }} ({{ client.phone }}){% if client.payer_status == 'bad' %} - Poor Payer{% elif client.payer_status == 'good' %} - Good Payer{% endif %}</option>
                     {% endfor %}
                 </select>
                 <p class="text-xs text-gray-500 mt-1">Don't see your client? <a href="{{ url_for('finance.clients') }}" style="color:var(--terra-600);" class="">Add them first</a></p>
@@ -128,8 +146,22 @@
                     <input type="number" name="principal" min="1" step="0.01" required class="form-input" placeholder="e.g., 500000">
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Interest Plan *</label>
+                    <select name="interest_mode" id="loan-interest-mode" class="form-select" onchange="toggleLoanInterestFields('loan-interest-mode', 'loan-flat-rate-group', 'loan-monthly-group')">
+                        <option value="flat_rate">Flat Interest Rate</option>
+                        <option value="monthly_accrual">Monthly Interest Accrual</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group" id="loan-flat-rate-group">
                     <label class="form-label">Interest Rate (%)</label>
-                    <input type="number" name="interest_rate" min="0" step="0.01" value="10" class="form-input">
+                    <input type="number" name="interest_rate" min="0" max="100" step="0.01" value="{{ site_settings.loan_interest_rate }}" class="form-input">
+                </div>
+                <div class="form-group hidden" id="loan-monthly-group">
+                    <label class="form-label">Monthly Interest Amount (UGX)</label>
+                    <input type="number" name="monthly_interest_amount" min="1" step="0.01" class="form-input" placeholder="e.g., 60000">
+                    <p class="text-xs text-gray-500 mt-1">This amount is added automatically for every completed month.</p>
                 </div>
             </div>
             <div class="grid grid-cols-3 gap-4">
@@ -163,6 +195,7 @@
     <div class="modal-content">
         <h3 class="text-lg font-semibold mb-4">Renew Loan</h3>
         <form id="renew-loan-form" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="guideline mb-4">
                 <strong>Renewing loan for: </strong><span id="renew-client-name" class="font-semibold"></span><br>
                 <span class="text-sm text-gray-600">Interest of <strong id="renew-interest-display"></strong> will be recorded as paid on the old loan. A new loan will be created with the terms below.</span>
@@ -172,7 +205,7 @@
                 <div class="font-semibold text-sm text-gray-600 mb-2">Previous Loan Terms</div>
                 <div class="grid grid-cols-3 gap-2 text-sm">
                     <div>Principal: <strong id="renew-old-principal"></strong></div>
-                    <div>Rate: <strong id="renew-old-rate"></strong>%</div>
+                    <div>Plan: <strong id="renew-old-rate"></strong></div>
                     <div>Duration: <strong id="renew-old-weeks"></strong> weeks</div>
                 </div>
             </div>
@@ -184,8 +217,21 @@
                     <input type="number" name="principal" id="renew-principal" min="1" step="0.01" required class="form-input">
                 </div>
                 <div class="form-group">
+                    <label class="form-label">Interest Plan *</label>
+                    <select name="interest_mode" id="renew-interest-mode" class="form-select" onchange="toggleLoanInterestFields('renew-interest-mode', 'renew-flat-rate-group', 'renew-monthly-group')">
+                        <option value="flat_rate">Flat Interest Rate</option>
+                        <option value="monthly_accrual">Monthly Interest Accrual</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="form-group" id="renew-flat-rate-group">
                     <label class="form-label">Interest Rate (%) *</label>
-                    <input type="number" name="interest_rate" id="renew-rate" min="0" step="0.01" required class="form-input">
+                    <input type="number" name="interest_rate" id="renew-rate" min="0" max="100" step="0.01" class="form-input">
+                </div>
+                <div class="form-group hidden" id="renew-monthly-group">
+                    <label class="form-label">Monthly Interest Amount (UGX) *</label>
+                    <input type="number" name="monthly_interest_amount" id="renew-monthly-interest" min="1" step="0.01" class="form-input">
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-4">
@@ -217,23 +263,52 @@ document.addEventListener('DOMContentLoaded', function() {
     initDateRestrictions(isManager);
 });
 
-function openRenewModal(loanId, clientName, principal, rate, weeks, interestOwed, durationType) {
+function toggleLoanInterestFields(modeId, flatRateId, monthlyId) {
+    const mode = document.getElementById(modeId).value;
+    const flatRateGroup = document.getElementById(flatRateId);
+    const monthlyGroup = document.getElementById(monthlyId);
+    const durationSelect = modeId === 'loan-interest-mode'
+        ? document.querySelector('select[name="duration_type"]')
+        : document.getElementById('renew-duration-type');
+
+    if (mode === 'monthly_accrual') {
+        flatRateGroup.classList.add('hidden');
+        monthlyGroup.classList.remove('hidden');
+        if (durationSelect) {
+            durationSelect.value = 'months';
+        }
+    } else {
+        flatRateGroup.classList.remove('hidden');
+        monthlyGroup.classList.add('hidden');
+    }
+}
+
+function openRenewModal(loanId, clientName, principal, rate, weeks, interestOwed, durationType, interestMode, monthlyInterestAmount) {
     document.getElementById('renew-loan-form').action = '/finance/loans/' + loanId + '/renew';
     document.getElementById('renew-client-name').textContent = clientName;
     document.getElementById('renew-interest-display').textContent = Number(interestOwed).toLocaleString('en', {maximumFractionDigits: 0});
 
     // Show previous terms
     document.getElementById('renew-old-principal').textContent = Number(principal).toLocaleString('en', {maximumFractionDigits: 0});
-    document.getElementById('renew-old-rate').textContent = rate;
+    document.getElementById('renew-old-rate').textContent = interestMode === 'monthly_accrual'
+        ? ('UGX ' + Number(monthlyInterestAmount || 0).toLocaleString('en', {maximumFractionDigits: 0}) + '/month')
+        : (rate + '% flat');
     document.getElementById('renew-old-weeks').textContent = weeks + ' ' + (durationType || 'weeks');
 
     // Pre-fill new terms with same values (editable)
     document.getElementById('renew-principal').value = principal;
     document.getElementById('renew-rate').value = rate;
+    document.getElementById('renew-monthly-interest').value = monthlyInterestAmount || '';
+    document.getElementById('renew-interest-mode').value = interestMode || 'flat_rate';
     document.getElementById('renew-weeks').value = weeks;
     document.getElementById('renew-duration-type').value = durationType || 'weeks';
+    toggleLoanInterestFields('renew-interest-mode', 'renew-flat-rate-group', 'renew-monthly-group');
 
     showModal('renew-loan-modal');
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    toggleLoanInterestFields('loan-interest-mode', 'loan-flat-rate-group', 'loan-monthly-group');
+});
 </script>
 {% endblock %}

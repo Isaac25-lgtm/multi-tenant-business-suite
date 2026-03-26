@@ -10,6 +10,7 @@
 {% block content %}
 <div class="section-card max-w-2xl">
     <form method="POST" action="{{ url_for('boutique.create_hire') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <!-- Item Selection -->
         <div class="form-group">
             <label class="form-label">Item to Hire *</label>

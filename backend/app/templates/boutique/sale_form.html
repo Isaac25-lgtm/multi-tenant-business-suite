@@ -9,6 +9,7 @@
 
 {% block content %}
 <form method="POST" action="{{ url_for('boutique.create_sale') }}" class="section-card">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div class="form-group">
             <label class="form-label">Sale Date</label>

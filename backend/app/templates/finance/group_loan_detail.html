@@ -146,13 +146,14 @@
             <div class="space-y-2 mb-4">
                 {% for doc in documents %}
                 <div class="uploaded-file">
-                    <div class="file-icon">{{ doc.file_type.upper() if doc.file_type else 'DOC' }}</div>
+                    <div class="file-icon">{{ doc.file_type.upper() if doc.file_type else 'FILE' }}</div>
                     <div class="flex-1">
                         <p class="font-medium text-sm">{{ doc.filename }}</p>
                         <p class="text-xs text-gray-500">Uploaded {{ doc.created_at.strftime('%Y-%m-%d') if doc.created_at else '-' }}</p>
                     </div>
                     <a href="{{ url_for('finance.download_document', id=doc.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm mr-2">Download</a>
                     <form method="POST" action="{{ url_for('finance.delete_document', id=doc.id) }}" class="inline" onsubmit="return confirm('Delete this document?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="text-red-600 hover:underline text-sm">Delete</button>
                     </form>
                 </div>
@@ -164,14 +165,15 @@
 
             <!-- Upload Form -->
             <form method="POST" action="{{ url_for('finance.upload_group_loan_collateral', id=group.id) }}" enctype="multipart/form-data">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="upload-zone" onclick="document.getElementById('collateral-file').click()">
                     <svg class="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                     </svg>
                     <p class="text-sm text-gray-600">Click to upload collateral document</p>
-                    <p class="text-xs text-gray-500">PDF, PNG, JPG, DOC (max 10MB)</p>
+                    <p class="text-xs text-gray-500">PDF, PNG, JPG, JPEG, GIF, or WebP (max 10MB)</p>
                 </div>
-                <input type="file" id="collateral-file" name="collateral_file" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx" onchange="this.form.submit()">
+                <input type="file" id="collateral-file" name="collateral_file" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" onchange="this.form.submit()">
             </form>
         </div>
     </div>
@@ -200,6 +202,7 @@
 
             {% if group.balance > 0 %}
             <form method="POST" action="{{ url_for('finance.pay_group_loan', id=group.id) }}" class="mt-6 pt-4" style="border-top:1px solid var(--border)">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <h3 class="font-semibold mb-3">Record Payment</h3>
                 <div class="form-group">
                     <label class="form-label">Amount</label>

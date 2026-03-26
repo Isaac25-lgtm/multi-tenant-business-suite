@@ -29,6 +29,24 @@
 </div>
 
 
+<div class="card mb-6" style="border: 1px solid #cbd5e1;">
+    <div class="card-body"
+        style="padding: 18px 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+        <div>
+            <p style="font-weight: 600; font-size: 16px; color: #0f172a;">Website Settings</p>
+            <p style="font-size: 13px; color: #64748b; margin-top: 4px;">
+                Update the public Denove brand, logo, contact details, and loan rate in one place.
+            </p>
+            <p style="font-size: 12px; color: #475569; margin-top: 6px;">
+                Live rate: {{ website_settings.loan_interest_rate or site_settings.loan_interest_rate }}%
+                {{ website_settings.loan_interest_rate_label or site_settings.loan_interest_rate_label }}
+            </p>
+        </div>
+        <a href="{{ url_for('website.website_settings') }}" class="btn btn-primary">Open Website Settings</a>
+    </div>
+</div>
+
+
 <!-- Welcome Guide -->
 <div class="card mb-8"
     style="background: linear-gradient(135deg, #1e3a5f 0%, #0f172a 100%); border: none; color: white;">

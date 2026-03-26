@@ -9,9 +9,7 @@ from datetime import datetime, date
 import io
 import os
 
-LOGO_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), '..', 'static', 'images', 'denovo.png')
-)
+from app.utils.branding import get_company_display_name, get_site_settings
 
 
 def format_currency(amount):
@@ -33,36 +31,77 @@ def _format_receipt_date(value, fallback):
     return 'N/A'
 
 
-def _draw_logo_image(c, x, y, size):
-    if not os.path.exists(LOGO_PATH):
+def _resolve_logo_path(settings):
+    logo_path = getattr(settings, 'logo_path', None)
+    if not logo_path:
+        return None
+    resolved = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), '..', 'static', logo_path)
+    )
+    return resolved if os.path.exists(resolved) else None
+
+
+def _draw_logo_image(c, x, y, width, height, image_path):
+    if not image_path or image_path.lower().endswith(('.svg', '.webp')):
         return False
     try:
-        logo = ImageReader(LOGO_PATH)
+        logo = ImageReader(image_path)
         iw, ih = logo.getSize()
         if not iw or not ih:
             return False
-        scale = size / max(iw, ih)
+        scale = min(width / iw, height / ih)
         draw_w = iw * scale
         draw_h = ih * scale
-        c.drawImage(logo, x, y + (size - draw_h) / 2, width=draw_w, height=draw_h, mask='auto')
+        c.drawImage(logo, x, y + (height - draw_h) / 2, width=draw_w, height=draw_h, mask='auto')
         return True
     except Exception:
         return False
 
 
-def draw_logo_header(c, width, y):
-    """Draw the Denove logo header on PDF"""
-    logo_size = 72
-    start_x = (width - logo_size) / 2
-    logo_y = y - logo_size
+def _draw_vector_brand_mark(c, x, y, size):
+    c.setFillColor(HexColor('#b85c38'))
+    c.roundRect(x, y, size, size, 12, fill=1, stroke=0)
+    c.setFillColor(HexColor('#fff7f5'))
+    c.setFont("Helvetica-Bold", 28)
+    c.drawCentredString(x + (size / 2), y + 12, "D")
+    c.setFillColor(HexColor('#e8d5a0'))
+    c.circle(x + size - 10, y + size - 10, 4, fill=1, stroke=0)
 
-    _draw_logo_image(c, start_x, logo_y, logo_size)
-    return y - logo_size - 16
+
+def draw_logo_header(c, width, y):
+    """Draw a branded PDF header that works with the default Denove logo."""
+    settings = get_site_settings()
+    company_name = get_company_display_name(settings)
+    tagline = getattr(settings, 'tagline', None) or 'Fashion, Hardware & Finance'
+
+    logo_height = 54
+    logo_width = 140
+    logo_x = 50
+    logo_y = y - logo_height
+    image_path = _resolve_logo_path(settings)
+
+    if _draw_logo_image(c, logo_x, logo_y, logo_width, logo_height, image_path):
+        text_x = logo_x + logo_width + 10
+    else:
+        _draw_vector_brand_mark(c, logo_x, logo_y + 2, 48)
+        text_x = logo_x + 62
+
+    c.setFillColor(HexColor('#0f172a'))
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(text_x, y - 16, company_name)
+    c.setFillColor(HexColor('#64748b'))
+    c.setFont("Helvetica", 9)
+    c.drawString(text_x, y - 30, tagline[:90])
+    c.setStrokeColor(HexColor('#e2e8f0'))
+    c.line(50, y - logo_height - 10, width - 50, y - logo_height - 10)
+    return y - logo_height - 22
 
 
 def generate_receipt_pdf(sale, business_name, served_by=None, items_override=None, totals_override=None, meta_override=None):
     """Generate PDF receipt for a sale"""
     buffer = io.BytesIO()
+    settings = get_site_settings()
+    company_name = get_company_display_name(settings)
 
     # Create PDF
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -71,14 +110,16 @@ def generate_receipt_pdf(sale, business_name, served_by=None, items_override=Non
     meta_override = meta_override or {}
 
     # Header with logo
-    y = height - 20
+    y = height - 26
     y = draw_logo_header(c, width, y)
 
-    y -= 10
-    c.setFont("Helvetica", 12)
-    c.drawCentredString(width/2, y, f"[{business_name}]")
+    y -= 2
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(HexColor('#64748b'))
+    c.drawCentredString(width/2, y, business_name)
+    c.setFillColor(HexColor('#0f172a'))
     
-    y -= 30
+    y -= 20
     c.line(50, y, width-50, y)
     
     # Business details
@@ -250,7 +291,7 @@ def generate_receipt_pdf(sale, business_name, served_by=None, items_override=Non
     
     y -= 20
     c.setFont("Helvetica", 8)
-    c.drawCentredString(width/2, y, "[Footer text - to be configured]")
+    c.drawCentredString(width/2, y, f"{company_name} | {settings.contact_phone or 'Please contact our team for support.'}")
     
     # Finalize PDF
     c.save()
@@ -268,7 +309,7 @@ def generate_group_agreement_pdf(group_loan):
     width, height = A4
 
     # Header with logo
-    y = height - 20
+    y = height - 26
     y = draw_logo_header(c, width, y)
 
     y -= 10
@@ -459,18 +500,21 @@ def generate_group_agreement_pdf(group_loan):
 def generate_hire_receipt_pdf(hire, business_name, served_by=None):
     """Generate PDF receipt for a hire/rental transaction"""
     buffer = io.BytesIO()
+    company_name = get_company_display_name()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
     # Header with logo
-    y = height - 20
+    y = height - 26
     y = draw_logo_header(c, width, y)
 
-    y -= 10
-    c.setFont("Helvetica", 12)
-    c.drawCentredString(width / 2, y, f"[{business_name}]")
+    y -= 2
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(HexColor('#64748b'))
+    c.drawCentredString(width / 2, y, business_name)
+    c.setFillColor(HexColor('#0f172a'))
 
-    y -= 30
+    y -= 20
     c.line(50, y, width - 50, y)
 
     # Title
@@ -607,7 +651,7 @@ def generate_hire_receipt_pdf(hire, business_name, served_by=None):
     # Footer
     y -= 30
     c.setFont("Helvetica-Oblique", 10)
-    c.drawCentredString(width / 2, y, "Thank you for choosing our hire service!")
+    c.drawCentredString(width / 2, y, f"Thank you for choosing {company_name}.")
 
     y -= 16
     c.setFont("Helvetica", 8)

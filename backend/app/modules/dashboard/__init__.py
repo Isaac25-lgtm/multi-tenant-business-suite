@@ -13,12 +13,7 @@ import os
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
-ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-
-
-def allowed_image(filename):
-    """Check if file is an allowed image type"""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+from app.utils.uploads import allowed_image, validate_and_save_image
 
 
 @dashboard_bp.route('/')
@@ -26,6 +21,9 @@ def allowed_image(filename):
 def index():
     """Unified dashboard view"""
     try:
+        from app.modules.finance import refresh_active_loans
+
+        refresh_active_loans()
         today = get_local_today()
         yesterday = today - timedelta(days=1)
 
@@ -383,6 +381,10 @@ def create_user():
             flash('Username is required', 'error')
             return redirect(url_for('dashboard.create_user'))
 
+        if not password:
+            flash('A password is required for every account.', 'error')
+            return redirect(url_for('dashboard.create_user'))
+
         # Check if username exists
         existing = User.query.filter_by(username=username).first()
         if existing:
@@ -405,9 +407,11 @@ def create_user():
             is_active=True
         )
 
-        # Set password if provided
-        if password:
+        try:
             user.set_password(password)
+        except ValueError as exc:
+            flash(str(exc), 'error')
+            return redirect(url_for('dashboard.create_user'))
 
         # Handle profile picture upload
         if 'profile_picture' in request.files:
@@ -417,8 +421,8 @@ def create_user():
                 upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'profiles')
                 os.makedirs(upload_folder, exist_ok=True)
                 file_path = os.path.join(upload_folder, f'user_{username}_{filename}')
-                file.save(file_path)
-                user.profile_picture = f'uploads/profiles/user_{username}_{filename}'
+                if validate_and_save_image(file, file_path):
+                    user.profile_picture = f'uploads/profiles/user_{username}_{filename}'
 
         db.session.add(user)
         db.session.commit()
@@ -464,10 +468,16 @@ def edit_user(id):
         user.can_access_finance = 'can_access_finance' in request.form
         user.can_access_customers = 'can_access_customers' in request.form
 
-        # Update password if provided
         password = request.form.get('password', '').strip()
+        if not user.password_hash and not password:
+            flash('This account has no password yet. Please set one now.', 'error')
+            return redirect(url_for('dashboard.edit_user', id=id))
         if password:
-            user.set_password(password)
+            try:
+                user.set_password(password)
+            except ValueError as exc:
+                flash(str(exc), 'error')
+                return redirect(url_for('dashboard.edit_user', id=id))
 
         # Handle profile picture upload
         if 'profile_picture' in request.files:
@@ -477,8 +487,8 @@ def edit_user(id):
                 upload_folder = os.path.join(current_app.root_path, 'static', 'uploads', 'profiles')
                 os.makedirs(upload_folder, exist_ok=True)
                 file_path = os.path.join(upload_folder, f'user_{user.username}_{filename}')
-                file.save(file_path)
-                user.profile_picture = f'uploads/profiles/user_{user.username}_{filename}'
+                if validate_and_save_image(file, file_path):
+                    user.profile_picture = f'uploads/profiles/user_{user.username}_{filename}'
 
         db.session.commit()
 

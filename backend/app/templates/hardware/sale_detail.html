@@ -99,6 +99,7 @@
 
             {% if sale.payment_type == 'part' and not sale.is_credit_cleared %}
             <form method="POST" action="{{ url_for('hardware.pay_credit', id=sale.id) }}" class="mt-6 pt-4 pt-3" style="border-top:1px solid var(--border);">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <h3 class="font-semibold mb-3">Record Payment</h3>
                 <div class="form-group">
                     <label class="form-label">Amount</label>
