@@ -11,6 +11,27 @@ from app.extensions import db
 from app.utils.timezone import get_local_now
 
 
+def _normalize_public_media_url(value):
+    raw = str(value or '').strip().replace('\\', '/')
+    if not raw:
+        return None
+    if raw.startswith(('http://', 'https://', 'data:')):
+        return raw
+    if raw.startswith('/static/'):
+        return raw
+    if raw.startswith('/images/'):
+        return f'/static{raw}'
+    if raw.startswith('static/'):
+        return f'/{raw}'
+    if raw.startswith('images/'):
+        return f'/static/{raw}'
+    if raw.startswith('uploads/'):
+        return f'/static/{raw}'
+    if raw.startswith('/uploads/'):
+        return f'/static{raw}'
+    return raw
+
+
 class WebsiteLoanInquiry(db.Model):
     """
     Captures public loan interest from website visitors.
@@ -209,9 +230,10 @@ class PublishedProduct(db.Model):
         
         # Gather all images for this product
         product_images = ProductImage.get_images(self.product_type, self.product_id)
-        image_urls = [img.image_url for img in product_images]
+        image_urls = [_normalize_public_media_url(img.image_url) for img in product_images]
+        image_urls = [url for url in image_urls if url]
         # Fallback: use the single image_url if no ProductImage rows
-        primary_image = self.image_url or getattr(item, 'image_url', None)
+        primary_image = _normalize_public_media_url(self.image_url or getattr(item, 'image_url', None))
         if not image_urls and primary_image:
             image_urls = [primary_image]
 
@@ -325,7 +347,7 @@ class WebsiteImage(db.Model):
         return {
             'id': self.id,
             'image_type': self.image_type,
-            'file_path': self.file_path,
+            'file_path': _normalize_public_media_url(self.file_path),
             'alt_text': self.alt_text,
             'is_active': self.is_active,
             'display_order': self.display_order,

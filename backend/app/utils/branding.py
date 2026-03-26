@@ -6,16 +6,16 @@ DEFAULT_SITE_SETTINGS = {
     'company_name': 'Denove',
     'company_suffix': 'APS',
     'tagline': 'Fashion, Hardware & Finance',
-    'announcement_text': 'Trusted products, practical finance, and dependable service across Uganda.',
+    'announcement_text': 'Serving all of Uganda with strong roots in Mbale and Kapchorwa.',
     'hero_title': 'Fashion, hardware and financial freedom',
     'hero_description': (
-        'Quality clothing, building materials, and accessible lending from one trusted local partner.'
+        'Quality clothing, building materials, and accessible lending for customers across all of Uganda, with strong roots in Mbale and Kapchorwa.'
     ),
     'contact_phone': '+256 788 066 808',
     'whatsapp_number': '256788066808',
     'contact_email': 'hello@denove.ug',
-    'headquarters': 'Kapchorwa',
-    'service_area': 'Uganda',
+    'headquarters': 'Mbale and Kapchorwa',
+    'service_area': 'all of Uganda',
     'loan_min_amount': Decimal('200000'),
     'loan_max_amount': Decimal('5000000'),
     'loan_interest_rate': Decimal('15.00'),
@@ -23,7 +23,7 @@ DEFAULT_SITE_SETTINGS = {
     'loan_repayment_note': 'Flexible weekly or monthly repayment',
     'loan_approval_hours': 48,
     'footer_description': (
-        'Your one-stop partner for boutique shopping, hardware supplies, and business-friendly finance.'
+        'Your one-stop partner for boutique shopping, hardware supplies, and business-friendly finance across all of Uganda.'
     ),
     'logo_path': 'images/denove.jpg',
 }

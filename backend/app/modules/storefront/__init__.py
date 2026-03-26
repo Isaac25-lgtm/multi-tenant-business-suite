@@ -14,7 +14,12 @@ from app.extensions import csrf
 from app.extensions import db
 from app.models.boutique import BoutiqueStock, BoutiqueCategory
 from app.models.hardware import HardwareStock, HardwareCategory
-from app.models.website import PublishedProduct, WebsiteLoanInquiry, WebsiteOrderRequest
+from app.models.website import (
+    PublishedProduct,
+    WebsiteImage,
+    WebsiteLoanInquiry,
+    WebsiteOrderRequest,
+)
 from app.utils.branding import get_site_settings
 from app.utils.rate_limit import consume_limit
 
@@ -67,6 +72,13 @@ def get_safe_hardware_products(limit=None):
     return get_published_products(product_type='hardware', limit=limit)
 
 
+def get_active_website_images(limit=None):
+    query = WebsiteImage.query.filter_by(is_active=True).order_by(WebsiteImage.display_order.asc(), WebsiteImage.id.asc())
+    if limit:
+        query = query.limit(limit)
+    return [image.to_dict() for image in query.all()]
+
+
 def _client_ip():
     forwarded_for = request.headers.get('X-Forwarded-For', '')
     if forwarded_for:
@@ -117,12 +129,19 @@ def home():
     boutique_products = get_safe_boutique_products(limit=4)
     hardware_products = get_safe_hardware_products(limit=4)
     featured_products = get_published_products(featured_only=True, limit=6)
+    website_images = get_active_website_images(limit=8)
     settings = get_site_settings()
+    hero_image = next(
+        (image['file_path'] for image in website_images if image['image_type'] in ('banner', 'promo') and image['file_path']),
+        website_images[0]['file_path'] if website_images else None
+    )
     
     return render_template('storefront/index.html',
         boutique_products=boutique_products,
         hardware_products=hardware_products,
         featured_products=featured_products,
+        website_images=website_images,
+        hero_image=hero_image,
         settings=settings,
     )
 
@@ -153,11 +172,18 @@ def shop():
     """
     boutique_products = get_safe_boutique_products()
     hardware_products = get_safe_hardware_products()
+    website_images = get_active_website_images(limit=8)
     settings = get_site_settings()
+    hero_image = next(
+        (image['file_path'] for image in website_images if image['image_type'] in ('banner', 'promo') and image['file_path']),
+        website_images[0]['file_path'] if website_images else None
+    )
     
     return render_template('storefront/index.html',
         boutique_products=boutique_products,
         hardware_products=hardware_products,
+        website_images=website_images,
+        hero_image=hero_image,
         show_all=True,
         settings=settings,
     )

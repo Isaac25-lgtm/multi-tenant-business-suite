@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{{ brand_display_name }} - {{ settings.tagline }} | {{ settings.headquarters }} &amp; {{ settings.service_area }}</title>
+  <title>{{ brand_display_name }} - {{ settings.tagline }} | Serving {{ settings.service_area }}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -19,7 +19,7 @@
       <span class="ann__i"><span class="ann__dot"></span>{{ settings.announcement_text }}</span>
       <span class="ann__i"><span class="ann__dot"></span>Loans from UGX {{ "{:,.0f}".format(settings.loan_min_amount) }} to UGX {{ "{:,.0f}".format(settings.loan_max_amount) }}</span>
       <span class="ann__i"><span class="ann__dot"></span>{{ "{:.0f}".format(settings.loan_interest_rate) }}% {{ settings.loan_interest_rate_label }}</span>
-      <span class="ann__i"><span class="ann__dot"></span>Serving {{ settings.service_area }} from {{ settings.headquarters }}</span>
+      <span class="ann__i"><span class="ann__dot"></span>Serving {{ settings.service_area }} with strong roots in {{ settings.headquarters }}</span>
       <span class="ann__i"><span class="ann__dot"></span>{{ settings.announcement_text }}</span>
       <span class="ann__i"><span class="ann__dot"></span>Loans from UGX {{ "{:,.0f}".format(settings.loan_min_amount) }} to UGX {{ "{:,.0f}".format(settings.loan_max_amount) }}</span>
     </div>
@@ -67,18 +67,39 @@
   </nav>
 
   <section class="hero">
-    <div class="hero__bg"><img src="https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?q=80&w=1400&auto=format&fit=crop" alt="{{ brand_display_name }}"></div>
+    <div class="hero__bg"><img src="{{ hero_image or 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?q=80&w=1400&auto=format&fit=crop' }}" alt="{{ brand_display_name }}" referrerpolicy="no-referrer"></div>
     <div class="hero__grad"></div>
     <div class="container hero__content">
       <div class="hero__tag"><span class="hero__tag-dot"></span>Serving {{ settings.service_area }}</div>
       <h1 class="hero__title">{{ settings.hero_title|replace(' and ', '<br>&amp; ')|safe }}</h1>
       <p class="hero__desc">{{ settings.hero_description }}</p>
+      <p class="hero__support">Strong roots in {{ settings.headquarters }}. Trusted service for customers across {{ settings.service_area }}.</p>
       <div class="hero__btns">
         <a href="#featured" class="hero__btn hero__btn--pri">Browse Products</a>
         <a href="#loans" class="hero__btn hero__btn--gho">Apply for a Loan</a>
       </div>
     </div>
   </section>
+
+  {% if website_images %}
+  <section class="sec sec--gallery" id="highlights">
+    <div class="container">
+      <div class="sec__header reveal">
+        <div class="sec__tag">Nationwide Reach</div>
+        <h2 class="sec__title">Serving all of Uganda</h2>
+        <p class="sec__desc">Denove APS serves customers across the country, with Mbale and Kapchorwa highlighted as strong service centers.</p>
+      </div>
+      <div class="media-wall">
+        {% for image in website_images %}
+        <figure class="media-card reveal">
+          <img src="{{ image.file_path }}" alt="{{ image.alt_text or brand_display_name }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.classList.add('media-card--text-only');">
+          <figcaption>{{ image.alt_text or image.image_type|replace('_', ' ')|title }}</figcaption>
+        </figure>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
 
   <section class="sec" id="featured" style="padding-top:72px">
     <div class="container">
@@ -123,9 +144,20 @@
       <div class="products">
         {% for product in boutique_products %}
         <div class="prod reveal">
-          <div class="prod__img">
-            {% if product.image_url %}
-            <img src="{{ product.image_url }}" alt="{{ product.name }}">
+          <div class="prod__img{% if product.images and product.images|length > 1 %} prod__carousel{% endif %}">
+            {% if product.images and product.images|length > 1 %}
+            {% for image_url in product.images %}
+            <img src="{{ image_url }}" alt="{{ product.name }}" class="carousel__img{% if loop.first %} active{% endif %}" loading="lazy" referrerpolicy="no-referrer" onerror="this.dataset.broken='1';this.classList.remove('active');this.style.display='none';const dots=this.parentElement.querySelectorAll('.carousel__dot');if(dots[{{ loop.index0 }}]){dots[{{ loop.index0 }}].style.display='none';dots[{{ loop.index0 }}].classList.remove('active');}if(!this.parentElement.querySelector('.carousel__img:not([data-broken=&quot;1&quot;])')){this.parentElement.querySelector('.img-label').style.display='grid';const dotsWrap=this.parentElement.querySelector('.carousel__dots');if(dotsWrap){dotsWrap.style.display='none';}}">
+            {% endfor %}
+            <div class="carousel__dots">
+              {% for image_url in product.images %}
+              <span class="carousel__dot{% if loop.first %} active{% endif %}"></span>
+              {% endfor %}
+            </div>
+            <span class="img-label" style="display:none;">{{ product.name[:24] }}</span>
+            {% elif product.image_url %}
+            <img src="{{ product.image_url }}" alt="{{ product.name }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.querySelector('.img-label').style.display='grid';">
+            <span class="img-label" style="display:none;">{{ product.name[:24] }}</span>
             {% else %}
             <span class="img-label">{{ product.name[:24] }}</span>
             {% endif %}
@@ -158,9 +190,20 @@
       <div class="products">
         {% for product in hardware_products %}
         <div class="prod reveal">
-          <div class="prod__img prod__img--hw">
-            {% if product.image_url %}
-            <img src="{{ product.image_url }}" alt="{{ product.name }}">
+          <div class="prod__img prod__img--hw{% if product.images and product.images|length > 1 %} prod__carousel{% endif %}">
+            {% if product.images and product.images|length > 1 %}
+            {% for image_url in product.images %}
+            <img src="{{ image_url }}" alt="{{ product.name }}" class="carousel__img{% if loop.first %} active{% endif %}" loading="lazy" referrerpolicy="no-referrer" onerror="this.dataset.broken='1';this.classList.remove('active');this.style.display='none';const dots=this.parentElement.querySelectorAll('.carousel__dot');if(dots[{{ loop.index0 }}]){dots[{{ loop.index0 }}].style.display='none';dots[{{ loop.index0 }}].classList.remove('active');}if(!this.parentElement.querySelector('.carousel__img:not([data-broken=&quot;1&quot;])')){this.parentElement.querySelector('.img-label').style.display='grid';const dotsWrap=this.parentElement.querySelector('.carousel__dots');if(dotsWrap){dotsWrap.style.display='none';}}">
+            {% endfor %}
+            <div class="carousel__dots">
+              {% for image_url in product.images %}
+              <span class="carousel__dot{% if loop.first %} active{% endif %}"></span>
+              {% endfor %}
+            </div>
+            <span class="img-label" style="display:none;">{{ product.name[:24] }}</span>
+            {% elif product.image_url %}
+            <img src="{{ product.image_url }}" alt="{{ product.name }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.querySelector('.img-label').style.display='grid';">
+            <span class="img-label" style="display:none;">{{ product.name[:24] }}</span>
             {% else %}
             <span class="img-label">{{ product.name[:24] }}</span>
             {% endif %}
@@ -600,6 +643,61 @@
       });
     }, { threshold: 0.08 });
     document.querySelectorAll('.reveal').forEach(element => observer.observe(element));
+
+    document.querySelectorAll('.prod__carousel').forEach(function (carousel) {
+      function visibleSlides() {
+        return Array.from(carousel.querySelectorAll('.carousel__img')).filter(function (slide) {
+          return slide.dataset.broken !== '1';
+        });
+      }
+
+      function visibleDots() {
+        return Array.from(carousel.querySelectorAll('.carousel__dot')).filter(function (dot) {
+          return dot.style.display !== 'none';
+        });
+      }
+
+      if (visibleSlides().length <= 1) {
+        return;
+      }
+
+      let activeIndex = visibleSlides().findIndex(function (slide) {
+        return slide.classList.contains('active');
+      });
+      if (activeIndex < 0) {
+        activeIndex = 0;
+        visibleSlides()[0].classList.add('active');
+        if (visibleDots()[0]) {
+          visibleDots()[0].classList.add('active');
+        }
+      }
+
+      function setActive(index) {
+        const slides = visibleSlides();
+        const dots = visibleDots();
+        if (!slides.length) {
+          return;
+        }
+        activeIndex = index % slides.length;
+        Array.from(carousel.querySelectorAll('.carousel__img')).forEach(function (slide) {
+          slide.classList.remove('active');
+        });
+        slides.forEach(function (slide, slideIndex) {
+          if (slideIndex === activeIndex) {
+            slide.classList.add('active');
+          }
+        });
+        dots.forEach(function (dot, dotIndex) {
+          dot.classList.toggle('active', dotIndex === activeIndex);
+        });
+      }
+
+      setInterval(function () {
+        if (visibleSlides().length > 1) {
+          setActive(activeIndex + 1);
+        }
+      }, 3200);
+    });
 
     addEventListener('scroll', () => document.getElementById('navbar').classList.toggle('scrolled', scrollY > 10));
   </script>
