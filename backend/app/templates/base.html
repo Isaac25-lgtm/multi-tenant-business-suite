@@ -548,16 +548,13 @@
     (function(){
       if(window.location.pathname.indexOf('/ai/briefing')!==-1)return;
       if(window.self!==window.top)return;
-      var key='_briefing_seen_'+'{{ current_user }}';
       window.dismissBriefing=function(){
         var el=document.getElementById('briefing-toast');
         if(el){el.style.animation='none';el.style.opacity='0';el.style.transform='translateY(20px)';el.style.transition='all .3s';setTimeout(function(){el.style.display='none'},300);}
         fetch('/ai/briefing/dismiss',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':'{{ csrf_token() }}'}}).catch(function(){});
-        var sd=el&&el.dataset.serverDate;if(sd)localStorage.setItem(key,sd);
       };
       fetch('/ai/briefing/check').then(function(r){return r.ok?r.json():null}).then(function(data){
         if(!data)return;
-        if(localStorage.getItem(key)===data.date)return;
         if(data.show){
           var toast=document.getElementById('briefing-toast');
           toast.dataset.serverDate=data.date;
