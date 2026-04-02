@@ -64,6 +64,45 @@ Denove APS is a full-stack Flask application built for a multi-section retail an
 - File upload validation and size restrictions
 - Soft deletes for data integrity
 
+## Local Development Setup
+
+**PostgreSQL is required** — SQLite is not supported.
+
+```bash
+# 1. Install PostgreSQL (if not already) and create the database
+createdb -U postgres denove_aps
+
+# 2. Set up the backend
+cd backend
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+
+# 3. Configure environment
+cp .env.example .env
+# Edit .env — set your PostgreSQL credentials (PGUSER, PGPASSWORD, PGDATABASE)
+
+# 4. Run database migrations
+flask --app run:app db upgrade
+
+# 5. Verify schema
+flask --app run:app db-doctor
+
+# 6. Create your admin account
+flask --app run:app create-admin
+
+# 7. Start the app
+python run.py
+# Open http://localhost:5000
+```
+
+If you have data in an old local SQLite database, you can migrate it:
+
+```bash
+python migrate_sqlite_to_pg.py             # auto-detects instance/denove.db
+python migrate_sqlite_to_pg.py path/to.db  # explicit path
+```
+
 ## Documentation
 
 - [User Guide](docs/USER_GUIDE.md) — How to use the application

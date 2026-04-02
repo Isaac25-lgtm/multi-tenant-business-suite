@@ -1,6 +1,7 @@
 import os
 from datetime import timedelta
 from dotenv import load_dotenv
+from sqlalchemy.engine import URL
 
 load_dotenv()
 
@@ -30,19 +31,51 @@ def get_secret_key():
 
 
 def get_database_url():
-    """Get database URL - SQLite for local dev, PostgreSQL for production.
+    """Build a PostgreSQL connection URL. SQLite is not supported.
 
-    If DATABASE_URL is set, use PostgreSQL (production).
-    Otherwise, use SQLite for local development.
+    Resolution order:
+      1. DATABASE_URL env var (used by Render and direct config).
+      2. Individual PG* env vars assembled into a URL.
+      3. No fallback — raise with clear instructions.
     """
     url = os.getenv('DATABASE_URL')
     if url:
-        # Production: PostgreSQL
+        if url.startswith('sqlite'):
+            raise RuntimeError(
+                'SQLite is not supported. Set DATABASE_URL to a PostgreSQL '
+                'connection string (postgresql://user:pass@host:port/dbname).'
+            )
+        # Render and older Heroku supply postgres:// but SQLAlchemy needs postgresql://
         if url.startswith('postgres://'):
             url = url.replace('postgres://', 'postgresql://', 1)
         return url
-    # Local development: SQLite
-    return 'sqlite:///denove.db'
+
+    # Assemble from individual PG* variables (convenient for local dev).
+    # URL.create safely escapes passwords with special characters.
+    pg_user = os.getenv('PGUSER')
+    pg_pass = os.getenv('PGPASSWORD')
+    pg_host = os.getenv('PGHOST', 'localhost')
+    pg_port = os.getenv('PGPORT', '5432')
+    pg_db = os.getenv('PGDATABASE')
+    if pg_user and pg_db:
+        try:
+            port = int(pg_port)
+        except (TypeError, ValueError):
+            port = pg_port
+        return str(URL.create(
+            drivername='postgresql+psycopg2',
+            username=pg_user,
+            password=pg_pass or None,
+            host=pg_host,
+            port=port,
+            database=pg_db,
+        ))
+
+    raise RuntimeError(
+        'No database configured. Set DATABASE_URL to a PostgreSQL connection '
+        'string, or set PGUSER + PGPASSWORD + PGDATABASE (and optionally '
+        'PGHOST, PGPORT). See backend/.env.example for details.'
+    )
 
 
 def _env_bool(name, default=False):
@@ -68,9 +101,6 @@ def is_render():
 
 
 def get_engine_options():
-    if not os.getenv('DATABASE_URL'):
-        return {}
-
     return {
         'pool_pre_ping': True,
         'pool_recycle': _env_int('DB_POOL_RECYCLE', 300),
@@ -99,11 +129,11 @@ class Config:
     SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', is_render() or is_production())
     PERMANENT_SESSION_LIFETIME = timedelta(hours=12)
 
-    # Database - SQLite for local, PostgreSQL for production
+    # Database — PostgreSQL only (local and production)
     SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # PostgreSQL Connection Pool Settings (for production stability)
+    # PostgreSQL connection pool settings
     SQLALCHEMY_ENGINE_OPTIONS = get_engine_options()
 
     # File Upload

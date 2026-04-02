@@ -15,13 +15,15 @@ services:
         - backend/**
         - render.yaml
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    preDeployCommand: python -m flask --app run:app db-ensure && python -m flask --app run:app db upgrade
+    preDeployCommand: python -m flask --app run:app db-ensure && python -m flask --app run:app db upgrade && python -m flask --app run:app db-doctor
     startCommand: gunicorn run:app --config gunicorn.conf.py
     disk:
       name: denove-uploads
       mountPath: /opt/render/project/src/backend/app/static/uploads
       sizeGB: 5
     envVars:
+      - key: FLASK_APP
+        value: run:app
       - key: FLASK_ENV
         value: production
       - key: PYTHON_VERSION
@@ -59,4 +61,4 @@ services:
       - key: SESSION_COOKIE_SECURE
         value: "1"
       - key: SECRET_KEY
-        generateValue: true
+        sync: false  # Set manually in Render dashboard - must be a stable 64+ char random string

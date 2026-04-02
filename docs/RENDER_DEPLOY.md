@@ -30,17 +30,22 @@ That path is important because product images, profile pictures, website images,
 
 ## Required Manual Environment Variables
 
-Set these in the Render dashboard if they are not already set:
+Set these in the Render dashboard - they are **not** auto-generated:
 
-- `DATABASE_URL`
+- `DATABASE_URL` - Your Render PostgreSQL connection string
+- `SECRET_KEY` - A stable random string, 64+ characters. Generate one with:
+  ```
+  python -c "import secrets; print(secrets.token_urlsafe(64))"
+  ```
+  **Important:** Do NOT use `generateValue: true` - that creates a new key on every deploy, which breaks encrypted data (customer NINs, loan client NINs).
 
-This repo already defines or generates:
+This repo already defines:
 
+- `FLASK_APP=run:app`
 - `FLASK_ENV=production`
 - `PYTHON_VERSION=3.11.11`
 - `PYTHONUNBUFFERED=1`
 - `SESSION_COOKIE_SECURE=1`
-- `SECRET_KEY` with `generateValue: true`
 
 ## How To Deploy On Render
 
@@ -80,12 +85,47 @@ If that path changes in Flask code, update both:
 - `render.yaml`
 - the upload handling code
 
+## Pre-Deploy Sequence
+
+The `preDeployCommand` in `render.yaml` runs three steps in order:
+
+1. `python -m flask --app run:app db-ensure` - Checks whether the database is safely ready for migrations.
+   - Empty DB: passes (upgrade will create everything).
+   - Already versioned: passes.
+   - Has tables but no Alembic tracking: **fails with instructions** (prevents silently stamping a mismatched schema as current).
+2. `python -m flask --app run:app db upgrade` - Applies all pending Alembic migrations.
+3. `python -m flask --app run:app db-doctor` - Verifies every production-critical table and column exists.
+   If anything is missing, the deploy **fails before the new code goes live**.
+
+## Diagnosing Existing Schema Drift
+
+If your Render database was previously stamped at HEAD but is actually missing tables or columns (causing 500 errors), run this from the Render Shell:
+
+```bash
+python -m flask --app run:app db-doctor
+```
+
+If it reports missing items:
+
+1. Check your current Alembic version:
+   ```bash
+   python -m flask --app run:app db current
+   ```
+2. If the version is at HEAD but items are missing, the DB was falsely stamped.
+   Fix it by stamping the **actual** last-applied revision and re-running upgrade:
+   ```bash
+   python -m flask --app run:app db stamp 4694bf24ca95    # baseline example - adjust to your actual state
+   python -m flask --app run:app db upgrade               # applies the missing migrations
+   python -m flask --app run:app db-doctor                # verify everything is now present
+   ```
+
 ## If Deploy Fails
 
 Check these first:
 
-1. `DATABASE_URL` is set
-2. The migration command succeeds
-3. `SECRET_KEY` exists
-4. The health check path is still `/healthz`
-5. The persistent disk mount path still matches the Flask static upload path
+1. `DATABASE_URL` is set to a PostgreSQL connection string
+2. `SECRET_KEY` is set to a stable 64+ char string (not auto-generated)
+3. The migration command succeeds (`python -m flask --app run:app db upgrade`)
+4. `python -m flask --app run:app db-doctor` passes
+5. The health check path is still `/healthz`
+6. The persistent disk mount path still matches the Flask static upload path
