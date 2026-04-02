@@ -138,7 +138,7 @@ def extract_from_pdf(pdf_path, document_type='general'):
        send it through the vision OCR path.
     3. Fall back to manual entry if neither path is available.
     """
-    from app.utils.ai_client import is_ocr_enabled
+    from app.utils.ai_client import ai_document, is_ocr_enabled
 
     # For PDFs, try text extraction first.
     try:
@@ -159,6 +159,30 @@ def extract_from_pdf(pdf_path, document_type='general'):
         pass
 
     if is_ocr_enabled():
+        try:
+            with open(pdf_path, 'rb') as f:
+                pdf_bytes = f.read()
+            prompt = EXTRACTION_PROMPTS.get(document_type, EXTRACTION_PROMPTS['general'])
+            raw = ai_document(pdf_bytes, prompt, system=SYSTEM_PROMPT, mime_type='application/pdf')
+            if raw:
+                cleaned = raw.strip()
+                if cleaned.startswith('```'):
+                    lines = cleaned.split('\n')
+                    cleaned = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
+                try:
+                    fields = json.loads(cleaned)
+                except json.JSONDecodeError:
+                    logger.debug('OCR returned non-JSON for PDF: %s', cleaned[:200])
+                    fields = {'extracted_text': cleaned}
+                return {
+                    'success': True,
+                    'raw_text': raw,
+                    'fields': fields,
+                    'error': None,
+                }
+        except OSError as exc:
+            logger.warning('Cannot read PDF for OCR: %s', exc)
+
         rendered = _render_pdf_first_page(pdf_path)
         if rendered:
             try:

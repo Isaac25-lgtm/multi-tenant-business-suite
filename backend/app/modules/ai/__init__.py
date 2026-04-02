@@ -7,6 +7,7 @@ OCR and briefing are role-aware.
 import json
 import logging
 import os
+from datetime import datetime, time, timedelta
 
 from flask import (
     Blueprint, jsonify, render_template, request, session,
@@ -16,14 +17,66 @@ from werkzeug.utils import secure_filename
 
 from app.extensions import db
 from app.models.ai import BriefingDismissal, ChatMessage, OcrExtraction
-from app.models.user import User
-from app.modules.auth import manager_required, login_required, get_session_user, log_action
-from app.utils.timezone import get_local_today, get_local_now
+from app.modules.auth import manager_required, get_session_user, log_action
+from app.utils.timezone import EAT_TIMEZONE, get_local_today, get_local_now
 from app.utils.uploads import allowed_file, validate_and_save
 
 logger = logging.getLogger(__name__)
 
 ai_bp = Blueprint('ai', __name__)
+
+
+def _normalize_client_reference(value):
+    return ' '.join((value or '').strip().lower().split())
+
+
+def _local_day_bounds(day=None):
+    target_day = day or get_local_today()
+    start = datetime.combine(target_day, time.min, tzinfo=EAT_TIMEZONE)
+    end = start + timedelta(days=1)
+    return start, end
+
+
+def _get_today_ai_client_refs():
+    start, end = _local_day_bounds()
+    refs = set()
+    rows = OcrExtraction.query.filter(
+        OcrExtraction.used_ai.is_(True),
+        OcrExtraction.created_at >= start,
+        OcrExtraction.created_at < end,
+    ).all()
+    for row in rows:
+        normalized = _normalize_client_reference(row.client_reference)
+        if normalized:
+            refs.add(normalized)
+    return refs
+
+
+def _get_ocr_quota_status(client_reference=None):
+    from app.utils.ai_client import get_ocr_limits
+
+    limits = get_ocr_limits()
+    used_refs = _get_today_ai_client_refs()
+    normalized = _normalize_client_reference(client_reference)
+    is_new_client = bool(normalized) and normalized not in used_refs
+    used_count = len(used_refs)
+    next_new_client_number = used_count + (1 if is_new_client else 0)
+    limit_reached_for_new_client = is_new_client and used_count >= limits['daily_client_limit']
+    warning_active = (
+        is_new_client
+        and next_new_client_number >= limits['warning_client_number']
+        and next_new_client_number <= limits['daily_client_limit']
+    )
+    return {
+        'used_count': used_count,
+        'limit': limits['daily_client_limit'],
+        'warning_number': limits['warning_client_number'],
+        'is_new_client': is_new_client,
+        'limit_reached_for_new_client': limit_reached_for_new_client,
+        'next_new_client_number': next_new_client_number,
+        'provider': limits['provider'],
+        'used_refs': sorted(used_refs),
+    }
 
 
 # ============================================================================
@@ -203,6 +256,11 @@ def ocr_upload():
         return redirect(request.referrer or url_for('ai.ocr_page'))
 
     document_type = request.form.get('document_type', 'general')
+    client_reference = (request.form.get('client_reference') or '').strip()
+    if not client_reference:
+        flash('Add a client reference so the daily OCR credit limit can be tracked.', 'error')
+        return redirect(request.referrer or url_for('ai.ocr_page'))
+
     filename = secure_filename(file.filename)
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
 
@@ -219,12 +277,28 @@ def ocr_upload():
         return redirect(request.referrer or url_for('ai.ocr_page'))
 
     # Run OCR extraction
-    from app.utils.ocr_engine import extract_from_image, extract_from_pdf
+    from app.utils.ai_client import is_ocr_enabled
+    from app.utils.ocr_engine import _empty_fields, extract_from_image, extract_from_pdf
 
-    if ext == 'pdf':
-        result = extract_from_pdf(save_path, document_type)
+    quota = _get_ocr_quota_status(client_reference)
+    used_ai = is_ocr_enabled() and not quota['limit_reached_for_new_client']
+
+    if used_ai:
+        if ext == 'pdf':
+            result = extract_from_pdf(save_path, document_type)
+        else:
+            result = extract_from_image(save_path, document_type)
+        used_ai = bool(result.get('success'))
     else:
-        result = extract_from_image(save_path, document_type)
+        result = {
+            'success': False,
+            'raw_text': None,
+            'fields': _empty_fields(document_type),
+            'error': (
+                f"Today's AI OCR limit of {quota['limit']} client references has been reached. "
+                'You can still upload and review documents manually.'
+            ),
+        }
 
     # Save extraction record
     extraction = OcrExtraction(
@@ -233,9 +307,16 @@ def ocr_upload():
         file_path=relative_path,
         file_type=ext,
         document_type=document_type,
+        client_reference=client_reference,
         raw_ocr_text=result.get('raw_text'),
         extracted_fields_json=json.dumps(result.get('fields', {})),
-        status='pending' if result.get('success') else 'failed',
+        used_ai=used_ai,
+        fallback_reason=None if used_ai else (
+            'daily_limit'
+            if quota['limit_reached_for_new_client']
+            else 'provider_unavailable'
+        ),
+        status='pending',
     )
     db.session.add(extraction)
     db.session.commit()
@@ -243,8 +324,22 @@ def ocr_upload():
     log_action(
         session.get('username', 'unknown'), session.get('section', 'ai'),
         'create', 'ocr_extraction', extraction.id,
-        {'filename': filename, 'document_type': document_type, 'ocr_success': result.get('success')},
+        {
+            'filename': filename,
+            'document_type': document_type,
+            'ocr_success': result.get('success'),
+            'used_ai': used_ai,
+            'client_reference': client_reference,
+            'fallback_reason': extraction.fallback_reason,
+        },
     )
+
+    if quota['is_new_client'] and quota['next_new_client_number'] == quota['warning_number']:
+        flash(
+            f"This is AI OCR client {quota['next_new_client_number']} of {quota['limit']} for today. "
+            'After the fifth unique client reference, uploads will switch to manual review to save credits.',
+            'warning',
+        )
 
     if result.get('error'):
         flash(result['error'], 'info')
@@ -265,7 +360,13 @@ def ocr_page():
         uploaded_by=user.id
     ).order_by(OcrExtraction.created_at.desc()).limit(10).all()
 
-    return render_template('ai/ocr_upload.html', ocr_enabled=is_ocr_enabled(), recent=recent)
+    quota = _get_ocr_quota_status()
+    return render_template(
+        'ai/ocr_upload.html',
+        ocr_enabled=is_ocr_enabled(),
+        recent=recent,
+        quota=quota,
+    )
 
 
 @ai_bp.route('/ocr/<int:id>/review')
@@ -314,6 +415,10 @@ def ocr_confirm(id):
     extraction.status = 'confirmed'
     extraction.reviewed_by = user.id
     extraction.reviewed_at = get_local_now()
+
+    client_reference = (request.form.get('client_reference') or '').strip()
+    if client_reference:
+        extraction.client_reference = client_reference
 
     # Optionally link to an entity
     link_entity = request.form.get('link_entity')

@@ -2,20 +2,44 @@
 {% block title %}Document OCR{% endblock %}
 
 {% block content %}
-<div style="max-width: 700px; margin: 0 auto;">
+<div style="max-width: 760px; margin: 0 auto;">
   <h1 style="font-family: 'Source Serif 4', serif; font-size: 22px; font-weight: 700; color: var(--navy-800); margin-bottom: 8px;">
     Document Scanner
   </h1>
   <p style="font-size: 13px; color: var(--navy-400); margin-bottom: 24px;">
-    Upload a document image or PDF for AI-powered text extraction. You can review and correct all extracted fields before saving.
+    Upload a document image or PDF for OCR. Every extracted field stays editable before anything is finalized.
   </p>
 
-  {% if not ocr_enabled %}
-  <div class="guideline" style="margin-bottom: 20px;">
-    <strong>OCR provider not configured.</strong> You can still upload documents and enter fields manually.
-    To enable AI extraction, set OCR_ENABLED plus a vision-capable OCR_MODEL or AI_VISION_MODEL.
+  <div class="section-card" style="margin-bottom: 18px;">
+    <div class="section-card-header">
+      <h3 class="section-card-title">Today's OCR Usage</h3>
+    </div>
+    <div style="padding: 16px 20px;">
+      <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px;">
+        <span class="badge badge-primary">{{ quota.used_count }} of {{ quota.limit }} AI client references used today</span>
+        <span class="badge badge-secondary">Warning starts on client {{ quota.warning_number }}</span>
+        {% if ocr_enabled %}
+          <span class="badge badge-success">OCR provider ready</span>
+        {% else %}
+          <span class="badge badge-warning">Manual review mode</span>
+        {% endif %}
+      </div>
+
+      {% if not ocr_enabled %}
+      <div class="guideline">
+        <strong>OCR provider not configured.</strong> Uploads still work, but they will open in manual review mode until Anthropic OCR is configured.
+      </div>
+      {% elif quota.used_count >= quota.limit %}
+      <div class="guideline">
+        <strong>Today's AI OCR limit has been reached.</strong> New client references will switch to manual review automatically to protect your credits.
+      </div>
+      {% elif quota.used_count >= (quota.warning_number - 1) %}
+      <div class="guideline">
+        <strong>Approaching today's OCR credit limit.</strong> If this upload is for a new client reference, it will count as client {{ quota.used_count + 1 }} of {{ quota.limit }}.
+      </div>
+      {% endif %}
+    </div>
   </div>
-  {% endif %}
 
   <div class="section-card">
     <div class="section-card-header">
@@ -23,6 +47,17 @@
     </div>
     <form action="{{ url_for('ai.ocr_upload') }}" method="post" enctype="multipart/form-data" style="padding: 0 20px 20px;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-group">
+        <label class="form-label">Client Reference</label>
+        <input type="text" name="client_reference" id="ocrClientReference" class="form-input"
+               placeholder="Client name, phone number, or record ID" required>
+        <p style="font-size: 12px; color: var(--navy-400); margin-top: 6px;">
+          OCR credits are limited to 5 unique client references per day. Reusing the same reference will not consume a new client slot.
+        </p>
+      </div>
+
+      <div id="ocrClientLimitNotice" class="guideline" style="display:none; margin-bottom: 16px;"></div>
 
       <div class="form-group">
         <label class="form-label">Document Type</label>
@@ -35,10 +70,10 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">File (JPG, PNG, PDF, WebP — max 5MB)</label>
+        <label class="form-label">File (JPG, PNG, PDF, WebP - max 5MB)</label>
         <div class="upload-zone" id="ocrDropZone" onclick="document.getElementById('ocrFileInput').click()">
           <input type="file" name="file" id="ocrFileInput" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf"
-                 style="display:none" onchange="showFileName(this)">
+                 style="display:none" onchange="showFileName(this)" required>
           <p style="color: var(--navy-400); font-size: 14px; margin: 0;" id="ocrFileLabel">
             Click or drag a file here to upload
           </p>
@@ -46,7 +81,7 @@
       </div>
 
       <button type="submit" class="btn btn-primary" style="width: 100%;">
-        Upload &amp; Extract
+        Upload &amp; Review
       </button>
     </form>
   </div>
@@ -58,13 +93,20 @@
     </div>
     <table class="data-table">
       <thead>
-        <tr><th>File</th><th>Type</th><th>Status</th><th>Date</th><th></th></tr>
+        <tr><th>File</th><th>Client</th><th>Mode</th><th>Status</th><th>Date</th><th></th></tr>
       </thead>
       <tbody>
         {% for ext in recent %}
         <tr>
           <td>{{ ext.original_filename[:30] }}</td>
-          <td>{{ ext.document_type }}</td>
+          <td>{{ ext.client_reference or '-' }}</td>
+          <td>
+            {% if ext.used_ai %}
+              <span class="badge badge-success">AI OCR</span>
+            {% else %}
+              <span class="badge badge-secondary">Manual Review</span>
+            {% endif %}
+          </td>
           <td>
             {% if ext.status == 'confirmed' %}
               <span class="badge badge-success">Confirmed</span>
@@ -87,6 +129,39 @@
 </div>
 
 <script>
+const ocrQuota = {{ quota|tojson }};
+const knownRefs = new Set((ocrQuota.used_refs || []).map(v => v.toLowerCase()));
+
+function normalizeClientReference(value) {
+  return (value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function updateOcrLimitNotice() {
+  const input = document.getElementById('ocrClientReference');
+  const notice = document.getElementById('ocrClientLimitNotice');
+  const normalized = normalizeClientReference(input.value);
+  const isNewClient = normalized && !knownRefs.has(normalized);
+
+  if (!normalized) {
+    notice.style.display = 'none';
+    return;
+  }
+
+  if (isNewClient && ocrQuota.used_count >= ocrQuota.limit) {
+    notice.style.display = 'block';
+    notice.innerHTML = "<strong>AI OCR limit reached for today.</strong> This upload will open in manual review mode to save credits.";
+    return;
+  }
+
+  if (isNewClient && (ocrQuota.used_count + 1) >= ocrQuota.warning_number) {
+    notice.style.display = 'block';
+    notice.innerHTML = "<strong>Heads up.</strong> This new client reference will count as client " + (ocrQuota.used_count + 1) + " of " + ocrQuota.limit + " for today's AI OCR limit.";
+    return;
+  }
+
+  notice.style.display = 'none';
+}
+
 function showFileName(input) {
   const label = document.getElementById('ocrFileLabel');
   if (input.files.length > 0) {
@@ -94,6 +169,7 @@ function showFileName(input) {
     label.style.color = 'var(--terra-600)';
   }
 }
+
 const dz = document.getElementById('ocrDropZone');
 dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
 dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
@@ -102,5 +178,8 @@ dz.addEventListener('drop', e => {
   document.getElementById('ocrFileInput').files = e.dataTransfer.files;
   showFileName(document.getElementById('ocrFileInput'));
 });
+
+document.getElementById('ocrClientReference').addEventListener('input', updateOcrLimitNotice);
+updateOcrLimitNotice();
 </script>
 {% endblock %}

@@ -59,9 +59,12 @@ class OcrExtraction(db.Model):
     file_path = db.Column(db.String(512), nullable=False)
     file_type = db.Column(db.String(20))  # 'pdf', 'jpg', etc.
     document_type = db.Column(db.String(50))  # 'national_id', 'receipt', 'collateral', 'general'
+    client_reference = db.Column(db.String(255))
     raw_ocr_text = db.Column(db.Text)  # raw provider response
     extracted_fields_json = db.Column(db.Text)  # structured extraction as JSON
     corrected_fields_json = db.Column(db.Text)  # user-corrected final values
+    used_ai = db.Column(db.Boolean, default=False, nullable=False)
+    fallback_reason = db.Column(db.String(100))
     status = db.Column(db.String(20), default='pending')  # 'pending', 'reviewed', 'confirmed', 'failed'
     reviewed_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     reviewed_at = db.Column(db.DateTime)

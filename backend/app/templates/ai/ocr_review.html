@@ -12,6 +12,7 @@
   </h1>
   <p style="font-size: 13px; color: var(--navy-400); margin-bottom: 24px;">
     {{ extraction.original_filename }} &middot; {{ extraction.document_type }} &middot;
+    {{ extraction.client_reference or 'No client reference' }} &middot;
     {% if extraction.status == 'confirmed' %}
       <span class="badge badge-success">Confirmed</span>
     {% elif extraction.status == 'pending' %}
@@ -20,6 +21,16 @@
       <span class="badge badge-danger">{{ extraction.status }}</span>
     {% endif %}
   </p>
+
+  {% if not extraction.used_ai %}
+  <div class="guideline" style="margin-bottom: 18px;">
+    {% if extraction.fallback_reason == 'daily_limit' %}
+      AI OCR was skipped because today's OCR credit limit was reached. Enter or correct the fields manually below.
+    {% else %}
+      AI OCR was unavailable for this upload. Enter or correct the fields manually below.
+    {% endif %}
+  </div>
+  {% endif %}
 
   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
     {# Left: Document Preview #}
@@ -56,6 +67,11 @@
           No fields were extracted. Please enter them manually below.
         </div>
         {% endif %}
+
+        <div class="form-group">
+          <label class="form-label">Client Reference</label>
+          <input type="text" name="client_reference" class="form-input" value="{{ extraction.client_reference or '' }}" placeholder="Client name, phone, or record ID" required>
+        </div>
 
         {% for key, value in fields.items() %}
         <div class="form-group">
