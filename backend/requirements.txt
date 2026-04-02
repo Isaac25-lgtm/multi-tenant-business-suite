@@ -11,3 +11,4 @@ gunicorn==21.2.0
 psycopg2-binary==2.9.10
 duckduckgo-search>=7.0.0
 requests>=2.31.0
+pypdfium2>=4.30.0

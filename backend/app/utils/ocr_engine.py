@@ -1,13 +1,15 @@
 """OCR extraction engine using vision-capable AI models.
 
-Extracts structured fields from uploaded document images.
-Falls back to manual entry if the provider is unavailable.
+Extracts structured fields from uploaded document images. For PDFs, the engine
+tries plain-text extraction first and then falls back to rasterizing the first
+page for AI vision OCR when a vision model is configured.
 """
 
 import base64
 import json
 import logging
 import os
+import tempfile
 
 logger = logging.getLogger(__name__)
 
@@ -128,8 +130,17 @@ def extract_from_image(image_path, document_type='general'):
 
 
 def extract_from_pdf(pdf_path, document_type='general'):
-    """Extract text from a PDF. Falls back to manual entry if unavailable."""
-    # For PDFs, try text extraction first; vision model is for images
+    """Extract text from a PDF.
+
+    Strategy:
+    1. Try machine-readable text extraction via ``pdftotext``.
+    2. If that fails and OCR is configured, render the first page to PNG and
+       send it through the vision OCR path.
+    3. Fall back to manual entry if neither path is available.
+    """
+    from app.utils.ai_client import is_ocr_enabled
+
+    # For PDFs, try text extraction first.
     try:
         import subprocess
         # Try pdftotext if available (lightweight)
@@ -144,15 +155,53 @@ def extract_from_pdf(pdf_path, document_type='general'):
                 'fields': {'extracted_text': result.stdout.strip()},
                 'error': None,
             }
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
         pass
+
+    if is_ocr_enabled():
+        rendered = _render_pdf_first_page(pdf_path)
+        if rendered:
+            try:
+                return extract_from_image(rendered, document_type)
+            finally:
+                try:
+                    os.remove(rendered)
+                except OSError:
+                    pass
 
     return {
         'success': False,
         'raw_text': None,
         'fields': _empty_fields(document_type),
-        'error': 'PDF text extraction not available. Please enter fields manually.',
+        'error': 'PDF OCR is unavailable right now. Please enter fields manually.',
     }
+
+
+def _render_pdf_first_page(pdf_path):
+    """Render the first page of a PDF to a temporary PNG path.
+
+    Requires ``pypdfium2``. If the library is missing or rendering fails,
+    returns ``None`` so the caller can fall back gracefully.
+    """
+    try:
+        import pypdfium2 as pdfium
+    except ImportError:
+        logger.warning('PDF OCR fallback unavailable: pypdfium2 not installed')
+        return None
+
+    try:
+        pdf = pdfium.PdfDocument(pdf_path)
+        if len(pdf) < 1:
+            return None
+        page = pdf[0]
+        bitmap = page.render(scale=2.0)
+        image = bitmap.to_pil()
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            image.save(tmp.name, format='PNG')
+            return tmp.name
+    except Exception as exc:
+        logger.warning('PDF OCR render failed: %s', exc.__class__.__name__)
+        return None
 
 
 def _empty_fields(document_type):
