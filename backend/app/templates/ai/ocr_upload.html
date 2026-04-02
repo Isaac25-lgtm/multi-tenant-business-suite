@@ -3,11 +3,17 @@
 
 {% block content %}
 <div style="max-width: 760px; margin: 0 auto;">
+  {% if return_to %}
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+    <a href="{{ return_to }}" style="color: var(--terra-600); font-size: 13px;">&larr; Back to Finance</a>
+  </div>
+  {% endif %}
   <h1 style="font-family: 'Source Serif 4', serif; font-size: 22px; font-weight: 700; color: var(--navy-800); margin-bottom: 8px;">
-    Document Scanner
+    {% if context_label %}{{ context_label }} OCR{% else %}Document Scanner{% endif %}
   </h1>
   <p style="font-size: 13px; color: var(--navy-400); margin-bottom: 24px;">
     Upload a document image or PDF for OCR. Every extracted field stays editable before anything is finalized.
+    {% if context_label %}This upload will return to finance after review.{% endif %}
   </p>
 
   <div class="section-card" style="margin-bottom: 18px;">
@@ -47,11 +53,12 @@
     </div>
     <form action="{{ url_for('ai.ocr_upload') }}" method="post" enctype="multipart/form-data" style="padding: 0 20px 20px;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ return_to }}">
 
       <div class="form-group">
         <label class="form-label">Client Reference</label>
         <input type="text" name="client_reference" id="ocrClientReference" class="form-input"
-               placeholder="Client name, phone number, or record ID" required>
+               placeholder="Client name, phone number, or record ID" value="{{ client_reference or '' }}" required>
         <p style="font-size: 12px; color: var(--navy-400); margin-top: 6px;">
           OCR credits are limited to 5 unique client references per day. Reusing the same reference will not consume a new client slot.
         </p>
@@ -62,10 +69,10 @@
       <div class="form-group">
         <label class="form-label">Document Type</label>
         <select name="document_type" class="form-select">
-          <option value="national_id">National ID Card</option>
-          <option value="receipt">Receipt / Payment Proof</option>
-          <option value="collateral">Collateral Document</option>
-          <option value="general" selected>General Document</option>
+          <option value="national_id" {% if document_type == 'national_id' %}selected{% endif %}>National ID Card</option>
+          <option value="receipt" {% if document_type == 'receipt' %}selected{% endif %}>Receipt / Payment Proof</option>
+          <option value="collateral" {% if document_type == 'collateral' %}selected{% endif %}>Collateral Document</option>
+          <option value="general" {% if document_type == 'general' %}selected{% endif %}>General Document</option>
         </select>
       </div>
 

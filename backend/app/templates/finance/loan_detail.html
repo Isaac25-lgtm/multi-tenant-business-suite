@@ -125,7 +125,18 @@
 
         <!-- Collateral Documents -->
         <div class="section-card mt-4">
-            <h2 class="font-semibold text-lg mb-4">Collateral Documents</h2>
+            <div class="flex justify-between items-start gap-4 mb-4">
+                <div>
+                    <h2 class="font-semibold text-lg">Collateral Documents</h2>
+                    <p class="text-xs text-gray-500 mt-1">Upload normally, or use OCR to extract details before reviewing and saving.</p>
+                </div>
+                <a
+                    href="{{ url_for('ai.ocr_page', document_type='collateral', client_reference=(loan.client.name ~ ' - ' ~ loan.client.phone), next=url_for('finance.view_loan', id=loan.id), context='Collateral') }}"
+                    class="btn btn-outline"
+                >
+                    Scan with OCR
+                </a>
+            </div>
 
             {% set documents = loan.documents.filter_by(is_deleted=False).all() if loan.documents else [] %}
             {% if documents %}
@@ -161,6 +172,7 @@
                 </div>
                 <input type="file" id="collateral-file" name="collateral_file" class="hidden" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp" onchange="this.form.submit()">
             </form>
+            <p class="text-xs text-gray-500 mt-3">Use the OCR button when you want AI-assisted extraction and field review. Use the upload box for direct collateral storage only.</p>
         </div>
     </div>
 

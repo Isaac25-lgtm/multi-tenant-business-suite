@@ -4,7 +4,7 @@
 {% block content %}
 <div style="max-width: 800px; margin: 0 auto;">
   <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-    <a href="{{ url_for('ai.ocr_page') }}" style="color: var(--terra-600); font-size: 13px;">&larr; Back to Documents</a>
+    <a href="{{ return_to or url_for('ai.ocr_page') }}" style="color: var(--terra-600); font-size: 13px;">&larr; Back</a>
   </div>
 
   <h1 style="font-family: 'Source Serif 4', serif; font-size: 22px; font-weight: 700; color: var(--navy-800); margin-bottom: 4px;">
@@ -61,6 +61,7 @@
       </div>
       <form action="{{ url_for('ai.ocr_confirm', id=extraction.id) }}" method="post" style="padding: 0 20px 20px;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ return_to }}">
 
         {% if not fields %}
         <div class="guideline" style="margin-bottom: 16px;">
@@ -116,7 +117,7 @@
         {% if extraction.status != 'confirmed' %}
         <div style="display: flex; gap: 12px; margin-top: 16px;">
           <button type="submit" class="btn btn-primary" style="flex: 1;">Confirm &amp; Save</button>
-          <a href="{{ url_for('ai.ocr_page') }}" class="btn btn-secondary" style="flex: 1; text-align: center;">Cancel</a>
+          <a href="{{ return_to or url_for('ai.ocr_page') }}" class="btn btn-secondary" style="flex: 1; text-align: center;">Cancel</a>
         </div>
         {% else %}
         <div class="guideline" style="margin-top: 16px;">

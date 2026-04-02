@@ -109,16 +109,6 @@
                 Website Management
             </a>
 
-            <p class="nav-label">Tools</p>
-            <a href="{{ url_for('ai.ocr_page') }}"
-                class="nav-item {% if request.endpoint and 'ocr' in request.endpoint %}active{% endif %}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Document OCR
-            </a>
-
             {% elif current_section == 'boutique' %}
             <p class="nav-label">Boutique</p>
             <a href="{{ url_for('boutique.index') }}"
@@ -268,18 +258,6 @@
             </a>
             {% endif %}
 
-            {# AI tools for non-manager users (manager has its own AI Tools section above) #}
-            {% if current_section != 'manager' %}
-            <p class="nav-label" style="margin-top:12px">Tools</p>
-            <a href="{{ url_for('ai.ocr_page') }}"
-                class="nav-item {% if request.endpoint and 'ocr' in request.endpoint %}active{% endif %}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Document OCR
-            </a>
-            {% endif %}
         </nav>
 
         <div class="user-footer">

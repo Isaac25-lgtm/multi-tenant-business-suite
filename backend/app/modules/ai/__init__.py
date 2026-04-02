@@ -342,6 +342,7 @@ def ocr_upload():
 
     document_type = request.form.get('document_type', 'general')
     client_reference = (request.form.get('client_reference') or '').strip()
+    return_to = (request.form.get('next') or '').strip()
     if not client_reference:
         flash('Add a client reference so the daily OCR credit limit can be tracked.', 'error')
         return redirect(request.referrer or url_for('ai.ocr_page'))
@@ -429,6 +430,8 @@ def ocr_upload():
     if result.get('error'):
         flash(result['error'], 'info')
 
+    if return_to and return_to.startswith('/'):
+        return redirect(url_for('ai.ocr_review', id=extraction.id, next=return_to))
     return redirect(url_for('ai.ocr_review', id=extraction.id))
 
 
@@ -446,11 +449,19 @@ def ocr_page():
     ).order_by(OcrExtraction.created_at.desc()).limit(10).all()
 
     quota = _get_ocr_quota_status()
+    client_reference = (request.args.get('client_reference') or '').strip()
+    document_type = (request.args.get('document_type') or 'general').strip()
+    return_to = (request.args.get('next') or '').strip()
+    context_label = (request.args.get('context') or '').strip()
     return render_template(
         'ai/ocr_upload.html',
         ocr_enabled=is_ocr_enabled(),
         recent=recent,
         quota=quota,
+        client_reference=client_reference,
+        document_type=document_type,
+        return_to=return_to,
+        context_label=context_label,
     )
 
 
@@ -474,6 +485,7 @@ def ocr_review(id):
         'ai/ocr_review.html',
         extraction=extraction,
         fields=fields,
+        return_to=(request.args.get('next') or '').strip(),
     )
 
 
@@ -521,4 +533,7 @@ def ocr_confirm(id):
     )
 
     flash('OCR extraction confirmed and saved.', 'success')
+    return_to = (request.form.get('next') or '').strip()
+    if return_to and return_to.startswith('/'):
+        return redirect(return_to)
     return redirect(url_for('ai.ocr_page'))
