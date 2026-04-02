@@ -44,7 +44,7 @@ Denove APS is a full-stack Flask application built for a multi-section retail an
 
 - **Backend:** Flask · SQLAlchemy · Alembic
 - **Database:** PostgreSQL
-- **AI:** OpenAI-compatible provider (DeepSeek, OpenAI, etc.) — optional, degrades gracefully
+- **AI:** Dual-provider support — DeepSeek/OpenAI for chat, Anthropic for OCR — optional, degrades gracefully
 - **Security:** Encrypted PII · CSRF protection · rate limiting · comprehensive audit trail
 - **Deployment:** Render · Gunicorn
 
@@ -67,6 +67,45 @@ Denove APS is a full-stack Flask application built for a multi-section retail an
 - Secure session management
 - File upload validation and size restrictions
 - Soft deletes for data integrity
+
+## AI Features (Optional)
+
+Three AI-powered tools are built in. All degrade gracefully — the app works fully without any AI provider configured.
+
+| Feature | Who can use it | What it does |
+|---------|---------------|--------------|
+| **Morning Briefing** | All staff | Role-aware daily summary with yesterday's metrics, attention flags, and low-stock alerts. Appears as a banner on first login of the day. Managers see the full business overview; section staff see scoped data for their role. |
+| **AI Assistant** | Managers only | Read-only chatbot at `/ai/chat`. Ask natural-language questions like "show overdue loans" or "compare branches this week". Queries run against real database data — the LLM only narrates structured results. |
+| **Document OCR** | All staff | Upload ID cards, receipts, collateral docs, or scanned PDFs at `/ai/ocr`. A vision-capable model extracts fields into an editable review form. Staff correct any mistakes before confirming. Daily usage is capped per client to control costs. |
+
+### Provider setup
+
+The app supports a **dual-provider** configuration — one provider for text chat (briefing narration, chatbot) and a separate provider for vision/OCR. This lets you pair a cost-effective chat model with a high-quality vision model.
+
+**Chat + Briefing** (OpenAI-compatible — DeepSeek, OpenAI, etc.):
+
+```
+AI_ENABLED=true
+AI_API_KEY=<your-deepseek-or-openai-key>
+AI_BASE_URL=https://api.deepseek.com/v1
+AI_CHAT_MODEL=deepseek-chat
+```
+
+**Document OCR** (Anthropic recommended for vision quality):
+
+```
+OCR_ENABLED=true
+OCR_PROVIDER=anthropic
+OCR_API_KEY=<your-anthropic-key>
+OCR_BASE_URL=https://api.anthropic.com
+OCR_MODEL=claude-3-5-haiku-latest
+OCR_DAILY_CLIENT_LIMIT=5
+OCR_WARNING_CLIENT_NUMBER=3
+```
+
+OCR can also use any OpenAI-compatible vision endpoint — set `OCR_PROVIDER=openai_compatible` and point `OCR_BASE_URL` / `OCR_MODEL` at your provider.
+
+See `backend/.env.example` for the full list of configuration variables.
 
 ## Local Development Setup
 
