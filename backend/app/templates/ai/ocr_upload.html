@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Document OCR{% endblock %}
+
+{% block content %}
+<div style="max-width: 700px; margin: 0 auto;">
+  <h1 style="font-family: 'Source Serif 4', serif; font-size: 22px; font-weight: 700; color: var(--navy-800); margin-bottom: 8px;">
+    Document Scanner
+  </h1>
+  <p style="font-size: 13px; color: var(--navy-400); margin-bottom: 24px;">
+    Upload a document image for AI-powered text extraction. You can review and correct all extracted fields before saving.
+  </p>
+
+  {% if not ocr_enabled %}
+  <div class="guideline" style="margin-bottom: 20px;">
+    <strong>OCR provider not configured.</strong> You can still upload documents and enter fields manually.
+    To enable AI extraction, set OCR_ENABLED plus a vision-capable OCR_MODEL or AI_VISION_MODEL.
+  </div>
+  {% endif %}
+
+  <div class="section-card">
+    <div class="section-card-header">
+      <h3 class="section-card-title">Upload Document</h3>
+    </div>
+    <form action="{{ url_for('ai.ocr_upload') }}" method="post" enctype="multipart/form-data" style="padding: 0 20px 20px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-group">
+        <label class="form-label">Document Type</label>
+        <select name="document_type" class="form-select">
+          <option value="national_id">National ID Card</option>
+          <option value="receipt">Receipt / Payment Proof</option>
+          <option value="collateral">Collateral Document</option>
+          <option value="general" selected>General Document</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">File (JPG, PNG, PDF, WebP — max 5MB)</label>
+        <div class="upload-zone" id="ocrDropZone" onclick="document.getElementById('ocrFileInput').click()">
+          <input type="file" name="file" id="ocrFileInput" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf"
+                 style="display:none" onchange="showFileName(this)">
+          <p style="color: var(--navy-400); font-size: 14px; margin: 0;" id="ocrFileLabel">
+            Click or drag a file here to upload
+          </p>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary" style="width: 100%;">
+        Upload &amp; Extract
+      </button>
+    </form>
+  </div>
+
+  {% if recent %}
+  <div class="section-card" style="margin-top: 20px;">
+    <div class="section-card-header">
+      <h3 class="section-card-title">Recent Extractions</h3>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr><th>File</th><th>Type</th><th>Status</th><th>Date</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for ext in recent %}
+        <tr>
+          <td>{{ ext.original_filename[:30] }}</td>
+          <td>{{ ext.document_type }}</td>
+          <td>
+            {% if ext.status == 'confirmed' %}
+              <span class="badge badge-success">Confirmed</span>
+            {% elif ext.status == 'pending' %}
+              <span class="badge badge-warning">Pending Review</span>
+            {% else %}
+              <span class="badge badge-danger">{{ ext.status }}</span>
+            {% endif %}
+          </td>
+          <td>{{ ext.created_at.strftime('%d %b %H:%M') if ext.created_at else '-' }}</td>
+          <td>
+            <a href="{{ url_for('ai.ocr_review', id=ext.id) }}" class="btn btn-sm btn-outline">Review</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function showFileName(input) {
+  const label = document.getElementById('ocrFileLabel');
+  if (input.files.length > 0) {
+    label.textContent = input.files[0].name + ' (' + (input.files[0].size / 1024).toFixed(1) + ' KB)';
+    label.style.color = 'var(--terra-600)';
+  }
+}
+const dz = document.getElementById('ocrDropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('dragover');
+  document.getElementById('ocrFileInput').files = e.dataTransfer.files;
+  showFileName(document.getElementById('ocrFileInput'));
+});
+</script>
+{% endblock %}

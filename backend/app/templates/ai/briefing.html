@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Morning Briefing{% endblock %}
+
+{% block content %}
+<div style="max-width: 900px; margin: 0 auto;">
+
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px;">
+    <div>
+      <h1 style="font-family: 'Source Serif 4', serif; font-size: 24px; font-weight: 700; color: var(--navy-800); margin: 0;">
+        Good morning, {{ user.full_name or user.username }}
+      </h1>
+      <p style="color: var(--navy-400); font-size: 13px; margin-top: 4px;">
+        {{ briefing_date.strftime('%A, %d %B %Y') }} &middot; {{ scope|title }}{% if branch %} &middot; Branch {{ branch }}{% endif %}
+      </p>
+    </div>
+    <a href="{{ url_for('dashboard.index') }}" class="btn btn-secondary" style="font-size: 13px;">
+      Go to Dashboard
+    </a>
+  </div>
+
+  {% if ai_narrative %}
+  <div class="section-card anim-up d1" style="background: linear-gradient(135deg, var(--terra-50) 0%, #fff 100%); border-left: 4px solid var(--terra-400);">
+    <div style="padding: 20px;">
+      <p style="font-size: 14px; line-height: 1.7; color: var(--navy-700); margin: 0;">
+        {{ ai_narrative }}
+      </p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if not metrics %}
+  <div class="section-card" style="padding: 40px; text-align: center;">
+    <p style="color: var(--navy-400);">No briefing data available yet. Check back after business activity begins.</p>
+  </div>
+  {% endif %}
+
+  {# ===== MANAGER BRIEFING ===== #}
+  {% if scope == 'manager' and metrics %}
+
+  {# Yesterday's Revenue Cards #}
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+    <div class="stat-card anim-up d1">
+      <div class="stat-card-label">Boutique Yesterday</div>
+      <div class="stat-card-value" style="color: var(--terra-600);">UGX {{ "{:,.0f}".format(metrics.boutique_yesterday_revenue) }}</div>
+      <div class="stat-detail">{{ metrics.boutique_yesterday_count }} transactions</div>
+    </div>
+    <div class="stat-card anim-up d2">
+      <div class="stat-card-label">Hardware Yesterday</div>
+      <div class="stat-card-value" style="color: var(--forest-600);">UGX {{ "{:,.0f}".format(metrics.hardware_yesterday_revenue) }}</div>
+      <div class="stat-detail">{{ metrics.hardware_yesterday_count }} transactions</div>
+    </div>
+    <div class="stat-card anim-up d3">
+      <div class="stat-card-label">Finance Repayments</div>
+      <div class="stat-card-value" style="color: #2563eb;">UGX {{ "{:,.0f}".format(metrics.finance_yesterday_repayments) }}</div>
+      <div class="stat-detail">{{ metrics.finance_loans_issued_yesterday }} loans issued</div>
+    </div>
+    <div class="stat-card anim-up d4">
+      <div class="stat-card-label">Overdue Loans</div>
+      <div class="stat-card-value" style="color: {% if metrics.overdue_loans > 0 %}#dc2626{% else %}var(--forest-600){% endif %};">{{ metrics.overdue_loans }}</div>
+      <div class="stat-detail">UGX {{ "{:,.0f}".format(metrics.overdue_balance) }} at risk</div>
+    </div>
+  </div>
+
+  {# Attention Flags #}
+  {% if metrics.attention_flags %}
+  <div class="section-card anim-up d2" style="border-left: 4px solid #f59e0b;">
+    <div style="padding: 16px 20px;">
+      <h3 style="font-size: 14px; font-weight: 700; color: var(--navy-800); margin: 0 0 10px 0;">Needs Attention Today</h3>
+      <ul style="margin: 0; padding-left: 20px;">
+        {% for flag in metrics.attention_flags %}
+        <li style="font-size: 13px; color: var(--navy-700); margin-bottom: 4px;">{{ flag }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  {# Branch Breakdown #}
+  {% if metrics.boutique_branches %}
+  <div class="section-card anim-up d3">
+    <div class="section-card-header">
+      <h3 class="section-card-title">Boutique by Branch (Yesterday)</h3>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Branch</th><th style="text-align:right">Revenue</th><th style="text-align:right">Sales</th></tr></thead>
+      <tbody>
+      {% for b in metrics.boutique_branches %}
+        <tr>
+          <td>{{ b.branch }}</td>
+          <td style="text-align:right">UGX {{ "{:,.0f}".format(b.revenue) }}</td>
+          <td style="text-align:right">{{ b.count }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {# Activity + Low Stock Side by Side #}
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+    {# Who Logged In #}
+    <div class="section-card anim-up d3">
+      <div class="section-card-header">
+        <h3 class="section-card-title">Users Active Yesterday</h3>
+      </div>
+      <div style="padding: 0 20px 16px;">
+        {% if metrics.users_logged_in_yesterday %}
+          {% for u in metrics.users_logged_in_yesterday %}
+          <span class="badge badge-info" style="margin: 2px;">{{ u }}</span>
+          {% endfor %}
+          <p style="font-size: 12px; color: var(--navy-400); margin-top: 8px;">{{ metrics.login_count_yesterday }} total login events</p>
+        {% else %}
+          <p style="font-size: 13px; color: var(--navy-400);">No logins recorded yesterday.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Low Stock #}
+    <div class="section-card anim-up d4">
+      <div class="section-card-header">
+        <h3 class="section-card-title">Low Stock ({{ metrics.low_stock_count }})</h3>
+      </div>
+      <div style="padding: 0 20px 16px;">
+        {% if metrics.low_stock_items %}
+          {% for item in metrics.low_stock_items[:6] %}
+          <div style="display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border);">
+            <span>{{ item.section }} &middot; {{ item.name }}</span>
+            <span class="badge badge-warning">{{ item.qty }} {{ item.unit }}</span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p style="font-size: 13px; color: var(--forest-500);">All stock levels are healthy.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# Major Transactions #}
+  {% if metrics.major_transactions %}
+  <div class="section-card anim-up d4" style="margin-top: 16px;">
+    <div class="section-card-header">
+      <h3 class="section-card-title">Major Transactions (Yesterday)</h3>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Reference</th><th>Section</th><th style="text-align:right">Amount</th></tr></thead>
+      <tbody>
+      {% for t in metrics.major_transactions[:5] %}
+        <tr>
+          <td>{{ t.ref }}</td>
+          <td>{{ t.section }}</td>
+          <td style="text-align:right">UGX {{ "{:,.0f}".format(t.amount) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% endif %} {# end manager scope #}
+
+  {# ===== BOUTIQUE BRIEFING ===== #}
+  {% if scope == 'boutique' and metrics %}
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+    <div class="stat-card anim-up d1">
+      <div class="stat-card-label">Yesterday Revenue</div>
+      <div class="stat-card-value" style="color: var(--terra-600);">UGX {{ "{:,.0f}".format(metrics.yesterday_revenue) }}</div>
+      <div class="stat-detail">{{ metrics.yesterday_count }} sales</div>
+    </div>
+    <div class="stat-card anim-up d2">
+      <div class="stat-card-label">Outstanding Credits</div>
+      <div class="stat-card-value" style="color: #f59e0b;">UGX {{ "{:,.0f}".format(metrics.outstanding_credits) }}</div>
+    </div>
+    <div class="stat-card anim-up d3">
+      <div class="stat-card-label">Low Stock Items</div>
+      <div class="stat-card-value" style="color: {% if metrics.low_stock_count > 0 %}#dc2626{% else %}var(--forest-600){% endif %};">{{ metrics.low_stock_count }}</div>
+    </div>
+  </div>
+  {% if metrics.low_stock_items %}
+  <div class="section-card anim-up d3">
+    <div class="section-card-header"><h3 class="section-card-title">Items to Restock</h3></div>
+    <div style="padding: 0 20px 16px;">
+      {% for item in metrics.low_stock_items %}
+      <div style="display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border);">
+        <span>{{ item.name }}</span>
+        <span class="badge badge-warning">{{ item.qty }} {{ item.unit }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {# ===== HARDWARE BRIEFING ===== #}
+  {% if scope == 'hardware' and metrics %}
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+    <div class="stat-card anim-up d1">
+      <div class="stat-card-label">Yesterday Revenue</div>
+      <div class="stat-card-value" style="color: var(--forest-600);">UGX {{ "{:,.0f}".format(metrics.yesterday_revenue) }}</div>
+      <div class="stat-detail">{{ metrics.yesterday_count }} sales</div>
+    </div>
+    <div class="stat-card anim-up d2">
+      <div class="stat-card-label">Outstanding Credits</div>
+      <div class="stat-card-value" style="color: #f59e0b;">UGX {{ "{:,.0f}".format(metrics.outstanding_credits) }}</div>
+    </div>
+    <div class="stat-card anim-up d3">
+      <div class="stat-card-label">Low Stock Items</div>
+      <div class="stat-card-value" style="color: {% if metrics.low_stock_count > 0 %}#dc2626{% else %}var(--forest-600){% endif %};">{{ metrics.low_stock_count }}</div>
+    </div>
+  </div>
+  {% if metrics.low_stock_items %}
+  <div class="section-card anim-up d3">
+    <div class="section-card-header"><h3 class="section-card-title">Items to Restock</h3></div>
+    <div style="padding: 0 20px 16px;">
+      {% for item in metrics.low_stock_items %}
+      <div style="display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--border);">
+        <span>{{ item.name }}</span>
+        <span class="badge badge-warning">{{ item.qty }} {{ item.unit }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {# ===== FINANCE BRIEFING ===== #}
+  {% if scope == 'finance' and metrics %}
+  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+    <div class="stat-card anim-up d1">
+      <div class="stat-card-label">Yesterday Repayments</div>
+      <div class="stat-card-value" style="color: var(--forest-600);">UGX {{ "{:,.0f}".format(metrics.yesterday_repayments) }}</div>
+    </div>
+    <div class="stat-card anim-up d2">
+      <div class="stat-card-label">Loans Issued</div>
+      <div class="stat-card-value" style="color: #2563eb;">{{ metrics.loans_issued_yesterday }}</div>
+    </div>
+    <div class="stat-card anim-up d3">
+      <div class="stat-card-label">Overdue Loans</div>
+      <div class="stat-card-value" style="color: {% if metrics.overdue_count > 0 %}#dc2626{% else %}var(--forest-600){% endif %};">{{ metrics.overdue_count }}</div>
+    </div>
+    <div class="stat-card anim-up d4">
+      <div class="stat-card-label">Pending Inquiries</div>
+      <div class="stat-card-value" style="color: #f59e0b;">{{ metrics.pending_inquiries }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

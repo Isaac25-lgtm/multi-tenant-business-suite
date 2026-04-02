@@ -109,6 +109,32 @@
                 Website Management
             </a>
 
+            <p class="nav-label">AI Tools</p>
+            <a href="{{ url_for('ai.briefing') }}"
+                class="nav-item {% if request.endpoint and 'briefing' in request.endpoint %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Morning Briefing
+            </a>
+            <a href="{{ url_for('ai.chat_page') }}"
+                class="nav-item {% if request.endpoint and 'chat' in request.endpoint %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                </svg>
+                AI Assistant
+            </a>
+            <a href="{{ url_for('ai.ocr_page') }}"
+                class="nav-item {% if request.endpoint and 'ocr' in request.endpoint %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Document OCR
+            </a>
+
             {% elif current_section == 'boutique' %}
             <p class="nav-label">Boutique</p>
             <a href="{{ url_for('boutique.index') }}"
@@ -255,6 +281,27 @@
                         d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
                 </svg>
                 Website
+            </a>
+            {% endif %}
+
+            {# AI tools for non-manager users (manager has its own AI Tools section above) #}
+            {% if current_section != 'manager' %}
+            <p class="nav-label" style="margin-top:12px">Tools</p>
+            <a href="{{ url_for('ai.briefing') }}"
+                class="nav-item {% if request.endpoint and 'briefing' in request.endpoint %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                Morning Briefing
+            </a>
+            <a href="{{ url_for('ai.ocr_page') }}"
+                class="nav-item {% if request.endpoint and 'ocr' in request.endpoint %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Document OCR
             </a>
             {% endif %}
         </nav>
@@ -489,6 +536,45 @@
       // Start polling
       setTimeout(doPoll, 3000);
       setInterval(doPoll, POLL_INTERVAL);
+    })();
+    </script>
+    {% endif %}
+
+    {# Morning briefing auto-check — show once per user per day #}
+    {% if current_user %}
+    <script>
+    (function() {
+      // Don't redirect if already on briefing page
+      if (window.location.pathname.indexOf('/ai/briefing') !== -1) return;
+
+      var key = '_briefing_dismissed_' + '{{ current_user }}';
+      var today = new Date().toISOString().slice(0, 10);
+      if (localStorage.getItem(key) === today) return;
+
+      fetch('/ai/briefing/check')
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (data && data.show) {
+            // Show a non-intrusive banner instead of auto-redirect
+            var banner = document.createElement('div');
+            banner.id = 'briefing-banner';
+            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:300;background:linear-gradient(135deg,var(--terra-600),var(--terra-500));color:white;padding:10px 20px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:14px;font-weight:500;animation:rise 0.4s ease both;';
+            banner.innerHTML = '<span>Your morning briefing is ready</span>'
+              + '<a href="/ai/briefing" style="background:white;color:var(--terra-600);padding:4px 14px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;">View Briefing</a>'
+              + '<button onclick="dismissBriefingBanner()" style="background:none;border:none;color:white;cursor:pointer;font-size:18px;margin-left:8px;">&times;</button>';
+            document.body.prepend(banner);
+          }
+        }).catch(function() {});
+
+      window.dismissBriefingBanner = function() {
+        var el = document.getElementById('briefing-banner');
+        if (el) el.remove();
+        localStorage.setItem(key, today);
+        fetch('/ai/briefing/dismiss', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+        }).catch(function() {});
+      };
     })();
     </script>
     {% endif %}

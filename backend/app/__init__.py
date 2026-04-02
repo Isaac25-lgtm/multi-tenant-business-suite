@@ -26,7 +26,7 @@ def create_app(config_class=Config):
     upload_root = os.path.normpath(upload_root)
     app.config['UPLOAD_FOLDER'] = upload_root
     os.makedirs(upload_root, exist_ok=True)
-    for subdir in ('products', 'profiles', 'website', 'collateral'):
+    for subdir in ('products', 'profiles', 'website', 'collateral', 'ocr'):
         os.makedirs(os.path.join(upload_root, subdir), exist_ok=True)
 
     # Register blueprints
@@ -38,6 +38,7 @@ def create_app(config_class=Config):
     from app.modules.finance import finance_bp
     from app.modules.storefront import storefront_bp
     from app.modules.website_management import website_bp
+    from app.modules.ai import ai_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -46,6 +47,7 @@ def create_app(config_class=Config):
     app.register_blueprint(customers_bp, url_prefix='/customers')
     app.register_blueprint(finance_bp, url_prefix='/finance')
     app.register_blueprint(website_bp, url_prefix='/website')
+    app.register_blueprint(ai_bp, url_prefix='/ai')
     
     # Public storefront at root - no authentication required
     app.register_blueprint(storefront_bp)
@@ -174,6 +176,10 @@ def create_app(config_class=Config):
             'website_order_requests',
             'website_settings',
             'rate_limit_states',
+            'daily_briefings',
+            'briefing_dismissals',
+            'chat_messages',
+            'ocr_extractions',
         }
         has_app_tables = bool(app_tables.intersection(tables))
         has_alembic = 'alembic_version' in tables
@@ -224,6 +230,10 @@ def create_app(config_class=Config):
             'boutique_sales',
             'hardware_stock',
             'hardware_sales',
+            'daily_briefings',
+            'briefing_dismissals',
+            'chat_messages',
+            'ocr_extractions',
         ]
 
         # Required columns  (table, column)

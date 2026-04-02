@@ -36,11 +36,15 @@ Denove APS is a full-stack Flask application built for a multi-section retail an
 | **Public Storefront** | Product showcase, featured items, loan inquiry & order submissions |
 | **Website CMS** | Publish/unpublish products, manage banners & branding, inquiry inbox with one-click conversion to real loans |
 | **Manager Dashboard** | Real-time KPIs across all sections — sales, credits, loans, inventory value — with day-over-day comparisons |
+| **Morning Briefing** | Role-aware daily welcome with yesterday's metrics, attention flags, and optional AI narration |
+| **AI Assistant** | Manager-only read-only chatbot for querying business data with natural language |
+| **Document OCR** | Upload documents for AI-powered text extraction with user review before save; requires a vision-capable model/provider |
 
 ## Tech Stack
 
 - **Backend:** Flask · SQLAlchemy · Alembic
 - **Database:** PostgreSQL
+- **AI:** OpenAI-compatible provider (DeepSeek, OpenAI, etc.) — optional, degrades gracefully
 - **Security:** Encrypted PII · CSRF protection · rate limiting · comprehensive audit trail
 - **Deployment:** Render · Gunicorn
 

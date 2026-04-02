@@ -17,12 +17,16 @@ from app.models.website import (
     WebsiteLoanInquiry, WebsiteOrderRequest,
     PublishedProduct, WebsiteImage
 )
+from app.models.ai import (
+    DailyBriefing, BriefingDismissal, ChatMessage, OcrExtraction
+)
 
 __all__ = [
     'Customer', 'User', 'AuditLog',
     'BoutiqueCategory', 'BoutiqueStock', 'BoutiqueSale', 'BoutiqueSaleItem', 'BoutiqueCreditPayment',
     'HardwareCategory', 'HardwareStock', 'HardwareSale', 'HardwareSaleItem', 'HardwareCreditPayment',
     'LoanClient', 'Loan', 'LoanPayment', 'GroupLoan', 'GroupLoanPayment', 'LoanDocument',
-    'WebsiteLoanInquiry', 'WebsiteOrderRequest', 'PublishedProduct', 'WebsiteImage'
+    'WebsiteLoanInquiry', 'WebsiteOrderRequest', 'PublishedProduct', 'WebsiteImage',
+    'DailyBriefing', 'BriefingDismissal', 'ChatMessage', 'OcrExtraction',
 ]
 

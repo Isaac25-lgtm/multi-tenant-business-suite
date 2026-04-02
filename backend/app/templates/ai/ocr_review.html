@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Review Extraction{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto;">
+  <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+    <a href="{{ url_for('ai.ocr_page') }}" style="color: var(--terra-600); font-size: 13px;">&larr; Back to Documents</a>
+  </div>
+
+  <h1 style="font-family: 'Source Serif 4', serif; font-size: 22px; font-weight: 700; color: var(--navy-800); margin-bottom: 4px;">
+    Review Extracted Fields
+  </h1>
+  <p style="font-size: 13px; color: var(--navy-400); margin-bottom: 24px;">
+    {{ extraction.original_filename }} &middot; {{ extraction.document_type }} &middot;
+    {% if extraction.status == 'confirmed' %}
+      <span class="badge badge-success">Confirmed</span>
+    {% elif extraction.status == 'pending' %}
+      <span class="badge badge-warning">Pending Review</span>
+    {% else %}
+      <span class="badge badge-danger">{{ extraction.status }}</span>
+    {% endif %}
+  </p>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+    {# Left: Document Preview #}
+    <div class="section-card">
+      <div class="section-card-header">
+        <h3 class="section-card-title">Document</h3>
+      </div>
+      <div style="padding: 16px; text-align: center;">
+        {% if extraction.file_type in ('jpg', 'jpeg', 'png', 'gif', 'webp') %}
+          <img src="{{ url_for('static', filename=extraction.public_file_path) if extraction.public_file_path else '' }}"
+               alt="Document" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border);"
+               onerror="this.parentElement.innerHTML='<p style=color:var(--navy-400)>Preview not available</p>'">
+        {% elif extraction.file_type == 'pdf' %}
+          <div style="padding: 30px; background: var(--navy-50); border-radius: 8px;">
+            <p style="font-size: 14px; color: var(--navy-600);">PDF document</p>
+            <p style="font-size: 12px; color: var(--navy-400);">{{ extraction.original_filename }}</p>
+          </div>
+        {% else %}
+          <p style="color: var(--navy-400);">Preview not available for this file type.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    {# Right: Editable Fields #}
+    <div class="section-card">
+      <div class="section-card-header">
+        <h3 class="section-card-title">Extracted Fields</h3>
+      </div>
+      <form action="{{ url_for('ai.ocr_confirm', id=extraction.id) }}" method="post" style="padding: 0 20px 20px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {% if not fields %}
+        <div class="guideline" style="margin-bottom: 16px;">
+          No fields were extracted. Please enter them manually below.
+        </div>
+        {% endif %}
+
+        {% for key, value in fields.items() %}
+        <div class="form-group">
+          <label class="form-label">{{ key.replace('_', ' ')|title }}</label>
+          {% if value is string and value|length > 100 %}
+            <textarea name="field_{{ key }}" class="form-textarea" rows="3">{{ value }}</textarea>
+          {% else %}
+            <input type="text" name="field_{{ key }}" class="form-input" value="{{ value if value else '' }}">
+          {% endif %}
+        </div>
+        {% endfor %}
+
+        {# If no fields, show empty general field #}
+        {% if not fields %}
+        <div class="form-group">
+          <label class="form-label">Notes / Extracted Text</label>
+          <textarea name="field_extracted_text" class="form-textarea" rows="4" placeholder="Enter document content manually..."></textarea>
+        </div>
+        {% endif %}
+
+        <div style="border-top: 1px solid var(--border); margin-top: 16px; padding-top: 16px;">
+          <p style="font-size: 12px; color: var(--navy-400); margin-bottom: 12px;">
+            Optionally link this extraction to a record:
+          </p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label class="form-label">Link To</label>
+              <select name="link_entity" class="form-select">
+                <option value="">None</option>
+                <option value="customer">Customer</option>
+                <option value="loan_client">Loan Client</option>
+                <option value="loan_document">Loan Document</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Record ID</label>
+              <input type="number" name="link_entity_id" class="form-input" placeholder="ID">
+            </div>
+          </div>
+        </div>
+
+        {% if extraction.status != 'confirmed' %}
+        <div style="display: flex; gap: 12px; margin-top: 16px;">
+          <button type="submit" class="btn btn-primary" style="flex: 1;">Confirm &amp; Save</button>
+          <a href="{{ url_for('ai.ocr_page') }}" class="btn btn-secondary" style="flex: 1; text-align: center;">Cancel</a>
+        </div>
+        {% else %}
+        <div class="guideline" style="margin-top: 16px;">
+          This extraction has already been confirmed.
+          {% if extraction.reviewed_at %}
+            Reviewed {{ extraction.reviewed_at.strftime('%d %b %Y at %H:%M') }}.
+          {% endif %}
+        </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  {# Raw OCR text (collapsible) #}
+  {% if extraction.raw_ocr_text %}
+  <details class="section-card" style="margin-top: 20px;">
+    <summary style="padding: 16px 20px; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--navy-700);">
+      Raw OCR Output
+    </summary>
+    <pre style="padding: 16px 20px; font-size: 12px; color: var(--navy-600); white-space: pre-wrap; border-top: 1px solid var(--border); max-height: 300px; overflow-y: auto;">{{ extraction.raw_ocr_text }}</pre>
+  </details>
+  {% endif %}
+</div>
+{% endblock %}
