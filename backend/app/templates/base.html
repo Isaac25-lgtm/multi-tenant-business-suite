@@ -110,14 +110,6 @@
             </a>
 
             <p class="nav-label">AI Tools</p>
-            <a href="{{ url_for('ai.briefing') }}"
-                class="nav-item {% if request.endpoint and 'briefing' in request.endpoint %}active{% endif %}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                Morning Briefing
-            </a>
             <a href="{{ url_for('ai.chat_page') }}"
                 class="nav-item {% if request.endpoint and 'chat' in request.endpoint %}active{% endif %}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -287,14 +279,6 @@
             {# AI tools for non-manager users (manager has its own AI Tools section above) #}
             {% if current_section != 'manager' %}
             <p class="nav-label" style="margin-top:12px">Tools</p>
-            <a href="{{ url_for('ai.briefing') }}"
-                class="nav-item {% if request.endpoint and 'briefing' in request.endpoint %}active{% endif %}">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-                Morning Briefing
-            </a>
             <a href="{{ url_for('ai.ocr_page') }}"
                 class="nav-item {% if request.endpoint and 'ocr' in request.endpoint %}active{% endif %}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -540,44 +524,64 @@
     </script>
     {% endif %}
 
-    {# Morning briefing auto-check — show once per user per day #}
+        {# Morning briefing auto-check ? show once per user per day as a modal #}
     {% if current_user %}
+    <div id="briefing-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.62);z-index:10020;align-items:center;justify-content:center;padding:20px;">
+      <div id="briefing-modal-card" style="background:#fff;border-radius:18px;width:min(1120px,96vw);height:min(88vh,900px);box-shadow:0 28px 70px rgba(15,23,42,.28);overflow:hidden;display:flex;flex-direction:column;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--terra-50),#fff);">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:700;color:var(--navy-800);">Morning Briefing</h3>
+            <p style="margin:4px 0 0;font-size:12px;color:var(--navy-400);">This welcome summary appears once each day, then stays out of the way.</p>
+          </div>
+          <button onclick="closeBriefingModal(true)" style="background:none;border:none;font-size:28px;line-height:1;color:var(--navy-400);cursor:pointer;">&times;</button>
+        </div>
+        <iframe id="briefing-modal-frame" src="about:blank" style="border:0;width:100%;flex:1;background:#fff;"></iframe>
+        <div style="display:flex;justify-content:flex-end;gap:12px;padding:14px 20px;border-top:1px solid var(--border);background:#fff;">
+          <button onclick="closeBriefingModal(true)" class="btn btn-primary">Close</button>
+        </div>
+      </div>
+    </div>
     <script>
     (function() {
-      // Don't redirect if already on briefing page
       if (window.location.pathname.indexOf('/ai/briefing') !== -1) return;
 
       var key = '_briefing_dismissed_' + '{{ current_user }}';
       var today = new Date().toISOString().slice(0, 10);
       if (localStorage.getItem(key) === today) return;
 
+      var overlay = document.getElementById('briefing-modal-overlay');
+      var frame = document.getElementById('briefing-modal-frame');
+
+      window.closeBriefingModal = function(markDismissed) {
+        overlay.style.display = 'none';
+        frame.src = 'about:blank';
+        if (markDismissed) {
+          localStorage.setItem(key, today);
+          fetch('/ai/briefing/dismiss', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+          }).catch(function() {});
+        }
+      };
+
+      overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+          closeBriefingModal(true);
+        }
+      });
+
       fetch('/ai/briefing/check')
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
           if (data && data.show) {
-            // Show a non-intrusive banner instead of auto-redirect
-            var banner = document.createElement('div');
-            banner.id = 'briefing-banner';
-            banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:300;background:linear-gradient(135deg,var(--terra-600),var(--terra-500));color:white;padding:10px 20px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:14px;font-weight:500;animation:rise 0.4s ease both;';
-            banner.innerHTML = '<span>Your morning briefing is ready</span>'
-              + '<a href="/ai/briefing" style="background:white;color:var(--terra-600);padding:4px 14px;border-radius:999px;font-size:12px;font-weight:700;text-decoration:none;">View Briefing</a>'
-              + '<button onclick="dismissBriefingBanner()" style="background:none;border:none;color:white;cursor:pointer;font-size:18px;margin-left:8px;">&times;</button>';
-            document.body.prepend(banner);
+            frame.src = '/ai/briefing';
+            overlay.style.display = 'flex';
           }
         }).catch(function() {});
-
-      window.dismissBriefingBanner = function() {
-        var el = document.getElementById('briefing-banner');
-        if (el) el.remove();
-        localStorage.setItem(key, today);
-        fetch('/ai/briefing/dismiss', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
-        }).catch(function() {});
-      };
     })();
     </script>
     {% endif %}
+
 </body>
 
 </html>
