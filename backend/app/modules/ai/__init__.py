@@ -79,6 +79,70 @@ def _get_ocr_quota_status(client_reference=None):
     }
 
 
+def _resolve_briefing_scope(user):
+    current_section = session.get('section') or user.role
+    if current_section not in {'manager', 'boutique', 'hardware', 'finance'}:
+        current_section = user.role
+    scope = 'manager' if user.role == 'manager' else current_section
+    branch = user.boutique_branch if scope == 'boutique' else None
+    return scope, branch
+
+
+def _build_briefing_preview(scope, metrics, ai_narrative):
+    if ai_narrative:
+        preview = ' '.join(str(ai_narrative).split())
+        return {
+            'title': 'Denove Assistant',
+            'message': preview[:220] + ('...' if len(preview) > 220 else ''),
+        }
+
+    if scope == 'manager':
+        boutique = float(metrics.get('boutique_yesterday_revenue') or 0)
+        hardware = float(metrics.get('hardware_yesterday_revenue') or 0)
+        repayments = float(metrics.get('finance_yesterday_repayments') or 0)
+        attention = len(metrics.get('attention_flags') or [])
+        return {
+            'title': 'Denove Assistant',
+            'message': (
+                f"Yesterday closed with boutique at UGX {boutique:,.0f}, hardware at UGX {hardware:,.0f}, "
+                f"and finance collections at UGX {repayments:,.0f}. "
+                f"{attention} item{'s' if attention != 1 else ''} need your attention today."
+            ),
+        }
+
+    if scope == 'boutique':
+        revenue = float(metrics.get('yesterday_revenue') or 0)
+        stock_count = int(metrics.get('low_stock_count') or 0)
+        return {
+            'title': 'Denove Assistant',
+            'message': (
+                f"Your boutique briefing is ready: yesterday brought in UGX {revenue:,.0f}, "
+                f"and {stock_count} stock item{'s' if stock_count != 1 else ''} need a check."
+            ),
+        }
+
+    if scope == 'hardware':
+        revenue = float(metrics.get('yesterday_revenue') or 0)
+        stock_count = int(metrics.get('low_stock_count') or 0)
+        return {
+            'title': 'Denove Assistant',
+            'message': (
+                f"Your hardware briefing is ready: yesterday brought in UGX {revenue:,.0f}, "
+                f"and {stock_count} stock item{'s' if stock_count != 1 else ''} need a check."
+            ),
+        }
+
+    repayments = float(metrics.get('yesterday_repayments') or 0)
+    overdue = int(metrics.get('overdue_count') or 0)
+    return {
+        'title': 'Denove Assistant',
+        'message': (
+            f"Finance update ready: yesterday's repayments were UGX {repayments:,.0f}, "
+            f"with {overdue} overdue loan{'s' if overdue != 1 else ''} still open."
+        ),
+    }
+
+
 # ============================================================================
 # Morning Briefing
 # ============================================================================
@@ -91,11 +155,7 @@ def briefing():
         return redirect(url_for('auth.login'))
 
     today = get_local_today()
-    current_section = session.get('section') or user.role
-    if current_section not in {'manager', 'boutique', 'hardware', 'finance'}:
-        current_section = user.role
-    scope = 'manager' if user.role == 'manager' else current_section
-    branch = user.boutique_branch if scope == 'boutique' else None
+    scope, branch = _resolve_briefing_scope(user)
 
     # Auto-dismiss only when the page is loaded directly (not inside the modal
     # iframe). The modal's close button calls /briefing/dismiss explicitly.
@@ -169,7 +229,21 @@ def check_briefing():
         dismissed = BriefingDismissal.query.filter_by(
             user_id=user.id, briefing_date=today
         ).first()
-        return jsonify({'show': not bool(dismissed), 'date': today.isoformat()})
+        show = not bool(dismissed)
+        payload = {'show': show, 'date': today.isoformat()}
+        if show:
+            try:
+                from app.utils.briefing_engine import get_or_create_briefing
+                scope, branch = _resolve_briefing_scope(user)
+                metrics, ai_narrative = get_or_create_briefing(scope, branch, today)
+                payload.update(_build_briefing_preview(scope, metrics, ai_narrative))
+            except Exception as exc:
+                logger.warning('Briefing preview unavailable: %s', exc.__class__.__name__)
+                payload.update({
+                    'title': 'Denove Assistant',
+                    'message': 'Your morning briefing is ready with today’s priorities and yesterday’s business summary.',
+                })
+        return jsonify(payload)
     except Exception as exc:
         logger.warning('Briefing check unavailable: %s', exc.__class__.__name__)
         return jsonify({'show': False, 'date': today.isoformat()})

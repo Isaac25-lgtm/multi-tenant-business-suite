@@ -55,7 +55,7 @@ def _float(val):
 
 _INTENT_PATTERNS = [
     ('overdue_loans', re.compile(r'overdue|past\s*due|late\s*(loan|payment)', re.I)),
-    ('low_stock', re.compile(r'low.stock|out.of.stock|restock|replenish|stock.*(low|need|run)', re.I)),
+    ('low_stock', re.compile(r'low.stock|out.of.stock|restock|replenish|stock.*(low|need|run|level)|inventory.*(level|status|check)', re.I)),
     ('yesterday_summary', re.compile(r'yesterday|summary|performance|recap', re.I)),
     ('branch_comparison', re.compile(r'branch|compar|kapchorwa|mbale', re.I)),
     ('user_activity', re.compile(r'(who|user|staff).*(log|activ|did)|log.*in.*yesterday', re.I)),

@@ -68,11 +68,13 @@ def create_app(config_class=Config):
     def inject_utilities():
         from flask import session
         from app.utils.branding import get_company_display_name, get_site_settings
+        from app.utils.ai_client import is_chat_enabled
         from app.utils.timezone import convert_to_dual_timezone
         site_settings = get_site_settings()
         return {
             'current_user': session.get('username'),
             'current_section': session.get('section'),
+            'ai_chat_enabled': is_chat_enabled(),
             'convert_to_dual_timezone': convert_to_dual_timezone,
             'site_settings': site_settings,
             'brand_display_name': get_company_display_name(site_settings),
