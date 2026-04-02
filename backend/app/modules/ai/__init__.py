@@ -102,9 +102,9 @@ def _build_briefing_preview(scope, metrics, ai_narrative):
         repayments = float(metrics.get('finance_yesterday_repayments') or 0)
         attention = len(metrics.get('attention_flags') or [])
         return {
-            'title': 'Denove Assistant',
+            'title': 'Morning check-in',
             'message': (
-                f"Yesterday closed with boutique at UGX {boutique:,.0f}, hardware at UGX {hardware:,.0f}, "
+                f"I reviewed yesterday for you: boutique closed at UGX {boutique:,.0f}, hardware at UGX {hardware:,.0f}, "
                 f"and finance collections at UGX {repayments:,.0f}. "
                 f"{attention} item{'s' if attention != 1 else ''} need your attention today."
             ),
@@ -114,10 +114,10 @@ def _build_briefing_preview(scope, metrics, ai_narrative):
         revenue = float(metrics.get('yesterday_revenue') or 0)
         stock_count = int(metrics.get('low_stock_count') or 0)
         return {
-            'title': 'Denove Assistant',
+            'title': 'Morning check-in',
             'message': (
-                f"Your boutique briefing is ready: yesterday brought in UGX {revenue:,.0f}, "
-                f"and {stock_count} stock item{'s' if stock_count != 1 else ''} need a check."
+                f"Boutique check-in ready: yesterday brought in UGX {revenue:,.0f}, "
+                f"and {stock_count} stock item{'s' if stock_count != 1 else ''} need a closer look."
             ),
         }
 
@@ -125,19 +125,19 @@ def _build_briefing_preview(scope, metrics, ai_narrative):
         revenue = float(metrics.get('yesterday_revenue') or 0)
         stock_count = int(metrics.get('low_stock_count') or 0)
         return {
-            'title': 'Denove Assistant',
+            'title': 'Morning check-in',
             'message': (
-                f"Your hardware briefing is ready: yesterday brought in UGX {revenue:,.0f}, "
-                f"and {stock_count} stock item{'s' if stock_count != 1 else ''} need a check."
+                f"Hardware check-in ready: yesterday brought in UGX {revenue:,.0f}, "
+                f"and {stock_count} stock item{'s' if stock_count != 1 else ''} need a closer look."
             ),
         }
 
     repayments = float(metrics.get('yesterday_repayments') or 0)
     overdue = int(metrics.get('overdue_count') or 0)
     return {
-        'title': 'Denove Assistant',
+        'title': 'Morning check-in',
         'message': (
-            f"Finance update ready: yesterday's repayments were UGX {repayments:,.0f}, "
+            f"Finance check-in ready: yesterday's repayments were UGX {repayments:,.0f}, "
             f"with {overdue} overdue loan{'s' if overdue != 1 else ''} still open."
         ),
     }
@@ -256,15 +256,8 @@ def check_briefing():
 @ai_bp.route('/chat')
 @manager_required
 def chat_page():
-    """Render the AI chatbot interface (manager only)."""
-    from app.utils.ai_client import is_chat_enabled
-    from app.utils.chat_engine import SUGGESTED_PROMPTS
-
-    return render_template(
-        'ai/chat.html',
-        chat_enabled=is_chat_enabled(),
-        suggested_prompts=SUGGESTED_PROMPTS,
-    )
+    """Open the floating assistant from the dashboard instead of a full page."""
+    return redirect(url_for('dashboard.index', open_assistant='1'))
 
 
 @ai_bp.route('/chat/send', methods=['POST'])

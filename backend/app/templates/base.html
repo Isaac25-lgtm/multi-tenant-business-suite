@@ -500,19 +500,19 @@
       <div style="padding:14px 16px;background:linear-gradient(135deg,var(--navy-900),var(--navy-700));color:#fff;display:flex;align-items:center;gap:12px;">
         <div style="width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--terra-500),var(--terra-600));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;box-shadow:0 6px 18px rgba(194,75,40,.32);">D</div>
         <div style="flex:1;min-width:0;">
-          <div id="briefing-toast-title" style="font-weight:700;font-size:14px;line-height:1.2;">Denove Assistant</div>
-          <div style="margin-top:2px;font-size:11px;color:rgba(255,255,255,.72);">Morning signal</div>
+          <div id="briefing-toast-title" style="font-weight:700;font-size:14px;line-height:1.2;">Morning check-in</div>
+          <div style="margin-top:2px;font-size:11px;color:rgba(255,255,255,.72);">Assistant message</div>
         </div>
         <button onclick="dismissBriefing()" style="background:none;border:none;color:rgba(255,255,255,.7);font-size:20px;cursor:pointer;line-height:1;">&times;</button>
       </div>
       <div style="padding:16px 16px 14px;background:linear-gradient(180deg,#fff,var(--sand-100));">
         <div style="display:flex;gap:10px;align-items:flex-start;">
           <div style="width:10px;height:10px;border-radius:50%;background:#22c55e;flex:0 0 auto;margin-top:6px;box-shadow:0 0 0 4px rgba(34,197,94,.12);"></div>
-          <p id="briefing-toast-text" style="font-size:13px;color:var(--navy-700);line-height:1.58;margin:0;">Your morning briefing is ready with today’s priorities.</p>
+          <p id="briefing-toast-text" style="font-size:13px;color:var(--navy-700);line-height:1.58;margin:0;">I checked yesterday's business for you and pulled out what needs attention today.</p>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:14px;">
           <a href="/ai/briefing" style="display:inline-flex;align-items:center;gap:6px;padding:9px 15px;background:var(--terra-600);color:#fff;border-radius:12px;font-size:13px;font-weight:600;text-decoration:none;transition:background .2s;" onmouseover="this.style.background='var(--terra-500)'" onmouseout="this.style.background='var(--terra-600)'">
-            Open briefing
+            See full check-in
             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
           </a>
           <button onclick="dismissBriefing()" style="padding:9px 13px;background:#fff;color:var(--navy-700);border:1px solid var(--border);border-radius:12px;font-size:12px;font-weight:600;cursor:pointer;">Close</button>
@@ -605,26 +605,27 @@
           <p>Business data &middot; Read-only</p>
           <div class="cw-status">
             <span class="cw-status-dot"></span>
-            <span>{% if ai_chat_enabled %}AI + structured replies{% else %}Structured query mode{% endif %}</span>
+            <span>{% if ai_chat_enabled %}AI + live business data{% else %}Live structured business data{% endif %}</span>
           </div>
         </div>
         <button class="cw-close" onclick="toggleChat()">&times;</button>
       </div>
       <div class="cw-messages" id="cwMessages">
         <div class="cw-msg bot">
-          <p>Good to see you. I can compare branches, flag overdue loans, surface low stock, and explain yesterday’s business activity.</p>
-          <p>{% if ai_chat_enabled %}Ask naturally and I’ll answer with real numbers from the system.{% else %}AI narration is off right now, but I can still answer with structured business data.{% endif %}</p>
+          <p>Good to see you. I can check stock on hand, compare branches, flag overdue loans, and explain what changed yesterday.</p>
+          <p>{% if ai_chat_enabled %}Ask naturally and I'll answer with real numbers pulled from the system.{% else %}I'll still answer from live system data, even without AI narration enabled.{% endif %}</p>
         </div>
       </div>
       <div class="cw-suggestions" id="cwSuggestions">
+        <button class="cw-sug" onclick="cwSendText(this.textContent)">How much stock do I have right now?</button>
         <button class="cw-sug" onclick="cwSendText(this.textContent)">Summarise yesterday's performance by section</button>
-        <button class="cw-sug" onclick="cwSendText(this.textContent)">Show all overdue loans</button>
         <button class="cw-sug" onclick="cwSendText(this.textContent)">Which stock items need restocking?</button>
+        <button class="cw-sug" onclick="cwSendText(this.textContent)">Show all overdue loans</button>
         <button class="cw-sug" onclick="cwSendText(this.textContent)">Compare boutique branches this week</button>
-        <button class="cw-sug" onclick="cwSendText(this.textContent)">Who logged in yesterday and what did they do?</button>
+        <button class="cw-sug" onclick="cwSendText(this.textContent)">Explain projections</button>
       </div>
       <div class="cw-input-area">
-        <input class="cw-input" id="cwInput" placeholder="Ask a question..." maxlength="1000" onkeydown="if(event.key==='Enter')cwSend()">
+        <input class="cw-input" id="cwInput" placeholder="Ask about stock, loans, branches, or yesterday..." maxlength="1000" onkeydown="if(event.key==='Enter')cwSend()">
         <button class="cw-send" id="cwSendBtn" onclick="cwSend()">
           <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M12 5l7 7-7 7"/></svg>
         </button>
@@ -646,6 +647,17 @@
         if(widget.classList.contains('open')){fab.style.display='none';input.focus();}
         else{fab.style.display='flex';}
       };
+
+      function launchAssistantFromUrl(){
+        try{
+          var url=new URL(window.location.href);
+          if(url.searchParams.get('open_assistant')==='1'&&!widget.classList.contains('open')){
+            window.toggleChat();
+            url.searchParams.delete('open_assistant');
+            window.history.replaceState({},'',url.pathname + (url.search ? url.search : '') + url.hash);
+          }
+        }catch(e){}
+      }
 
       function addMsg(role,html){
         var d=document.createElement('div');
@@ -739,6 +751,8 @@
         sendBtn.disabled=false;
         input.focus();
       };
+
+      launchAssistantFromUrl();
     })();
     </script>
     {% endif %}
