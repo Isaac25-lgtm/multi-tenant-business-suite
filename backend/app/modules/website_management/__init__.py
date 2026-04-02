@@ -14,6 +14,7 @@ from functools import wraps
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, current_app
 from werkzeug.utils import secure_filename
+from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db
 from app.models.user import User
 from app.models.website import (
@@ -794,7 +795,15 @@ def check_new_orders():
             query = query.filter(WebsiteOrderRequest.submitted_at > since_dt)
         except (ValueError, TypeError):
             pass
-    all_orders = query.order_by(WebsiteOrderRequest.submitted_at.desc()).all()
+    try:
+        all_orders = query.order_by(WebsiteOrderRequest.submitted_at.desc()).all()
+    except SQLAlchemyError:
+        current_app.logger.error(
+            'Order notification polling unavailable on %s due to database schema/config drift.',
+            request.path,
+        )
+        return jsonify({'orders': [], 'count': 0, 'degraded': True}), 200
+
     orders = filter_orders_by_section(all_orders)
     return jsonify({
         'orders': [{
@@ -829,7 +838,15 @@ def check_new_inquiries():
             query = query.filter(WebsiteLoanInquiry.submitted_at > since_dt)
         except (ValueError, TypeError):
             pass
-    inquiries = query.order_by(WebsiteLoanInquiry.submitted_at.desc()).all()
+    try:
+        inquiries = query.order_by(WebsiteLoanInquiry.submitted_at.desc()).all()
+    except SQLAlchemyError:
+        current_app.logger.error(
+            'Loan inquiry polling unavailable on %s due to database schema/config drift.',
+            request.path,
+        )
+        return jsonify({'inquiries': [], 'count': 0, 'degraded': True}), 200
+
     return jsonify({
         'inquiries': [i.to_dict() for i in inquiries],
         'count': len(inquiries)

@@ -3,6 +3,7 @@ from flask_wtf.csrf import CSRFError
 from app.extensions import db, migrate, csrf
 from app.config import Config
 from werkzeug.middleware.proxy_fix import ProxyFix
+from sqlalchemy.exc import SQLAlchemyError, OperationalError, ProgrammingError
 import os
 import json
 import click
@@ -93,6 +94,40 @@ def create_app(config_class=Config):
     def handle_csrf_error(e):
         flash('Your session expired or the form is invalid. Please try again.', 'error')
         return redirect(request.referrer or url_for('auth.login'))
+
+    def _is_api_request():
+        path = (request.path or '').lower()
+        accept = request.accept_mimetypes
+        return (
+            request.is_json
+            or path.startswith('/api/')
+            or '/api/' in path
+            or accept.accept_json and not accept.accept_html
+        )
+
+    @app.errorhandler(OperationalError)
+    @app.errorhandler(ProgrammingError)
+    @app.errorhandler(SQLAlchemyError)
+    def handle_database_error(exc):
+        # Keep production logs concise so Render doesn't get flooded with SQL traces
+        # for known schema/config issues. We still surface enough context to debug.
+        if app.debug:
+            app.logger.exception('Database request failed on %s %s', request.method, request.path)
+        else:
+            app.logger.error(
+                'Database request failed on %s %s (%s)',
+                request.method,
+                request.path,
+                exc.__class__.__name__,
+            )
+
+        if _is_api_request():
+            return jsonify({
+                'error': 'service_unavailable',
+                'message': 'A database problem prevented this request from completing.',
+            }), 503
+
+        return render_template('errors/500.html'), 500
 
     # CLI commands
     @app.cli.command('db-ensure')
