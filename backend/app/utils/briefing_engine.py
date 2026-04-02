@@ -36,6 +36,84 @@ def _local_day_window(day):
     return start, end
 
 
+def _coerce_number(value, *, integer=False):
+    try:
+        number = float(value or 0)
+    except (TypeError, ValueError):
+        number = 0.0
+    return int(number) if integer else number
+
+
+def _coerce_list(value):
+    return value if isinstance(value, list) else []
+
+
+def sanitize_briefing_metrics(scope, metrics, branch=None, target_date=None):
+    """Normalize cached or computed briefing metrics into a template-safe shape."""
+    today = target_date or get_local_today()
+    yesterday = today - timedelta(days=1)
+    incoming = metrics if isinstance(metrics, dict) else {}
+
+    if scope == 'manager':
+        return {
+            'date': str(incoming.get('date') or today.isoformat()),
+            'yesterday': str(incoming.get('yesterday') or yesterday.isoformat()),
+            'boutique_yesterday_revenue': _coerce_number(incoming.get('boutique_yesterday_revenue')),
+            'boutique_yesterday_count': _coerce_number(incoming.get('boutique_yesterday_count'), integer=True),
+            'hardware_yesterday_revenue': _coerce_number(incoming.get('hardware_yesterday_revenue')),
+            'hardware_yesterday_count': _coerce_number(incoming.get('hardware_yesterday_count'), integer=True),
+            'finance_yesterday_repayments': _coerce_number(incoming.get('finance_yesterday_repayments')),
+            'finance_loans_issued_yesterday': _coerce_number(incoming.get('finance_loans_issued_yesterday'), integer=True),
+            'overdue_loans': _coerce_number(incoming.get('overdue_loans'), integer=True),
+            'overdue_balance': _coerce_number(incoming.get('overdue_balance')),
+            'low_stock_count': _coerce_number(incoming.get('low_stock_count'), integer=True),
+            'new_loan_inquiries': _coerce_number(incoming.get('new_loan_inquiries'), integer=True),
+            'new_order_requests': _coerce_number(incoming.get('new_order_requests'), integer=True),
+            'login_count_yesterday': _coerce_number(incoming.get('login_count_yesterday'), integer=True),
+            'users_logged_in_yesterday': _coerce_list(incoming.get('users_logged_in_yesterday')),
+            'boutique_branches': _coerce_list(incoming.get('boutique_branches')),
+            'low_stock_items': _coerce_list(incoming.get('low_stock_items')),
+            'major_transactions': _coerce_list(incoming.get('major_transactions')),
+            'attention_flags': _coerce_list(incoming.get('attention_flags')),
+            'activity_summary': incoming.get('activity_summary') if isinstance(incoming.get('activity_summary'), dict) else {},
+        }
+
+    if scope == 'boutique':
+        return {
+            'date': str(incoming.get('date') or today.isoformat()),
+            'yesterday': str(incoming.get('yesterday') or yesterday.isoformat()),
+            'branch': incoming.get('branch') or branch,
+            'yesterday_revenue': _coerce_number(incoming.get('yesterday_revenue')),
+            'yesterday_count': _coerce_number(incoming.get('yesterday_count'), integer=True),
+            'outstanding_credits': _coerce_number(incoming.get('outstanding_credits')),
+            'low_stock_count': _coerce_number(incoming.get('low_stock_count'), integer=True),
+            'low_stock_items': _coerce_list(incoming.get('low_stock_items')),
+        }
+
+    if scope == 'hardware':
+        return {
+            'date': str(incoming.get('date') or today.isoformat()),
+            'yesterday': str(incoming.get('yesterday') or yesterday.isoformat()),
+            'yesterday_revenue': _coerce_number(incoming.get('yesterday_revenue')),
+            'yesterday_count': _coerce_number(incoming.get('yesterday_count'), integer=True),
+            'outstanding_credits': _coerce_number(incoming.get('outstanding_credits')),
+            'low_stock_count': _coerce_number(incoming.get('low_stock_count'), integer=True),
+            'low_stock_items': _coerce_list(incoming.get('low_stock_items')),
+        }
+
+    if scope == 'finance':
+        return {
+            'date': str(incoming.get('date') or today.isoformat()),
+            'yesterday': str(incoming.get('yesterday') or yesterday.isoformat()),
+            'yesterday_repayments': _coerce_number(incoming.get('yesterday_repayments')),
+            'loans_issued_yesterday': _coerce_number(incoming.get('loans_issued_yesterday'), integer=True),
+            'overdue_count': _coerce_number(incoming.get('overdue_count'), integer=True),
+            'pending_inquiries': _coerce_number(incoming.get('pending_inquiries'), integer=True),
+        }
+
+    return {}
+
+
 # ---------------------------------------------------------------------------
 # Manager briefing — full business overview
 # ---------------------------------------------------------------------------
@@ -316,7 +394,13 @@ def get_or_create_briefing(scope, branch=None, target_date=None):
         or_(DailyBriefing.branch == cache_branch, DailyBriefing.branch.is_(None))
     ).first()
     if existing:
-        return json.loads(existing.metrics_json), existing.ai_narrative
+        try:
+            cached_metrics = json.loads(existing.metrics_json)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            logger.warning('Invalid cached briefing JSON for %s/%s; recomputing', scope, cache_branch)
+            cached_metrics = None
+        if cached_metrics is not None:
+            return sanitize_briefing_metrics(scope, cached_metrics, branch, today), existing.ai_narrative
 
     # Compute metrics
     if scope == 'manager':
@@ -355,7 +439,7 @@ def get_or_create_briefing(scope, branch=None, target_date=None):
         db.session.rollback()
         logger.warning('Failed to cache briefing for %s/%s', scope, branch)
 
-    return metrics, ai_narrative
+    return sanitize_briefing_metrics(scope, metrics, branch, today), ai_narrative
 
 
 def _build_narration_prompt(scope, metrics):

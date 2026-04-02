@@ -158,10 +158,14 @@ def check_briefing():
         return jsonify({'show': False})
 
     today = get_local_today()
-    dismissed = BriefingDismissal.query.filter_by(
-        user_id=user.id, briefing_date=today
-    ).first()
-    return jsonify({'show': not bool(dismissed), 'date': today.isoformat()})
+    try:
+        dismissed = BriefingDismissal.query.filter_by(
+            user_id=user.id, briefing_date=today
+        ).first()
+        return jsonify({'show': not bool(dismissed), 'date': today.isoformat()})
+    except Exception as exc:
+        logger.warning('Briefing check unavailable: %s', exc.__class__.__name__)
+        return jsonify({'show': False, 'date': today.isoformat()})
 
 
 # ============================================================================
