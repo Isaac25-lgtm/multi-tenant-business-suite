@@ -62,7 +62,7 @@
         </a>
         <a href="{{ url_for('finance.payments') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
             <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(total_outstanding) }}</div>
-            <div class="stat-card-label">Outstanding</div>
+            <div class="stat-card-label">Principal Outstanding</div>
             <div class="text-xs text-indigo-600 mt-1">View payments &rarr;</div>
         </a>
         <a href="{{ url_for('finance.loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">

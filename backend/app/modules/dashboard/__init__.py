@@ -21,7 +21,7 @@ from app.utils.uploads import allowed_image, validate_and_save_image
 def index():
     """Unified dashboard view"""
     try:
-        from app.modules.finance import refresh_active_loans
+        from app.modules.finance import refresh_active_loans, summarize_outstanding_portfolio
 
         refresh_active_loans()
         today = get_local_today()
@@ -100,15 +100,7 @@ def index():
             GroupLoanPayment.is_deleted == False
         ).scalar() or 0)
 
-        active_loans_balance = float(db.session.query(func.sum(Loan.balance)).filter(
-            Loan.is_deleted == False,
-            Loan.balance > 0
-        ).scalar() or 0)
-
-        active_group_balance = float(db.session.query(func.sum(GroupLoan.balance)).filter(
-            GroupLoan.is_deleted == False,
-            GroupLoan.balance > 0
-        ).scalar() or 0)
+        total_outstanding_loans, total_interest_expected = summarize_outstanding_portfolio()
 
         overdue_loans_count = Loan.query.filter(
             Loan.is_deleted == False,
@@ -170,7 +162,6 @@ def index():
         total_today = boutique_today + hardware_today + today_repayments + today_group_repayments
         total_yesterday = boutique_yesterday + hardware_yesterday
         total_credits = boutique_credits + hardware_credits
-        total_outstanding_loans = active_loans_balance + active_group_balance
         total_low_stock = boutique_low_stock + hardware_low_stock
         total_transactions = boutique_today_count + hardware_today_count
 
@@ -249,6 +240,7 @@ def index():
                 'yesterday_revenue': total_yesterday,
                 'credits_outstanding': total_credits,
                 'loans_outstanding': total_outstanding_loans,
+                'loan_interest_expected': total_interest_expected,
                 'low_stock_alerts': total_low_stock,
                 'transactions_today': total_transactions,
                 'overdue_loans': overdue_loans_count + overdue_groups_count,
@@ -276,6 +268,7 @@ def index():
                 },
                 'finance': {
                     'outstanding': total_outstanding_loans,
+                    'interest_expected': total_interest_expected,
                     'repayments_today': today_repayments + today_group_repayments,
                     'overdue_count': overdue_loans_count + overdue_groups_count
                 }
@@ -289,13 +282,13 @@ def index():
         today = get_local_today()
         empty_stats = {
             'today_revenue': 0, 'yesterday_revenue': 0, 'credits_outstanding': 0,
-            'loans_outstanding': 0, 'low_stock_alerts': 0, 'transactions_today': 0,
+            'loans_outstanding': 0, 'loan_interest_expected': 0, 'low_stock_alerts': 0, 'transactions_today': 0,
             'overdue_loans': 0, 'inventory_value': 0, 'profit_today': 0
         }
         empty_business = {
             'boutique': {'today': 0, 'yesterday': 0, 'credits': 0, 'transactions': 0, 'low_stock': 0, 'inventory_value': 0, 'profit_today': 0},
             'hardware': {'today': 0, 'yesterday': 0, 'credits': 0, 'transactions': 0, 'low_stock': 0, 'inventory_value': 0, 'profit_today': 0},
-            'finance': {'outstanding': 0, 'repayments_today': 0, 'overdue_count': 0}
+            'finance': {'outstanding': 0, 'interest_expected': 0, 'repayments_today': 0, 'overdue_count': 0}
         }
         return render_template('dashboard.html',
             today=today, stats=empty_stats, by_business=empty_business,

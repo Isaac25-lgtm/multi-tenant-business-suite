@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 
 from app.extensions import db
 from app.utils.pii import decrypt_value, encrypt_value
@@ -90,6 +91,26 @@ class Loan(db.Model):
     documents = db.relationship('LoanDocument', backref='loan', lazy='dynamic',
                                primaryjoin='Loan.id==LoanDocument.loan_id')
 
+    @property
+    def outstanding_principal(self):
+        principal = Decimal(str(self.principal or 0))
+        amount_paid = Decimal(str(self.amount_paid or 0))
+        balance = Decimal(str(self.balance or 0))
+        remaining_principal = principal - amount_paid
+        if remaining_principal < 0:
+            remaining_principal = Decimal('0')
+        if remaining_principal > balance:
+            remaining_principal = balance
+        return remaining_principal
+
+    @property
+    def outstanding_interest(self):
+        balance = Decimal(str(self.balance or 0))
+        remaining_interest = balance - self.outstanding_principal
+        if remaining_interest < 0:
+            return Decimal('0')
+        return remaining_interest
+
     def to_dict(self, include_payments=False):
         data = {
             'id': self.id,
@@ -103,6 +124,8 @@ class Loan(db.Model):
             'total_amount': float(self.total_amount),
             'amount_paid': float(self.amount_paid),
             'balance': float(self.balance),
+            'outstanding_principal': float(self.outstanding_principal),
+            'outstanding_interest': float(self.outstanding_interest),
             'duration_weeks': self.duration_weeks,
             'duration_type': self.duration_type or 'weeks',
             'issue_date': self.issue_date.isoformat() if self.issue_date else None,
@@ -171,6 +194,26 @@ class GroupLoan(db.Model):
                                primaryjoin='GroupLoan.id==LoanDocument.group_loan_id')
 
     @property
+    def outstanding_principal(self):
+        principal = Decimal(str(self.principal or 0))
+        amount_paid = Decimal(str(self.amount_paid or 0))
+        balance = Decimal(str(self.balance or 0))
+        remaining_principal = principal - amount_paid
+        if remaining_principal < 0:
+            remaining_principal = Decimal('0')
+        if remaining_principal > balance:
+            remaining_principal = balance
+        return remaining_principal
+
+    @property
+    def outstanding_interest(self):
+        balance = Decimal(str(self.balance or 0))
+        remaining_interest = balance - self.outstanding_principal
+        if remaining_interest < 0:
+            return Decimal('0')
+        return remaining_interest
+
+    @property
     def members(self):
         """Return parsed members data"""
         if self.members_json:
@@ -215,6 +258,8 @@ class GroupLoan(db.Model):
             'periods_left': self.total_periods - self.periods_paid,
             'amount_paid': float(self.amount_paid),
             'balance': float(self.balance),
+            'outstanding_principal': float(self.outstanding_principal),
+            'outstanding_interest': float(self.outstanding_interest),
             'issue_date': self.issue_date.isoformat() if self.issue_date else None,
             'due_date': self.due_date.isoformat() if self.due_date else None,
             'status': self.status,

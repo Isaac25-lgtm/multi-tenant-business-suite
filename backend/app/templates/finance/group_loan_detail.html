@@ -192,6 +192,14 @@
                     <span class="text-gray-500">Amount Paid:</span>
                     <span class="font-medium text-green-600">UGX {{ "{:,.0f}".format(group.amount_paid) }}</span>
                 </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Principal Remaining:</span>
+                    <span class="font-medium">UGX {{ "{:,.0f}".format(group.outstanding_principal) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-500">Interest Remaining:</span>
+                    <span class="font-medium text-amber-600">UGX {{ "{:,.0f}".format(group.outstanding_interest) }}</span>
+                </div>
                 <div class="flex justify-between pt-3" style="border-top:1px solid var(--border)">
                     <span class="text-gray-500">Balance:</span>
                     <span class="font-bold text-xl {% if group.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">

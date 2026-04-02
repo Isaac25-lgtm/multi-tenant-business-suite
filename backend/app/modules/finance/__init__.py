@@ -136,6 +136,20 @@ def refresh_active_loans():
     return changed
 
 
+def summarize_outstanding_portfolio():
+    """Split the active portfolio into remaining principal and interest portions."""
+    loan_rows = Loan.query.filter(Loan.is_deleted == False, Loan.balance > 0).all()
+    group_rows = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.balance > 0).all()
+
+    principal_outstanding = sum((loan.outstanding_principal for loan in loan_rows), Decimal('0'))
+    principal_outstanding += sum((group.outstanding_principal for group in group_rows), Decimal('0'))
+
+    interest_outstanding = sum((loan.outstanding_interest for loan in loan_rows), Decimal('0'))
+    interest_outstanding += sum((group.outstanding_interest for group in group_rows), Decimal('0'))
+
+    return float(principal_outstanding), float(interest_outstanding)
+
+
 def parse_individual_loan_form(form):
     client_id = get_form_value(form, 'client_id', cast=int)
     principal = safe_decimal(get_form_value(form, 'principal', '0'))
@@ -256,15 +270,7 @@ def index():
         overdue_loans = Loan.query.filter(Loan.is_deleted == False, Loan.status == 'overdue').count()
         overdue_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.status == 'overdue').count()
 
-        total_outstanding = float(db.session.query(db.func.sum(Loan.balance)).filter(
-            Loan.is_deleted == False, Loan.balance > 0).scalar() or 0)
-        total_outstanding += float(db.session.query(db.func.sum(GroupLoan.balance)).filter(
-            GroupLoan.is_deleted == False, GroupLoan.balance > 0).scalar() or 0)
-
-        total_interest_expected = float(db.session.query(db.func.sum(Loan.interest_amount)).filter(
-            Loan.is_deleted == False, Loan.balance > 0).scalar() or 0)
-        total_interest_expected += float(db.session.query(db.func.sum(GroupLoan.interest_amount)).filter(
-            GroupLoan.is_deleted == False, GroupLoan.balance > 0).scalar() or 0)
+        total_outstanding, total_interest_expected = summarize_outstanding_portfolio()
     except Exception as exc:
         db.session.rollback()
         current_app.logger.exception('Finance dashboard calculation failed: %s', exc)

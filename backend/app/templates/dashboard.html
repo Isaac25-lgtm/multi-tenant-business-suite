@@ -23,8 +23,9 @@
     </div>
 
     <div class="stat-card anim-up d3">
-        <div class="stat-card-label">Loans Outstanding</div>
+        <div class="stat-card-label">Principal Outstanding</div>
         <div class="stat-card-value text-blue-600">UGX {{ "{:,.0f}".format(stats.loans_outstanding) }}</div>
+        <div class="text-xs text-gray-400 mt-1">Interest expected: UGX {{ "{:,.0f}".format(stats.loan_interest_expected) }}</div>
         {% if stats.overdue_loans > 0 %}
         <div class="text-xs text-red-500 mt-1">{{ stats.overdue_loans }} overdue - needs attention!</div>
         {% else %}
@@ -134,8 +135,12 @@
             <div class="action-card-title">Finance</div>
             <div class="space-y-2 text-sm">
                 <div class="flex justify-between">
-                    <span class="text-gray-600">Outstanding</span>
+                    <span class="text-gray-600">Principal Outstanding</span>
                     <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.finance.outstanding) }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-600">Interest Expected</span>
+                    <span class="font-medium text-amber-600">UGX {{ "{:,.0f}".format(by_business.finance.interest_expected) }}</span>
                 </div>
                 <div class="flex justify-between">
                     <span class="text-gray-600">Today's Repayments</span>
