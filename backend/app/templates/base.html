@@ -543,20 +543,24 @@
     </div>
     <script>
     (function() {
+      // Skip if already viewing the briefing page inside the iframe or directly
       if (window.location.pathname.indexOf('/ai/briefing') !== -1) return;
-
-      var key = '_briefing_dismissed_' + '{{ current_user }}';
-      var today = new Date().toISOString().slice(0, 10);
-      if (localStorage.getItem(key) === today) return;
+      if (window.self !== window.top) return;
 
       var overlay = document.getElementById('briefing-modal-overlay');
       var frame = document.getElementById('briefing-modal-frame');
+      if (!overlay || !frame) return;
+
+      // Use a localStorage key as a fast client-side cache to avoid flicker,
+      // but the server (/ai/briefing/check) is always the source of truth.
+      var key = '_briefing_seen_' + '{{ current_user }}';
 
       window.closeBriefingModal = function(markDismissed) {
         overlay.style.display = 'none';
         frame.src = 'about:blank';
         if (markDismissed) {
-          localStorage.setItem(key, today);
+          // Store the server-provided date so timezone matches EAT
+          localStorage.setItem(key, overlay.dataset.serverDate || '');
           fetch('/ai/briefing/dismiss', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
@@ -565,16 +569,19 @@
       };
 
       overlay.addEventListener('click', function(e) {
-        if (e.target === overlay) {
-          closeBriefingModal(true);
-        }
+        if (e.target === overlay) closeBriefingModal(true);
       });
 
+      // Always ask the server — it tracks dismissals in the DB using EAT dates
       fetch('/ai/briefing/check')
         .then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
-          if (data && data.show) {
-            frame.src = '/ai/briefing';
+          if (!data) return;
+          // Fast-path: if localStorage already has today's server date, skip
+          if (localStorage.getItem(key) === data.date) return;
+          if (data.show) {
+            overlay.dataset.serverDate = data.date;
+            frame.src = '/ai/briefing?embedded=1';
             overlay.style.display = 'flex';
           }
         }).catch(function() {});

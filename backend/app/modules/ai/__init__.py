@@ -97,17 +97,24 @@ def briefing():
     scope = 'manager' if user.role == 'manager' else current_section
     branch = user.boutique_branch if scope == 'boutique' else None
 
-    # Mark the briefing as seen when the user opens it so the prompt only appears
-    # once per day unless they explicitly reopen it from navigation.
-    try:
-        existing = BriefingDismissal.query.filter_by(
-            user_id=user.id, briefing_date=today
-        ).first()
-        if not existing:
-            db.session.add(BriefingDismissal(user_id=user.id, briefing_date=today))
-            db.session.commit()
-    except Exception:
-        db.session.rollback()
+    # Auto-dismiss only when the page is loaded directly (not inside the modal
+    # iframe). The modal's close button calls /briefing/dismiss explicitly.
+    # We rely on an explicit query flag first, and fall back to browser fetch
+    # metadata headers where available.
+    is_iframe = (
+        request.args.get('embedded') == '1'
+        or request.headers.get('Sec-Fetch-Dest') == 'iframe'
+    )
+    if not is_iframe:
+        try:
+            existing = BriefingDismissal.query.filter_by(
+                user_id=user.id, briefing_date=today
+            ).first()
+            if not existing:
+                db.session.add(BriefingDismissal(user_id=user.id, briefing_date=today))
+                db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     try:
         from app.utils.briefing_engine import get_or_create_briefing
