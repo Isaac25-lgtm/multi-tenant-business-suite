@@ -13,7 +13,7 @@ class DailyBriefing(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     briefing_date = db.Column(db.Date, nullable=False)
     scope = db.Column(db.String(30), nullable=False)  # 'manager', 'boutique', 'hardware', 'finance'
-    branch = db.Column(db.String(10))  # 'K', 'B', or None
+    branch = db.Column(db.String(10))  # 'K', 'M', or None
     metrics_json = db.Column(db.Text, nullable=False)  # deterministic metrics as JSON
     ai_narrative = db.Column(db.Text)  # optional AI-generated summary
     created_at = db.Column(db.DateTime, default=get_local_now)

@@ -105,7 +105,7 @@ class WebsiteOrderRequest(db.Model):
     
     # Order Details
     items = db.Column(db.JSON, nullable=False)  # List of {product_id, product_type, name, quantity, price}
-    preferred_branch = db.Column(db.String(50), nullable=True)  # 'kapchorwa', 'mbale', or null
+    preferred_branch = db.Column(db.String(50), nullable=True)  # 'kapchorwa', 'bukwo', or null
     source = db.Column(db.String(20), default='website')
     
     # Status Workflow

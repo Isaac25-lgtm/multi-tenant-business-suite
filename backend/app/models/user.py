@@ -28,7 +28,7 @@ class User(db.Model):
     can_access_customers = db.Column(db.Boolean, default=False)
 
     # Boutique branch assignment (for branch-specific employees)
-    boutique_branch = db.Column(db.String(10), nullable=True)  # 'K', 'B', or None for all
+    boutique_branch = db.Column(db.String(10), nullable=True)  # 'K', 'M', or None for all
 
     # Manager who created this account
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)

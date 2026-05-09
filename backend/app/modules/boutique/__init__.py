@@ -22,7 +22,7 @@ boutique_bp = Blueprint('boutique', __name__)
 # Branch names
 BRANCHES = {
     'K': 'Kapchorwa Branch',
-    'M': 'Mbale Branch'
+    'M': 'Bukwo Branch'
 }
 
 AUTO_IMAGE_FETCH_SESSION_KEY = 'boutique_auto_image_fetch_date'

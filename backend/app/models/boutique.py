@@ -22,7 +22,7 @@ class BoutiqueStock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     item_name = db.Column(db.String(100), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('boutique_categories.id'))
-    branch = db.Column(db.String(10), nullable=True)  # 'K', 'B', or None for shared
+    branch = db.Column(db.String(10), nullable=True)  # 'K', 'M', or None for shared
     quantity = db.Column(db.Integer, nullable=False)
     initial_quantity = db.Column(db.Integer, nullable=False)
     unit = db.Column(db.String(20), default='pieces')
@@ -63,7 +63,7 @@ class BoutiqueSale(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     reference_number = db.Column(db.String(20), unique=True)
-    branch = db.Column(db.String(10), nullable=True)  # 'K' or 'B'
+    branch = db.Column(db.String(10), nullable=True)  # 'K' or 'M'
     sale_date = db.Column(db.Date, nullable=False)
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'), nullable=True)
     payment_type = db.Column(db.String(10), nullable=False)

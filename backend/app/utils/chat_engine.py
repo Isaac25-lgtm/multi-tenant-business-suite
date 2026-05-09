@@ -49,8 +49,8 @@ def _branch_label(raw_value):
     value = (raw_value or "").strip().upper()
     if value == "K":
         return "Kapchorwa"
-    if value == "B":
-        return "Mbale"
+    if value == "M":
+        return "Bukwo"
     if value:
         return value
     return "Shared / Unassigned"
@@ -77,7 +77,7 @@ _INTENT_PATTERNS = [
         ),
     ),
     ("yesterday_summary", re.compile(r"yesterday|summary|performance|recap", re.I)),
-    ("branch_comparison", re.compile(r"branch|compar|kapchorwa|mbale", re.I)),
+    ("branch_comparison", re.compile(r"branch|compar|kapchorwa|bukwo", re.I)),
     ("user_activity", re.compile(r"(who|user|staff).*(log|activ|did)|log.*in.*yesterday", re.I)),
     ("loan_search", re.compile(r"loan.*(above|over|more\s*than|greater|>\s*\d)", re.I)),
     ("top_transactions", re.compile(r"(big|top|large|major)\s*(transact|sale)", re.I)),
