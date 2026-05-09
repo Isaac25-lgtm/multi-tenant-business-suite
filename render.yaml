@@ -9,7 +9,6 @@ services:
     rootDir: backend
     autoDeployTrigger: commit
     healthCheckPath: /healthz
-    maxShutdownDelaySeconds: 45
     buildFilter:
       paths:
         - backend/**
