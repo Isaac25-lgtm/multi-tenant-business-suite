@@ -89,7 +89,9 @@ def refresh_loan_state(loan, as_of_date=None):
     changed = False
 
     principal = Decimal(str(loan.principal or 0))
-    amount_paid = Decimal(str(loan.amount_paid or 0))
+    principal_paid = Decimal(str(loan.principal_paid or 0))
+    interest_paid = Decimal(str(loan.interest_paid or 0))
+    principal_rolled = Decimal(str(loan.principal_rolled or 0))
     interest_mode = loan.interest_mode or 'flat_rate'
 
     if interest_mode == 'monthly_accrual':
@@ -100,11 +102,19 @@ def refresh_loan_state(loan, as_of_date=None):
         interest_amount = Decimal(str(loan.interest_amount or 0))
 
     total_amount = principal + interest_amount
-    balance = total_amount - amount_paid
+    principal_due = principal - principal_paid - principal_rolled
+    if principal_due < 0:
+        principal_due = Decimal('0')
+    interest_due = interest_amount - interest_paid
+    if interest_due < 0:
+        interest_due = Decimal('0')
+    balance = principal_due + interest_due
     if balance < 0:
         balance = Decimal('0')
 
-    if balance <= 0:
+    if (loan.status or '').lower() == 'renewed' and balance <= 0:
+        status = 'renewed'
+    elif balance <= 0:
         status = 'paid'
     elif loan.due_date and loan.due_date < as_of_date:
         status = 'overdue'
@@ -117,6 +127,10 @@ def refresh_loan_state(loan, as_of_date=None):
     if Decimal(str(loan.total_amount or 0)) != total_amount:
         loan.total_amount = total_amount
         changed = True
+    amount_paid = principal_paid + interest_paid
+    if Decimal(str(loan.amount_paid or 0)) != amount_paid:
+        loan.amount_paid = amount_paid
+        changed = True
     if Decimal(str(loan.balance or 0)) != balance:
         loan.balance = balance
         changed = True
@@ -124,6 +138,24 @@ def refresh_loan_state(loan, as_of_date=None):
         loan.status = status
         changed = True
     return changed
+
+
+def allocate_loan_payment(loan, amount):
+    """Apply a payment interest-first, then principal, and return the allocation."""
+    amount = Decimal(str(amount or 0))
+    interest_due = Decimal(str(loan.outstanding_interest or 0))
+    principal_due = Decimal(str(loan.outstanding_principal or 0))
+
+    interest_amount = min(amount, interest_due)
+    principal_amount = amount - interest_amount
+    if principal_amount > principal_due:
+        principal_amount = principal_due
+
+    loan.interest_paid = Decimal(str(loan.interest_paid or 0)) + interest_amount
+    loan.principal_paid = Decimal(str(loan.principal_paid or 0)) + principal_amount
+    loan.amount_paid = Decimal(str(loan.amount_paid or 0)) + interest_amount + principal_amount
+
+    return principal_amount, interest_amount
 
 
 def refresh_active_loans():
@@ -469,13 +501,18 @@ def pay_loan(id):
             flash(f'Payment cannot exceed the current balance of UGX {loan.balance:,.0f}.', 'error')
             return redirect(url_for('finance.view_loan', id=id))
 
-        loan.amount_paid = Decimal(str(loan.amount_paid or 0)) + amount
+        principal_amount, interest_amount = allocate_loan_payment(loan, amount)
         refresh_loan_state(loan, payment_date)
         balance_after_payment = loan.balance
 
         payment = LoanPayment(
             loan_id=loan.id, payment_date=payment_date,
-            amount=amount, balance_after=balance_after_payment, notes=notes
+            amount=amount,
+            principal_amount=principal_amount,
+            interest_amount=interest_amount,
+            payment_type='regular',
+            balance_after=balance_after_payment,
+            notes=notes
         )
         db.session.add(payment)
         refresh_loan_state(loan)
@@ -494,32 +531,22 @@ def pay_loan(id):
 @finance_bp.route('/loans/<int:id>/renew', methods=['POST'])
 @login_required('finance')
 def renew_loan(id):
-    """Renew a loan by paying interest and creating a new loan with revised or same terms"""
+    """Renew a loan by clearing old dues and rolling remaining principal."""
     try:
         old_loan = Loan.query.get_or_404(id)
         refresh_loan_state(old_loan)
 
-        # Calculate interest owed on old loan
-        interest_owed = Decimal(str(old_loan.interest_amount or 0))
-
-        # Update old loan - mark as paid
-        old_loan.amount_paid = Decimal(str(old_loan.amount_paid)) + interest_owed
-        refresh_loan_state(old_loan)
-
-        # Record interest payment on old loan
-        interest_payment = LoanPayment(
-            loan_id=old_loan.id,
-            amount=interest_owed,
-            payment_date=get_local_today(),
-            balance_after=old_loan.balance
-        )
-        db.session.add(interest_payment)
+        interest_owed = Decimal(str(old_loan.outstanding_interest or 0))
+        principal_due = Decimal(str(old_loan.outstanding_principal or 0))
+        if principal_due <= 0 and interest_owed <= 0:
+            flash('This loan has no remaining balance to renew.', 'warning')
+            return redirect(url_for('finance.view_loan', id=id))
 
         # Get new terms from form (may be revised or same as old)
         renewal_issue_date = old_loan.due_date or get_local_today()
         renewal_form = {
             'client_id': old_loan.client_id,
-            'principal': request.form.get('principal', str(old_loan.principal)),
+            'principal': request.form.get('principal', str(principal_due)),
             'interest_mode': request.form.get('interest_mode', old_loan.interest_mode or 'flat_rate'),
             'interest_rate': request.form.get('interest_rate', str(old_loan.interest_rate)),
             'monthly_interest_amount': request.form.get(
@@ -532,6 +559,37 @@ def renew_loan(id):
             'issue_date': str(renewal_issue_date),
         }
         new_loan_data = parse_individual_loan_form(renewal_form)
+        new_principal = Decimal(str(new_loan_data['principal']))
+
+        principal_paid_at_renewal = Decimal('0')
+        principal_rolled = principal_due
+        top_up_principal = Decimal('0')
+        if new_principal < principal_due:
+            principal_paid_at_renewal = principal_due - new_principal
+            principal_rolled = new_principal
+        elif new_principal > principal_due:
+            top_up_principal = new_principal - principal_due
+
+        old_loan.interest_paid = Decimal(str(old_loan.interest_paid or 0)) + interest_owed
+        old_loan.principal_paid = Decimal(str(old_loan.principal_paid or 0)) + principal_paid_at_renewal
+        old_loan.principal_rolled = Decimal(str(old_loan.principal_rolled or 0)) + principal_rolled
+        old_loan.amount_paid = Decimal(str(old_loan.amount_paid or 0)) + interest_owed + principal_paid_at_renewal
+        old_loan.status = 'renewed'
+        refresh_loan_state(old_loan)
+
+        total_cash_paid = interest_owed + principal_paid_at_renewal
+        if total_cash_paid > 0:
+            renewal_payment = LoanPayment(
+                loan_id=old_loan.id,
+                amount=total_cash_paid,
+                principal_amount=principal_paid_at_renewal,
+                interest_amount=interest_owed,
+                payment_type='renewal',
+                payment_date=get_local_today(),
+                balance_after=old_loan.balance,
+                notes='Cleared during loan renewal'
+            )
+            db.session.add(renewal_payment)
 
         # Create new loan with (possibly revised) terms
         new_loan = Loan(
@@ -548,22 +606,34 @@ def renew_loan(id):
             due_date=new_loan_data['due_date'],
             amount_paid=0,
             balance=new_loan_data['total_amount'],
-            status='active'
+            status='active',
+            renewal_parent_id=old_loan.id
         )
         db.session.add(new_loan)
+        db.session.flush()
+        old_loan.renewed_to_loan_id = new_loan.id
+        refresh_loan_state(new_loan)
         db.session.commit()
 
         # Log the renewal action
         log_action(session['username'], 'finance', 'renew', 'loan', old_loan.id,
                    {'client': old_loan.client.name if old_loan.client else 'Unknown',
                     'interest_paid': float(interest_owed),
+                    'principal_paid': float(principal_paid_at_renewal),
+                    'principal_rolled': float(principal_rolled),
+                    'top_up_principal': float(top_up_principal),
                     'new_loan_id': new_loan.id,
                     'new_principal': float(new_loan_data['principal']),
                     'new_rate': float(new_loan_data['interest_rate']),
                     'new_weeks': new_loan_data['duration_weeks'],
                     'interest_mode': new_loan_data['interest_mode']})
 
-        flash(f'Loan renewed! Interest of {interest_owed:,.0f} paid. New loan of {float(new_loan.total_amount):,.0f} created.', 'success')
+        flash(
+            f'Loan renewed. Interest paid: UGX {interest_owed:,.0f}; '
+            f'principal rolled: UGX {principal_rolled:,.0f}. '
+            f'New loan principal: UGX {new_principal:,.0f}.',
+            'success'
+        )
         return redirect(url_for('finance.view_loan', id=new_loan.id))
 
     except Exception as e:

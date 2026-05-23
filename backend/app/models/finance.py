@@ -76,12 +76,17 @@ class Loan(db.Model):
     interest_amount = db.Column(db.Numeric(12, 2), nullable=False)
     total_amount = db.Column(db.Numeric(12, 2), nullable=False)
     amount_paid = db.Column(db.Numeric(12, 2), default=0)
+    principal_paid = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    interest_paid = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    principal_rolled = db.Column(db.Numeric(12, 2), default=0, nullable=False)
     balance = db.Column(db.Numeric(12, 2), nullable=False)
     duration_weeks = db.Column(db.Integer, nullable=False)
     duration_type = db.Column(db.String(10), default='weeks')  # 'weeks' or 'months'
     issue_date = db.Column(db.Date, nullable=False)
     due_date = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(20), default='active')
+    renewal_parent_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True)
+    renewed_to_loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
@@ -90,13 +95,16 @@ class Loan(db.Model):
     payments = db.relationship('LoanPayment', backref='loan', lazy='dynamic')
     documents = db.relationship('LoanDocument', backref='loan', lazy='dynamic',
                                primaryjoin='Loan.id==LoanDocument.loan_id')
+    renewed_from = db.relationship('Loan', remote_side=[id], foreign_keys=[renewal_parent_id], uselist=False)
+    renewed_to = db.relationship('Loan', remote_side=[id], foreign_keys=[renewed_to_loan_id], uselist=False)
 
     @property
     def outstanding_principal(self):
         principal = Decimal(str(self.principal or 0))
-        amount_paid = Decimal(str(self.amount_paid or 0))
+        principal_paid = Decimal(str(self.principal_paid or 0))
+        principal_rolled = Decimal(str(self.principal_rolled or 0))
         balance = Decimal(str(self.balance or 0))
-        remaining_principal = principal - amount_paid
+        remaining_principal = principal - principal_paid - principal_rolled
         if remaining_principal < 0:
             remaining_principal = Decimal('0')
         if remaining_principal > balance:
@@ -105,8 +113,9 @@ class Loan(db.Model):
 
     @property
     def outstanding_interest(self):
-        balance = Decimal(str(self.balance or 0))
-        remaining_interest = balance - self.outstanding_principal
+        interest_amount = Decimal(str(self.interest_amount or 0))
+        interest_paid = Decimal(str(self.interest_paid or 0))
+        remaining_interest = interest_amount - interest_paid
         if remaining_interest < 0:
             return Decimal('0')
         return remaining_interest
@@ -123,6 +132,9 @@ class Loan(db.Model):
             'interest_amount': float(self.interest_amount),
             'total_amount': float(self.total_amount),
             'amount_paid': float(self.amount_paid),
+            'principal_paid': float(self.principal_paid or 0),
+            'interest_paid': float(self.interest_paid or 0),
+            'principal_rolled': float(self.principal_rolled or 0),
             'balance': float(self.balance),
             'outstanding_principal': float(self.outstanding_principal),
             'outstanding_interest': float(self.outstanding_interest),
@@ -146,6 +158,9 @@ class LoanPayment(db.Model):
     loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=False)
     payment_date = db.Column(db.Date, nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
+    principal_amount = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    interest_amount = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    payment_type = db.Column(db.String(30), default='regular', nullable=False)
     balance_after = db.Column(db.Numeric(12, 2), nullable=False)
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
@@ -158,6 +173,9 @@ class LoanPayment(db.Model):
             'client_name': self.loan.client.name if self.loan and self.loan.client else None,
             'payment_date': self.payment_date.isoformat() if self.payment_date else None,
             'amount': float(self.amount),
+            'principal_amount': float(self.principal_amount or 0),
+            'interest_amount': float(self.interest_amount or 0),
+            'payment_type': self.payment_type or 'regular',
             'balance_after': float(self.balance_after),
             'notes': self.notes,
             'created_at': self.created_at.isoformat() if self.created_at else None

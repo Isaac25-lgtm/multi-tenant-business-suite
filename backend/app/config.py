@@ -62,14 +62,14 @@ def get_database_url():
             port = int(pg_port)
         except (TypeError, ValueError):
             port = pg_port
-        return str(URL.create(
+        return URL.create(
             drivername='postgresql+psycopg2',
             username=pg_user,
             password=pg_pass or None,
             host=pg_host,
             port=port,
             database=pg_db,
-        ))
+        ).render_as_string(hide_password=False)
 
     raise RuntimeError(
         'No database configured. Set DATABASE_URL to a PostgreSQL connection '

@@ -245,6 +245,15 @@ def create_app(config_class=Config):
             ('loan_clients', 'payer_status'),
             ('loans', 'interest_mode'),
             ('loans', 'monthly_interest_amount'),
+            ('loans', 'principal_paid'),
+            ('loans', 'interest_paid'),
+            ('loans', 'principal_rolled'),
+            ('loan_payments', 'principal_amount'),
+            ('loan_payments', 'interest_amount'),
+            ('loan_payments', 'payment_type'),
+            ('boutique_stock', 'branch'),
+            ('boutique_sales', 'branch'),
+            ('boutique_hires', 'branch'),
             ('website_loan_inquiries', 'finance_client_id'),
         ]
 

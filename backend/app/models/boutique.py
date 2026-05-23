@@ -44,6 +44,7 @@ class BoutiqueStock(db.Model):
             'item_name': self.item_name,
             'category_id': self.category_id,
             'category_name': self.category.name if self.category else None,
+            'branch': self.branch,
             'quantity': self.quantity,
             'initial_quantity': self.initial_quantity,
             'unit': self.unit,
@@ -83,6 +84,7 @@ class BoutiqueSale(db.Model):
         data = {
             'id': self.id,
             'reference_number': self.reference_number,
+            'branch': self.branch,
             'sale_date': self.sale_date.isoformat(),
             'customer': self.customer.to_dict() if self.customer else None,
             'payment_type': self.payment_type,
@@ -174,6 +176,7 @@ class BoutiqueHire(db.Model):
         return {
             'id': self.id,
             'reference_number': self.reference_number,
+            'branch': self.branch,
             'item_name': self.stock_item.item_name if self.stock_item else None,
             'customer_name': self.customer.name if self.customer else self.customer_name,
             'customer_phone': self.customer.phone if self.customer else self.customer_phone,

@@ -4,13 +4,17 @@
 
 {% block page_header %}
 <h2>Boutique Stock</h2>
-<p>{{ stock|length }} items in inventory</p>
+<p>{{ branch_name or 'Selected Branch' }} &middot; {{ stock|length }} items in inventory</p>
 {% endblock %}
 
 {% block content %}
 <div class="flex justify-between items-center mb-6">
     <div class="flex gap-2 items-center">
+        {% if current_branch == 'ALL' %}
+        <a href="{{ url_for('boutique.select_branch', branch='K') }}" class="btn btn-primary">Select Branch to Add Stock</a>
+        {% else %}
         <button onclick="showModal('add-stock-modal')" class="btn btn-primary">Add Stock Item</button>
+        {% endif %}
         <form method="POST" action="{{ url_for('boutique.fetch_all_images') }}" class="inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-outline" title="Fetch images for items without photos">
@@ -153,6 +157,7 @@
                 <tr>
                     <th>Item</th>
                     <th>Category</th>
+                    {% if current_branch == 'ALL' %}<th>Branch</th>{% endif %}
                     <th class="text-right">Qty</th>
                     <th class="text-right">Cost</th>
                     <th class="text-right">Total</th>
@@ -169,6 +174,7 @@
                         {{ item.item_name }}
                     </td>
                     <td style="font-size:11px;">{{ item.category.name if item.category else '-' }}</td>
+                    {% if current_branch == 'ALL' %}<td>{{ branches.get(item.branch, item.branch or 'Kapchorwa Branch') }}</td>{% endif %}
                     <td class="text-right" style="white-space:nowrap;">
                         {{ item.quantity }}
                         {% if item.quantity <= (item.low_stock_threshold or 0) %}<span class="badge badge-warning" style="font-size:9px;padding:1px 4px;margin-left:2px;">Low</span>{% endif %}

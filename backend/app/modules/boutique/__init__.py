@@ -43,6 +43,38 @@ def get_user_branch():
     return None
 
 
+def resolve_branch(allow_all=False):
+    """Return the active boutique branch, respecting assigned users."""
+    user_section = session.get('section', '')
+    user_branch = get_user_branch()
+    if user_branch and user_section != 'manager':
+        session['boutique_branch'] = user_branch
+        return user_branch
+
+    current_branch = get_current_branch()
+    if allow_all and current_branch == 'ALL' and user_section == 'manager':
+        return 'ALL'
+    if current_branch in BRANCHES:
+        return current_branch
+    if user_section == 'manager' and allow_all:
+        return 'ALL'
+    return None
+
+
+def require_specific_branch():
+    branch = resolve_branch(allow_all=False)
+    if branch not in BRANCHES:
+        flash('Select Kapchorwa or Bukwo before entering branch stock or sales.', 'error')
+        return None
+    return branch
+
+
+def apply_branch_filter(query, model, branch):
+    if branch == 'ALL':
+        return query
+    return query.filter(model.branch == branch)
+
+
 def safe_decimal(value, default='0'):
     """Safely convert a value to Decimal, handling empty strings and invalid values"""
     if value is None or value == '':
@@ -155,11 +187,9 @@ def index():
             BoutiqueSale.is_credit_cleared == False
         )
 
-        # Filter by branch unless viewing all
+        # Filter by branch unless viewing all. Legacy unassigned rows are migrated to Kapchorwa.
         if current_branch != 'ALL':
-            stock_query = stock_query.filter(
-                db.or_(BoutiqueStock.branch == current_branch, BoutiqueStock.branch == None)
-            )
+            stock_query = stock_query.filter(BoutiqueStock.branch == current_branch)
             sales_query = sales_query.filter(BoutiqueSale.branch == current_branch)
             credits_query = credits_query.filter(BoutiqueSale.branch == current_branch)
 
@@ -249,6 +279,10 @@ def add_category():
 @login_required('boutique')
 def stock():
     """List all stock items"""
+    current_branch = resolve_branch(allow_all=True)
+    if not current_branch:
+        return redirect(url_for('boutique.index'))
+
     # Auto-fetch missing images once per day per session
     today_str = str(get_local_today())
     if session.get(AUTO_IMAGE_FETCH_SESSION_KEY) != today_str:
@@ -259,6 +293,7 @@ def stock():
     query = BoutiqueStock.query
     if not show_inactive:
         query = query.filter_by(is_active=True)
+    query = apply_branch_filter(query, BoutiqueStock, current_branch)
     items = query.order_by(BoutiqueStock.item_name).all()
     categories = BoutiqueCategory.query.order_by(BoutiqueCategory.name).all()
     # Load product images for each item
@@ -270,7 +305,11 @@ def stock():
         stock=items,
         categories=categories,
         show_inactive=show_inactive,
-        product_images=product_images
+        product_images=product_images,
+        current_branch=current_branch,
+        branch_name='All Branches' if current_branch == 'ALL' else BRANCHES.get(current_branch),
+        branches=BRANCHES,
+        is_manager=(session.get('section') == 'manager')
     )
 
 
@@ -279,6 +318,10 @@ def stock():
 def add_stock():
     """Add a new stock item"""
     try:
+        branch = require_specific_branch()
+        if not branch:
+            return redirect(url_for('boutique.stock'))
+
         item_name = request.form.get('item_name', '').strip()
         quantity = request.form.get('quantity', type=int)
         unit = request.form.get('unit', 'pieces')
@@ -328,7 +371,8 @@ def add_stock():
             min_selling_price=min_selling_price,
             max_selling_price=max_selling_price,
             low_stock_threshold=low_stock_threshold,
-            for_hire=for_hire
+            for_hire=for_hire,
+            branch=branch
         )
         db.session.add(stock_item)
         db.session.commit()
@@ -342,7 +386,8 @@ def add_stock():
         fetch_product_image_async(stock_item.id, item_name, category_name)
 
         log_action(session['username'], 'boutique', 'create', 'stock', stock_item.id,
-                   {'item_name': item_name, 'quantity': quantity, 'cost_price': float(cost_price)})
+                   {'item_name': item_name, 'quantity': quantity,
+                    'cost_price': float(cost_price), 'branch': branch})
         flash(f'Stock item "{item_name}" added successfully', 'success')
     except Exception as e:
         db.session.rollback()
@@ -356,6 +401,10 @@ def add_stock():
 def edit_stock(id):
     """Edit a stock item"""
     item = BoutiqueStock.query.get_or_404(id)
+    current_branch = resolve_branch(allow_all=True)
+    if current_branch != 'ALL' and item.branch != current_branch:
+        flash('That stock item belongs to another branch.', 'error')
+        return redirect(url_for('boutique.stock'))
 
     try:
         old_name = item.item_name
@@ -581,10 +630,14 @@ def permanent_delete_stock(id):
 @login_required('boutique')
 def sales():
     """List all sales"""
+    current_branch = resolve_branch(allow_all=True)
+    if not current_branch:
+        return redirect(url_for('boutique.index'))
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
     query = BoutiqueSale.query.filter_by(is_deleted=False)
+    query = apply_branch_filter(query, BoutiqueSale, current_branch)
 
     if start_date:
         query = query.filter(BoutiqueSale.sale_date >= date.fromisoformat(start_date))
@@ -599,9 +652,15 @@ def sales():
 @login_required('boutique')
 def new_sale():
     """New sale form"""
-    stock_items = BoutiqueStock.query.filter_by(is_active=True).filter(BoutiqueStock.quantity > 0).all()
+    branch = require_specific_branch()
+    if not branch:
+        return redirect(url_for('boutique.index'))
+    stock_items = BoutiqueStock.query.filter_by(is_active=True, branch=branch).filter(BoutiqueStock.quantity > 0).all()
     customers = Customer.query.filter_by(business_type='boutique').order_by(Customer.name).all()
-    return render_template('boutique/sale_form.html', stock=stock_items, customers=customers, today=get_local_today())
+    return render_template('boutique/sale_form.html',
+        stock=stock_items, customers=customers, today=get_local_today(),
+        current_branch=branch, branch_name=BRANCHES.get(branch)
+    )
 
 
 @boutique_bp.route('/sales/create', methods=['POST'])
@@ -609,6 +668,10 @@ def new_sale():
 def create_sale():
     """Create a new sale"""
     try:
+        branch = require_specific_branch()
+        if not branch:
+            return redirect(url_for('boutique.index'))
+
         sale_date = date.fromisoformat(request.form.get('sale_date', str(get_local_today())))
         payment_type = request.form.get('payment_type', 'full')
         customer_id = request.form.get('customer_id', type=int)
@@ -651,7 +714,8 @@ def create_sale():
 
             stock_item = db.session.query(BoutiqueStock).filter_by(
                 id=int(item_id),
-                is_active=True
+                is_active=True,
+                branch=branch
             ).with_for_update().first()
             if stock_item:
                 if qty > stock_item.quantity:
@@ -689,6 +753,7 @@ def create_sale():
         # Create sale
         sale = BoutiqueSale(
             reference_number=generate_reference_number('DNV-B-', BoutiqueSale),
+            branch=branch,
             sale_date=sale_date,
             customer_id=customer_id,
             payment_type=payment_type,
@@ -721,7 +786,8 @@ def create_sale():
 
         log_action(session['username'], 'boutique', 'create', 'sale', sale.id,
                    {'reference': sale.reference_number, 'total': float(total_amount),
-                    'payment_type': payment_type, 'items_count': len(items_data)})
+                    'payment_type': payment_type, 'items_count': len(items_data),
+                    'branch': branch})
         flash(f'Sale {sale.reference_number} created successfully', 'success')
         return redirect(url_for('boutique.sales'))
 
@@ -856,12 +922,16 @@ def delete_sale(id):
 @login_required('boutique')
 def credits():
     """List pending credits"""
+    current_branch = resolve_branch(allow_all=True)
+    if not current_branch:
+        return redirect(url_for('boutique.index'))
     pending = BoutiqueSale.query.filter(
         BoutiqueSale.is_deleted == False,
         BoutiqueSale.payment_type == 'part',
         BoutiqueSale.is_credit_cleared == False,
         BoutiqueSale.balance > 0
-    ).order_by(BoutiqueSale.sale_date.desc()).all()
+    )
+    pending = apply_branch_filter(pending, BoutiqueSale, current_branch).order_by(BoutiqueSale.sale_date.desc()).all()
 
     return render_template('boutique/credits.html', credits=pending)
 
@@ -923,11 +993,15 @@ def pay_credit(id):
 @login_required('boutique')
 def hires():
     """List all hires"""
+    current_branch = resolve_branch(allow_all=True)
+    if not current_branch:
+        return redirect(url_for('boutique.index'))
     status_filter = request.args.get('status', 'all')
     start_date = request.args.get('start_date')
     end_date = request.args.get('end_date')
 
     query = BoutiqueHire.query.filter_by(is_deleted=False)
+    query = apply_branch_filter(query, BoutiqueHire, current_branch)
 
     if status_filter != 'all':
         query = query.filter(BoutiqueHire.status == status_filter)
@@ -943,7 +1017,8 @@ def hires():
         BoutiqueHire.is_deleted == False,
         BoutiqueHire.status == 'active',
         BoutiqueHire.expected_return_date < today
-    ).all()
+    )
+    overdue_hires = apply_branch_filter(overdue_hires, BoutiqueHire, current_branch).all()
     for h in overdue_hires:
         h.status = 'overdue'
     if overdue_hires:
@@ -963,14 +1038,19 @@ def hires():
 @login_required('boutique')
 def new_hire():
     """New hire form"""
-    stock_items = BoutiqueStock.query.filter_by(is_active=True, for_hire=True).filter(
+    branch = require_specific_branch()
+    if not branch:
+        return redirect(url_for('boutique.index'))
+    stock_items = BoutiqueStock.query.filter_by(is_active=True, for_hire=True, branch=branch).filter(
         BoutiqueStock.quantity > 0
     ).order_by(BoutiqueStock.item_name).all()
     customers = Customer.query.filter_by(business_type='boutique').order_by(Customer.name).all()
     return render_template('boutique/hire_form.html',
         stock=stock_items,
         customers=customers,
-        today=get_local_today()
+        today=get_local_today(),
+        current_branch=branch,
+        branch_name=BRANCHES.get(branch)
     )
 
 
@@ -979,6 +1059,10 @@ def new_hire():
 def create_hire():
     """Create a new hire"""
     try:
+        branch = require_specific_branch()
+        if not branch:
+            return redirect(url_for('boutique.index'))
+
         stock_id = request.form.get('stock_id', type=int)
         quantity = request.form.get('quantity', 1, type=int)
         hire_date = date.fromisoformat(request.form.get('hire_date', str(get_local_today())))
@@ -994,7 +1078,7 @@ def create_hire():
             flash('Item and expected return date are required', 'error')
             return redirect(url_for('boutique.new_hire'))
 
-        stock_item = BoutiqueStock.query.get(stock_id)
+        stock_item = BoutiqueStock.query.filter_by(id=stock_id, branch=branch).first()
         if not stock_item or not stock_item.for_hire:
             flash('Selected item is not available for hire', 'error')
             return redirect(url_for('boutique.new_hire'))
@@ -1034,7 +1118,7 @@ def create_hire():
             amount_paid=deposit_amount,
             balance=estimated_total - deposit_amount,
             status='active',
-            branch=get_current_branch()
+            branch=branch
         )
         db.session.add(hire)
 
@@ -1046,7 +1130,8 @@ def create_hire():
         log_action(session['username'], 'boutique', 'create', 'hire', hire.id,
                    {'reference': hire.reference_number, 'item': stock_item.item_name,
                     'quantity': quantity, 'daily_rate': float(daily_rate),
-                    'customer': customer_name or (hire.customer.name if hire.customer else 'N/A')})
+                    'customer': customer_name or (hire.customer.name if hire.customer else 'N/A'),
+                    'branch': branch})
         flash(f'Hire {hire.reference_number} created successfully', 'success')
         return redirect(url_for('boutique.hires'))
 

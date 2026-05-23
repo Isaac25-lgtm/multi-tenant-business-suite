@@ -91,7 +91,7 @@
                     <td style="white-space: nowrap;">
                         <a href="{{ url_for('finance.view_loan', id=loan.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
                         {% if loan.status in ['active', 'overdue'] and loan.balance > 0 %}
-                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.interest_amount }}, '{{ loan.duration_type or 'weeks' }}', '{{ loan.interest_mode or 'flat_rate' }}', {{ loan.monthly_interest_amount or 0 }})" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
+                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.outstanding_principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.outstanding_interest }}, '{{ loan.duration_type or 'weeks' }}', '{{ loan.interest_mode or 'flat_rate' }}', {{ loan.monthly_interest_amount or 0 }}, {{ loan.principal }})" class="text-blue-600 hover:underline text-sm ml-2">Renew</button>
                         {% endif %}
                         {% if current_section == 'manager' %}
                         <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="text-green-600 hover:underline text-sm ml-2">Edit</a>
@@ -198,14 +198,16 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="guideline mb-4">
                 <strong>Renewing loan for: </strong><span id="renew-client-name" class="font-semibold"></span><br>
-                <span class="text-sm text-gray-600">Interest of <strong id="renew-interest-display"></strong> will be recorded as paid on the old loan. A new loan will be created with the terms below.</span>
+                <span class="text-sm text-gray-600">Remaining interest will be recorded as paid, remaining principal will be rolled into the new loan, and the old loan will be marked renewed.</span>
             </div>
 
             <div class="section-card mb-4" style="padding: 12px; background: var(--gray-50);">
                 <div class="font-semibold text-sm text-gray-600 mb-2">Previous Loan Terms</div>
                 <div class="grid grid-cols-3 gap-2 text-sm">
-                    <div>Principal: <strong id="renew-old-principal"></strong></div>
+                    <div>Original Principal: <strong id="renew-original-principal"></strong></div>
+                    <div>Principal to Roll: <strong id="renew-old-principal"></strong></div>
                     <div>Plan: <strong id="renew-old-rate"></strong></div>
+                    <div>Interest Due: <strong id="renew-interest-display"></strong></div>
                     <div>Duration: <strong id="renew-old-weeks"></strong> weeks</div>
                 </div>
             </div>
@@ -283,12 +285,13 @@ function toggleLoanInterestFields(modeId, flatRateId, monthlyId) {
     }
 }
 
-function openRenewModal(loanId, clientName, principal, rate, weeks, interestOwed, durationType, interestMode, monthlyInterestAmount) {
+function openRenewModal(loanId, clientName, principal, rate, weeks, interestOwed, durationType, interestMode, monthlyInterestAmount, originalPrincipal) {
     document.getElementById('renew-loan-form').action = '/finance/loans/' + loanId + '/renew';
     document.getElementById('renew-client-name').textContent = clientName;
     document.getElementById('renew-interest-display').textContent = Number(interestOwed).toLocaleString('en', {maximumFractionDigits: 0});
 
     // Show previous terms
+    document.getElementById('renew-original-principal').textContent = Number(originalPrincipal || principal).toLocaleString('en', {maximumFractionDigits: 0});
     document.getElementById('renew-old-principal').textContent = Number(principal).toLocaleString('en', {maximumFractionDigits: 0});
     document.getElementById('renew-old-rate').textContent = interestMode === 'monthly_accrual'
         ? ('UGX ' + Number(monthlyInterestAmount || 0).toLocaleString('en', {maximumFractionDigits: 0}) + '/month')

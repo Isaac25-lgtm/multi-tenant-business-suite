@@ -235,6 +235,11 @@
                 <div class="flex justify-between text-sm border-b pb-2">
                     <div>
                         <span>{{ payment.payment_date.strftime('%Y-%m-%d') }}</span>
+                        <span class="text-gray-500 block text-xs">
+                            Principal: UGX {{ "{:,.0f}".format(payment.principal_amount or 0) }} &middot;
+                            Interest: UGX {{ "{:,.0f}".format(payment.interest_amount or 0) }}
+                            {% if payment.payment_type and payment.payment_type != 'regular' %} &middot; {{ payment.payment_type|replace('_', ' ')|title }}{% endif %}
+                        </span>
                         {% if payment.notes %}
                         <span class="text-gray-500 block text-xs">{{ payment.notes }}</span>
                         {% endif %}
