@@ -125,10 +125,17 @@
             {% endif %}
 
             <!-- Actions -->
-            <div class="flex gap-2 mb-4">
+            <div class="flex gap-2 mb-4 flex-wrap">
                 <a href="{{ url_for('finance.download_group_agreement_pdf', id=group.id) }}" class="btn btn-outline">
                     Download Agreement PDF
                 </a>
+                {% if group.status == 'paid' %}
+                <a href="{{ url_for('finance.download_group_clearance_pdf', id=group.id) }}"
+                   class="btn btn-success"
+                   title="Download the official clearance certificate for this fully paid group loan">
+                    Download Clearance Certificate
+                </a>
+                {% endif %}
                 {% if current_section == 'manager' %}
                 <a href="{{ url_for('finance.edit_group_loan', id=group.id) }}" class="btn btn-secondary">
                     Edit Dates

@@ -8,8 +8,10 @@ from reportlab.lib.utils import ImageReader
 from datetime import datetime, date
 import io
 import os
+from xml.sax.saxutils import escape
 
 from app.utils.branding import get_company_display_name, get_site_settings
+from app.utils.timezone import get_local_now
 
 
 def format_currency(amount):
@@ -493,6 +495,575 @@ def generate_group_agreement_pdf(group_loan):
     # Finalize PDF
     c.save()
 
+    buffer.seek(0)
+    return buffer
+
+
+def _draw_clearance_page_header(c, width, height, cert_ref, clearance_date_str, is_continuation=False):
+    """Draw the compact identity header used on page 1 and repeated on continuation pages."""
+    green = HexColor('#16a34a')
+    slate = HexColor('#0f172a')
+    gray = HexColor('#64748b')
+    border = HexColor('#e2e8f0')
+
+    if is_continuation:
+        y = height - 30
+        c.setFillColor(green)
+        c.rect(50, y, width - 100, 2, fill=1, stroke=0)
+        y -= 14
+        c.setFont("Helvetica-Bold", 10)
+        c.setFillColor(slate)
+        c.drawString(50, y, "LOAN CLEARANCE CERTIFICATE  (continued)")
+        c.setFont("Helvetica", 9)
+        c.setFillColor(gray)
+        c.drawRightString(width - 50, y, f"{cert_ref}  |  {clearance_date_str}")
+        y -= 8
+        c.setStrokeColor(border)
+        c.line(50, y, width - 50, y)
+        return y - 8
+    return None
+
+
+def _draw_payment_table_header_individual(c, width, y, green):
+    """Draw the payment table column headers for individual loans."""
+    c.setFillColor(green)
+    c.rect(50, y - 16, width - 100, 18, fill=1, stroke=0)
+    c.setFillColor(HexColor('#ffffff'))
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(58, y - 12, "DATE")
+    c.drawRightString(220, y - 12, "PRINCIPAL")
+    c.drawRightString(330, y - 12, "INTEREST")
+    c.drawRightString(440, y - 12, "AMOUNT")
+    c.drawRightString(width - 58, y - 12, "BALANCE AFTER")
+    return y - 22
+
+
+def _draw_payment_table_header_group(c, width, y, green):
+    """Draw the payment table column headers for group loans."""
+    c.setFillColor(green)
+    c.rect(50, y - 16, width - 100, 18, fill=1, stroke=0)
+    c.setFillColor(HexColor('#ffffff'))
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(58, y - 12, "DATE")
+    c.drawRightString(300, y - 12, "PERIODS COVERED")
+    c.drawRightString(440, y - 12, "AMOUNT")
+    c.drawRightString(width - 58, y - 12, "BALANCE AFTER")
+    return y - 22
+
+
+def _draw_clearance_footer(c, width, company_name, contact_phone, headquarters, cert_ref, clearance_date_str, y):
+    """Draw signature block, stamp, and footer on the final page."""
+    green = HexColor('#16a34a')
+    slate = HexColor('#0f172a')
+    gray = HexColor('#64748b')
+    border = HexColor('#e2e8f0')
+    col_right = width / 2 + 10
+
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 14
+
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(slate)
+    c.drawString(50, y, "FINANCE OFFICER:")
+    c.drawString(col_right, y, "AUTHORIZED SIGNATORY:")
+
+    y -= 38
+    c.setStrokeColor(HexColor('#94a3b8'))
+    c.line(50, y, 220, y)
+    c.line(col_right, y, col_right + 170, y)
+    y -= 14
+    c.setFont("Helvetica", 9)
+    c.setFillColor(gray)
+    c.drawString(50, y, "Signature & Date")
+    c.drawString(col_right, y, "Signature & Date")
+
+    y -= 28
+    c.setStrokeColor(HexColor('#94a3b8'))
+    c.line(50, y, 220, y)
+    c.line(col_right, y, col_right + 170, y)
+    y -= 14
+    c.setFont("Helvetica", 9)
+    c.setFillColor(gray)
+    c.drawString(50, y, "Full Name & Designation")
+    c.drawString(col_right, y, "Full Name & Designation")
+
+    stamp_box_x = width / 2 - 36
+    stamp_box_y = y - 52
+    c.setStrokeColor(HexColor('#cbd5e1'))
+    c.setDash(4, 3)
+    c.roundRect(stamp_box_x, stamp_box_y, 72, 48, 4, fill=0, stroke=1)
+    c.setDash()
+    c.setFont("Helvetica", 7)
+    c.setFillColor(HexColor('#94a3b8'))
+    c.drawCentredString(width / 2, stamp_box_y + 18, "OFFICIAL STAMP")
+    y = stamp_box_y - 16
+
+    footer_y = max(y - 10, 24)
+    c.setStrokeColor(green)
+    c.setLineWidth(1)
+    c.line(50, footer_y + 14, width - 50, footer_y + 14)
+    c.setFont("Helvetica", 8)
+    c.setFillColor(gray)
+    footer_parts = [company_name]
+    if contact_phone:
+        footer_parts.append(f"Tel: {contact_phone}")
+    if headquarters:
+        footer_parts.append(headquarters)
+    c.drawCentredString(width / 2, footer_y + 4, "  |  ".join(footer_parts))
+    c.setFont("Helvetica-Oblique", 7)
+    c.drawCentredString(width / 2, footer_y - 6,
+                        f"Certificate {cert_ref}  |  Clearance date: {clearance_date_str}")
+
+
+def _paragraph_text(value):
+    """Escape dynamic values before inserting them into ReportLab paragraph markup."""
+    return escape(str(value or ''))
+
+
+def _clearance_date(record, payments):
+    """Use the latest recorded payment date, regardless of input ordering."""
+    payment_dates = [
+        payment.payment_date
+        for payment in payments
+        if getattr(payment, 'payment_date', None)
+    ]
+    if payment_dates:
+        return max(payment_dates)
+    return record.due_date or get_local_now().date()
+
+
+def generate_clearance_pdf(loan, payments):
+    """Generate a formal Loan Clearance Certificate for a fully paid individual loan."""
+    buffer = io.BytesIO()
+    settings = get_site_settings()
+    company_name = get_company_display_name(settings)
+    contact_phone = getattr(settings, 'contact_phone', '') or ''
+    headquarters = getattr(settings, 'headquarters', '') or ''
+
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    green = HexColor('#16a34a')
+    green_light = HexColor('#f0fdf4')
+    slate = HexColor('#0f172a')
+    gray = HexColor('#64748b')
+    border = HexColor('#e2e8f0')
+
+    # Deterministic certificate identity: derived from loan ID and final payment date
+    cert_ref = f'LCC-{loan.id:05d}'
+    clearance_date = _clearance_date(loan, payments)
+    clearance_date_str = clearance_date.strftime('%B %d, %Y') if hasattr(clearance_date, 'strftime') else str(clearance_date)
+
+    # ── Page 1 header ────────────────────────────────────────────
+    y = height - 26
+    y = draw_logo_header(c, width, y)
+
+    y -= 4
+    c.setFillColor(green)
+    c.rect(50, y - 2, width - 100, 3, fill=1, stroke=0)
+    y -= 16
+
+    c.setFillColor(slate)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width / 2, y, "LOAN CLEARANCE CERTIFICATE")
+    y -= 20
+
+    c.setFont("Helvetica", 9)
+    c.setFillColor(gray)
+    c.drawCentredString(width / 2, y,
+                        f"Certificate No: {cert_ref}   |   Clearance Date: {clearance_date_str}")
+    y -= 14
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 20
+
+    # ── Salutation ───────────────────────────────────────────────
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(slate)
+    c.drawString(50, y, "TO WHOM IT MAY CONCERN")
+    y -= 18
+
+    client_name = _paragraph_text(loan.client.name if loan.client else 'The Borrower')
+    company_name_paragraph = _paragraph_text(company_name)
+
+    styles = getSampleStyleSheet()
+    body_style = styles['Normal']
+    body_style.fontName = 'Helvetica'
+    body_style.fontSize = 10
+    body_style.leading = 16
+    body_style.textColor = HexColor('#0f172a')
+
+    cert_text = (
+        f"This is to certify that <b>{client_name}</b> held loan account <b>{cert_ref}</b> "
+        f"with <b>{company_name_paragraph}</b>. As recorded in the loan ledger, the outstanding balance "
+        f"on this account was confirmed as zero (0) on <b>{clearance_date_str}</b>, "
+        f"reflecting full repayment of the principal and all accrued interest."
+    )
+    para = Paragraph(cert_text, body_style)
+    para_width = width - 100
+    para_height = para.wrap(para_width, 200)[1]
+    para.drawOn(c, 50, y - para_height)
+    y -= para_height + 20
+
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 16
+
+    # ── Two-column info boxes ────────────────────────────────────
+    col_right = width / 2 + 10
+    col_w = (width - 100) / 2 - 8
+    box_top = y
+
+    c.setFillColor(HexColor('#f8fafc'))
+    c.roundRect(50, box_top - 100, col_w, 108, 6, fill=1, stroke=0)
+    c.setStrokeColor(border)
+    c.roundRect(50, box_top - 100, col_w, 108, 6, fill=0, stroke=1)
+
+    bx, by = 60, box_top - 14
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(green)
+    c.drawString(bx, by, "BORROWER INFORMATION")
+    by -= 14
+    c.setFont("Helvetica", 9)
+    c.setFillColor(slate)
+    c.drawString(bx, by, f"Name:    {(loan.client.name if loan.client else 'N/A')[:32]}")
+    by -= 13
+    c.drawString(bx, by, f"Phone:   {(loan.client.phone if loan.client else 'N/A')[:32]}")
+    by -= 13
+    nin_display = str(loan.client.nin if loan.client and loan.client.nin else 'N/A')
+    c.drawString(bx, by, f"NIN:     {nin_display[:32]}")
+    by -= 13
+    addr = (loan.client.address if loan.client and loan.client.address else 'N/A')
+    c.drawString(bx, by, f"Address: {addr[:32]}")
+
+    c.setFillColor(HexColor('#f8fafc'))
+    c.roundRect(col_right, box_top - 100, col_w, 108, 6, fill=1, stroke=0)
+    c.setStrokeColor(border)
+    c.roundRect(col_right, box_top - 100, col_w, 108, 6, fill=0, stroke=1)
+
+    rx, ry = col_right + 10, box_top - 14
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(green)
+    c.drawString(rx, ry, "LOAN ACCOUNT SUMMARY")
+    ry -= 14
+    c.setFont("Helvetica", 9)
+    c.setFillColor(slate)
+    c.drawString(rx, ry, f"Reference:  {cert_ref}")
+    ry -= 13
+    issue_str = loan.issue_date.strftime('%b %d, %Y') if loan.issue_date else 'N/A'
+    c.drawString(rx, ry, f"Issued:     {issue_str}")
+    ry -= 13
+    c.drawString(rx, ry, f"Cleared:    {clearance_date_str}")
+    ry -= 13
+    c.drawString(rx, ry, f"Principal:  {format_currency(float(loan.principal or 0))}")
+    ry -= 13
+    c.drawString(rx, ry, f"Total Paid: {format_currency(float(loan.amount_paid or 0))}")
+
+    y = box_top - 110
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 16
+
+    # ── Payment Record ───────────────────────────────────────────
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(slate)
+    c.drawString(50, y, "PAYMENT RECORD")
+    y -= 14
+    y = _draw_payment_table_header_individual(c, width, y, green)
+
+    c.setFont("Helvetica", 9)
+    for idx, pmt in enumerate(payments):
+        if y < 160:
+            c.showPage()
+            y = _draw_clearance_page_header(c, width, height, cert_ref, clearance_date_str, is_continuation=True)
+            y = _draw_payment_table_header_individual(c, width, y, green)
+        bg = HexColor('#f0fdf4') if idx % 2 == 0 else HexColor('#ffffff')
+        c.setFillColor(bg)
+        c.rect(50, y - 13, width - 100, 16, fill=1, stroke=0)
+        c.setFillColor(slate)
+        pdate = pmt.payment_date.strftime('%b %d, %Y') if pmt.payment_date else '-'
+        c.drawString(58, y - 10, pdate)
+        c.drawRightString(220, y - 10, format_currency(float(pmt.principal_amount or 0)))
+        c.drawRightString(330, y - 10, format_currency(float(pmt.interest_amount or 0)))
+        c.drawRightString(440, y - 10, format_currency(float(pmt.amount or 0)))
+        c.drawRightString(width - 58, y - 10, format_currency(float(pmt.balance_after or 0)))
+        y -= 16
+
+    # Keep the settlement statement and signatures together instead of drawing
+    # them into the bottom margin after a nearly full payment table.
+    if y < 310:
+        c.showPage()
+        y = _draw_clearance_page_header(
+            c, width, height, cert_ref, clearance_date_str, is_continuation=True
+        )
+
+    y -= 8
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 18
+
+    # ── FULLY SETTLED badge ──────────────────────────────────────
+    stamp_w, stamp_h = 200, 36
+    stamp_x = (width - stamp_w) / 2
+    stamp_y = y - stamp_h
+    c.setFillColor(green_light)
+    c.roundRect(stamp_x, stamp_y, stamp_w, stamp_h, 10, fill=1, stroke=0)
+    c.setStrokeColor(green)
+    c.setLineWidth(1.5)
+    c.roundRect(stamp_x, stamp_y, stamp_w, stamp_h, 10, fill=0, stroke=1)
+    c.setLineWidth(1)
+    c.setFillColor(green)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(width / 2, stamp_y + 11, "FULLY SETTLED")
+    y = stamp_y - 18
+
+    # ── Closing declaration ──────────────────────────────────────
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 14
+
+    decl_style = styles['Normal']
+    decl_style.fontName = 'Helvetica-Oblique'
+    decl_style.fontSize = 9
+    decl_style.leading = 14
+    decl_style.textColor = HexColor('#475569')
+    decl_text = (
+        f"This document confirms that, as of {clearance_date_str}, the recorded balance for "
+        f"loan account {cert_ref} is zero. It is issued as a record of the loan ledger status "
+        f"on that date and does not constitute a legal waiver of any kind."
+    )
+    decl_para = Paragraph(decl_text, decl_style)
+    decl_h = decl_para.wrap(width - 100, 80)[1]
+    decl_para.drawOn(c, 50, y - decl_h)
+    y -= decl_h + 16
+
+    if y < 200:
+        c.showPage()
+        y = _draw_clearance_page_header(
+            c, width, height, cert_ref, clearance_date_str, is_continuation=True
+        )
+
+    _draw_clearance_footer(c, width, company_name, contact_phone, headquarters,
+                           cert_ref, clearance_date_str, y)
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+
+def generate_group_clearance_pdf(group, payments):
+    """Generate a formal Loan Clearance Certificate for a fully paid group loan."""
+    buffer = io.BytesIO()
+    settings = get_site_settings()
+    company_name = get_company_display_name(settings)
+    contact_phone = getattr(settings, 'contact_phone', '') or ''
+    headquarters = getattr(settings, 'headquarters', '') or ''
+
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+
+    green = HexColor('#16a34a')
+    green_light = HexColor('#f0fdf4')
+    slate = HexColor('#0f172a')
+    gray = HexColor('#64748b')
+    border = HexColor('#e2e8f0')
+
+    cert_ref = f'GLCC-{group.id:05d}'
+    clearance_date = _clearance_date(group, payments)
+    clearance_date_str = clearance_date.strftime('%B %d, %Y') if hasattr(clearance_date, 'strftime') else str(clearance_date)
+
+    # When a group loan balance reaches zero the periods_paid counter may be lower
+    # than total_periods (e.g. early lump-sum settlement). Show "Fully settled"
+    # instead of the raw fraction to avoid a contradictory certificate.
+    if float(group.balance or 0) <= 0:
+        periods_display = "Fully settled"
+    else:
+        periods_display = f"{group.periods_paid} of {group.total_periods}"
+
+    # ── Page 1 header ────────────────────────────────────────────
+    y = height - 26
+    y = draw_logo_header(c, width, y)
+
+    y -= 4
+    c.setFillColor(green)
+    c.rect(50, y - 2, width - 100, 3, fill=1, stroke=0)
+    y -= 16
+
+    c.setFillColor(slate)
+    c.setFont("Helvetica-Bold", 15)
+    c.drawCentredString(width / 2, y, "GROUP LOAN CLEARANCE CERTIFICATE")
+    y -= 20
+
+    c.setFont("Helvetica", 9)
+    c.setFillColor(gray)
+    c.drawCentredString(width / 2, y,
+                        f"Certificate No: {cert_ref}   |   Clearance Date: {clearance_date_str}")
+    y -= 14
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 20
+
+    # ── Salutation ───────────────────────────────────────────────
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(slate)
+    c.drawString(50, y, "TO WHOM IT MAY CONCERN")
+    y -= 18
+
+    styles = getSampleStyleSheet()
+    body_style = styles['Normal']
+    body_style.fontName = 'Helvetica'
+    body_style.fontSize = 10
+    body_style.leading = 16
+    body_style.textColor = HexColor('#0f172a')
+
+    group_name_paragraph = _paragraph_text(group.group_name)
+    company_name_paragraph = _paragraph_text(company_name)
+    cert_text = (
+        f"This is to certify that <b>{group_name_paragraph}</b> (comprising <b>{group.member_count} "
+        f"member(s)</b>) held group loan account <b>{cert_ref}</b> with <b>{company_name_paragraph}</b>. "
+        f"As recorded in the loan ledger, the outstanding balance on this account was confirmed "
+        f"as zero (0) on <b>{clearance_date_str}</b>, reflecting full repayment of the principal "
+        f"and all accrued interest."
+    )
+    para = Paragraph(cert_text, body_style)
+    para_h = para.wrap(width - 100, 200)[1]
+    para.drawOn(c, 50, y - para_h)
+    y -= para_h + 20
+
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 16
+
+    # ── Two-column info boxes ────────────────────────────────────
+    col_right = width / 2 + 10
+    col_w = (width - 100) / 2 - 8
+    box_top = y
+
+    c.setFillColor(HexColor('#f8fafc'))
+    c.roundRect(50, box_top - 100, col_w, 108, 6, fill=1, stroke=0)
+    c.setStrokeColor(border)
+    c.roundRect(50, box_top - 100, col_w, 108, 6, fill=0, stroke=1)
+
+    bx, by = 60, box_top - 14
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(green)
+    c.drawString(bx, by, "GROUP INFORMATION")
+    by -= 14
+    c.setFont("Helvetica", 9)
+    c.setFillColor(slate)
+    c.drawString(bx, by, f"Group Name: {group.group_name[:30]}")
+    by -= 13
+    c.drawString(bx, by, f"Members:    {group.member_count}")
+    by -= 13
+    issue_str = group.issue_date.strftime('%b %d, %Y') if group.issue_date else 'N/A'
+    c.drawString(bx, by, f"Issued:     {issue_str}")
+    by -= 13
+    c.drawString(bx, by, f"Cleared:    {clearance_date_str}")
+
+    c.setFillColor(HexColor('#f8fafc'))
+    c.roundRect(col_right, box_top - 100, col_w, 108, 6, fill=1, stroke=0)
+    c.setStrokeColor(border)
+    c.roundRect(col_right, box_top - 100, col_w, 108, 6, fill=0, stroke=1)
+
+    rx, ry = col_right + 10, box_top - 14
+    c.setFont("Helvetica-Bold", 9)
+    c.setFillColor(green)
+    c.drawString(rx, ry, "LOAN ACCOUNT SUMMARY")
+    ry -= 14
+    c.setFont("Helvetica", 9)
+    c.setFillColor(slate)
+    c.drawString(rx, ry, f"Reference:  {cert_ref}")
+    ry -= 13
+    c.drawString(rx, ry, f"Principal:  {format_currency(float(group.principal or 0))}")
+    ry -= 13
+    c.drawString(rx, ry, f"Total Paid: {format_currency(float(group.amount_paid or 0))}")
+    ry -= 13
+    c.drawString(rx, ry, f"Periods:    {periods_display}")
+
+    y = box_top - 110
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 16
+
+    # ── Payment Record ───────────────────────────────────────────
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(slate)
+    c.drawString(50, y, "PAYMENT RECORD")
+    y -= 14
+    y = _draw_payment_table_header_group(c, width, y, green)
+
+    c.setFont("Helvetica", 9)
+    for idx, pmt in enumerate(payments):
+        if y < 160:
+            c.showPage()
+            y = _draw_clearance_page_header(c, width, height, cert_ref, clearance_date_str, is_continuation=True)
+            y = _draw_payment_table_header_group(c, width, y, green)
+        bg = HexColor('#f0fdf4') if idx % 2 == 0 else HexColor('#ffffff')
+        c.setFillColor(bg)
+        c.rect(50, y - 13, width - 100, 16, fill=1, stroke=0)
+        c.setFillColor(slate)
+        pdate = pmt.payment_date.strftime('%b %d, %Y') if pmt.payment_date else '-'
+        c.drawString(58, y - 10, pdate)
+        c.drawRightString(300, y - 10, str(getattr(pmt, 'periods_covered', '-')))
+        c.drawRightString(440, y - 10, format_currency(float(pmt.amount or 0)))
+        c.drawRightString(width - 58, y - 10, format_currency(float(pmt.balance_after or 0)))
+        y -= 16
+
+    if y < 310:
+        c.showPage()
+        y = _draw_clearance_page_header(
+            c, width, height, cert_ref, clearance_date_str, is_continuation=True
+        )
+
+    y -= 8
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 18
+
+    # ── FULLY SETTLED badge ──────────────────────────────────────
+    stamp_w, stamp_h = 220, 36
+    stamp_x = (width - stamp_w) / 2
+    stamp_y = y - stamp_h
+    c.setFillColor(green_light)
+    c.roundRect(stamp_x, stamp_y, stamp_w, stamp_h, 10, fill=1, stroke=0)
+    c.setStrokeColor(green)
+    c.setLineWidth(1.5)
+    c.roundRect(stamp_x, stamp_y, stamp_w, stamp_h, 10, fill=0, stroke=1)
+    c.setLineWidth(1)
+    c.setFillColor(green)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawCentredString(width / 2, stamp_y + 11, "FULLY SETTLED")
+    y = stamp_y - 18
+
+    # ── Closing declaration ──────────────────────────────────────
+    c.setStrokeColor(border)
+    c.line(50, y, width - 50, y)
+    y -= 14
+
+    decl_style = styles['Normal']
+    decl_style.fontName = 'Helvetica-Oblique'
+    decl_style.fontSize = 9
+    decl_style.leading = 14
+    decl_style.textColor = HexColor('#475569')
+    decl_text = (
+        f"This document confirms that, as of {clearance_date_str}, the recorded balance for "
+        f"group loan account {cert_ref} is zero. It is issued as a record of the loan ledger "
+        f"status on that date and does not constitute a legal waiver of any kind."
+    )
+    decl_para = Paragraph(decl_text, decl_style)
+    decl_h = decl_para.wrap(width - 100, 80)[1]
+    decl_para.drawOn(c, 50, y - decl_h)
+    y -= decl_h + 16
+
+    if y < 200:
+        c.showPage()
+        y = _draw_clearance_page_header(
+            c, width, height, cert_ref, clearance_date_str, is_continuation=True
+        )
+
+    _draw_clearance_footer(c, width, company_name, contact_phone, headquarters,
+                           cert_ref, clearance_date_str, y)
+    c.save()
     buffer.seek(0)
     return buffer
 

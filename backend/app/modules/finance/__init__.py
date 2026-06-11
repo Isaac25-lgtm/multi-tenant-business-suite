@@ -3,7 +3,7 @@ from app.models.finance import LoanClient, Loan, LoanPayment, GroupLoan, GroupLo
 from app.modules.auth import login_required, log_action
 from app.extensions import db
 from app.utils.timezone import get_local_now, get_local_today
-from app.utils.pdf_generator import generate_group_agreement_pdf
+from app.utils.pdf_generator import generate_group_agreement_pdf, generate_clearance_pdf, generate_group_clearance_pdf
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
@@ -1283,6 +1283,60 @@ def download_group_agreement_pdf(id):
         buffer.getvalue(),
         mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment; filename=group_loan_agreement_{group.id}.pdf'}
+    )
+
+
+# ============ CLEARANCE CERTIFICATES ============
+
+@finance_bp.route('/loans/<int:id>/clearance-pdf')
+@login_required('finance')
+def download_loan_clearance_pdf(id):
+    """Download clearance certificate for a fully paid individual loan."""
+    loan = Loan.query.get_or_404(id)
+    # Always refresh so monthly-accrual interest is current before the check
+    if refresh_loan_state(loan):
+        db.session.commit()
+
+    # Guard on both status flag AND calculated balance — a monthly-accrual loan
+    # can transition back to a non-zero balance if interest keeps accruing after
+    # the status was last saved as 'paid'.
+    if loan.status != 'paid' or Decimal(str(loan.balance or 0)) > 0:
+        flash('Clearance certificate is only available for loans with a zero balance.', 'error')
+        return redirect(url_for('finance.view_loan', id=id))
+
+    payments = loan.payments.filter_by(is_deleted=False).order_by(LoanPayment.payment_date.desc()).all()
+    buffer = generate_clearance_pdf(loan, payments)
+
+    log_action(session.get('username'), 'finance', 'view', 'clearance_certificate', loan.id,
+               {'client': loan.client.name if loan.client else 'Unknown'})
+
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename=clearance_LCC-{loan.id:05d}.pdf'}
+    )
+
+
+@finance_bp.route('/group-loans/<int:id>/clearance-pdf')
+@login_required('finance')
+def download_group_clearance_pdf(id):
+    """Download clearance certificate for a fully paid group loan."""
+    group = GroupLoan.query.get_or_404(id)
+
+    if group.status != 'paid' or Decimal(str(group.balance or 0)) > 0:
+        flash('Clearance certificate is only available for group loans with a zero balance.', 'error')
+        return redirect(url_for('finance.view_group_loan', id=id))
+
+    payments = group.payments.filter_by(is_deleted=False).order_by(GroupLoanPayment.payment_date.desc()).all()
+    buffer = generate_group_clearance_pdf(group, payments)
+
+    log_action(session.get('username'), 'finance', 'view', 'group_clearance_certificate', group.id,
+               {'group_name': group.group_name})
+
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename=clearance_GLCC-{group.id:05d}.pdf'}
     )
 
 

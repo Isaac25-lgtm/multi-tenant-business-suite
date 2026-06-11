@@ -111,10 +111,17 @@
             </table>
 
             <!-- Actions -->
-            <div class="flex gap-2 mb-6">
+            <div class="flex gap-2 mb-6 flex-wrap">
                 <a href="{{ url_for('finance.download_loan_agreement_pdf', id=loan.id) }}" class="btn btn-outline">
                     Download Agreement PDF
                 </a>
+                {% if loan.status == 'paid' %}
+                <a href="{{ url_for('finance.download_loan_clearance_pdf', id=loan.id) }}"
+                   class="btn btn-success"
+                   title="Download the official clearance certificate for this fully paid loan">
+                    Download Clearance Certificate
+                </a>
+                {% endif %}
                 {% if current_section == 'manager' %}
                 <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="btn btn-secondary">
                     Edit Dates
