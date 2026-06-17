@@ -719,6 +719,42 @@ table tbody tr:hover {
     font-weight: 700;
 }
 
+.finance-loans-table {
+    min-width: 980px;
+}
+
+.finance-schedule-table {
+    min-width: 760px;
+}
+
+.finance-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    min-width: 170px;
+}
+
+.finance-actions a,
+.finance-actions button {
+    white-space: nowrap;
+}
+
+.loan-detail-grid,
+.loan-detail-grid > * {
+    min-width: 0;
+}
+
+@media (max-width: 900px) {
+    .finance-loans-table {
+        min-width: 860px;
+    }
+
+    .modal-content {
+        width: min(96vw, 720px);
+    }
+}
+
 /* Status Pills */
 .status-pill {
     padding: 4px 10px;

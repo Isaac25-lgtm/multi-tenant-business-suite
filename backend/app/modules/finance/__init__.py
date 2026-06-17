@@ -3,9 +3,16 @@ from app.models.finance import LoanClient, Loan, LoanPayment, GroupLoan, GroupLo
 from app.modules.auth import login_required, log_action
 from app.extensions import db
 from app.utils.timezone import get_local_now, get_local_today
-from app.utils.pdf_generator import generate_group_agreement_pdf, generate_clearance_pdf, generate_group_clearance_pdf
+from app.utils.pdf_generator import (
+    generate_group_agreement_pdf,
+    generate_clearance_pdf,
+    generate_group_clearance_pdf,
+    generate_loan_statement_pdf,
+    generate_payment_plan_pdf,
+    generate_overdue_reminder_pdf,
+)
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from dateutil.relativedelta import relativedelta
 from werkzeug.utils import secure_filename
 import json
@@ -21,6 +28,8 @@ MAX_INTEREST_RATE = Decimal('100')
 MAX_MONTHLY_INTEREST = Decimal('100000000')
 MAX_DURATION_UNITS = 120
 MAX_GROUP_PERIODS = 240
+MONEY_QUANT = Decimal('1')
+INDIVIDUAL_INTEREST_MODES = {'flat_rate', 'monthly_accrual', 'reducing_balance_equal'}
 from app.utils.uploads import allowed_file, validate_and_save
 
 
@@ -32,6 +41,10 @@ def safe_decimal(value, default='0'):
         return Decimal(str(value).strip())
     except (InvalidOperation, ValueError):
         return Decimal(default)
+
+
+def round_money(value):
+    return Decimal(str(value or 0)).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
 
 
 def get_form_value(source, key, default=None, cast=None):
@@ -76,6 +89,62 @@ def calculate_due_date(issue_date, duration_units, duration_type):
     return issue_date + timedelta(weeks=duration_units)
 
 
+def calculate_reducing_balance_schedule(principal, monthly_rate_percent, periods, issue_date=None):
+    """Build an equal-payment reducing-balance monthly amortization schedule."""
+    principal = round_money(principal)
+    monthly_rate_percent = Decimal(str(monthly_rate_percent or 0))
+    periods = int(periods or 0)
+
+    if principal <= 0 or periods <= 0:
+        return []
+
+    monthly_rate = monthly_rate_percent / Decimal('100')
+    if monthly_rate == 0:
+        regular_payment = round_money(principal / Decimal(periods))
+    else:
+        discount = Decimal('1') - ((Decimal('1') + monthly_rate) ** -periods)
+        regular_payment = round_money((principal * monthly_rate) / discount)
+
+    rows = []
+    remaining = principal
+    for period in range(1, periods + 1):
+        interest = round_money(remaining * monthly_rate)
+        principal_component = regular_payment - interest
+
+        if period == periods or principal_component > remaining:
+            principal_component = remaining
+            payment = principal_component + interest
+        else:
+            payment = regular_payment
+
+        remaining -= principal_component
+        if remaining < 0:
+            remaining = Decimal('0')
+
+        due_date = issue_date + relativedelta(months=period) if issue_date else None
+        rows.append({
+            'period': period,
+            'due_date': due_date,
+            'payment': round_money(payment),
+            'interest': round_money(interest),
+            'principal': round_money(principal_component),
+            'balance_after': round_money(remaining),
+        })
+
+    return rows
+
+
+def get_loan_payment_schedule(loan):
+    if (loan.interest_mode or 'flat_rate') != 'reducing_balance_equal':
+        return []
+    return calculate_reducing_balance_schedule(
+        loan.principal or 0,
+        loan.interest_rate or 0,
+        loan.duration_weeks or 0,
+        loan.issue_date,
+    )
+
+
 def elapsed_full_months(issue_date, reference_date):
     if not issue_date or not reference_date or reference_date <= issue_date:
         return 0
@@ -98,10 +167,15 @@ def refresh_loan_state(loan, as_of_date=None):
         monthly_interest_amount = Decimal(str(loan.monthly_interest_amount or 0))
         accrued_months = elapsed_full_months(loan.issue_date, as_of_date)
         interest_amount = monthly_interest_amount * accrued_months
+    elif interest_mode == 'reducing_balance_equal':
+        schedule = get_loan_payment_schedule(loan)
+        interest_amount = sum((row['interest'] for row in schedule), Decimal('0'))
     else:
         interest_amount = Decimal(str(loan.interest_amount or 0))
 
     total_amount = principal + interest_amount
+    if interest_mode == 'reducing_balance_equal':
+        total_amount = sum((row['payment'] for row in get_loan_payment_schedule(loan)), Decimal('0'))
     principal_due = principal - principal_paid - principal_rolled
     if principal_due < 0:
         principal_due = Decimal('0')
@@ -143,6 +217,46 @@ def refresh_loan_state(loan, as_of_date=None):
 def allocate_loan_payment(loan, amount):
     """Apply a payment interest-first, then principal, and return the allocation."""
     amount = Decimal(str(amount or 0))
+
+    if (loan.interest_mode or 'flat_rate') == 'reducing_balance_equal':
+        schedule = get_loan_payment_schedule(loan)
+        current_paid = Decimal(str(loan.amount_paid or 0))
+        target_paid = current_paid + amount
+        scheduled_total = sum((row['payment'] for row in schedule), Decimal('0'))
+        if target_paid > scheduled_total:
+            target_paid = scheduled_total
+
+        remaining_paid = target_paid
+        target_interest = Decimal('0')
+        target_principal = Decimal('0')
+        for row in schedule:
+            row_payment = Decimal(str(row['payment']))
+            if remaining_paid <= 0:
+                break
+
+            applied = min(remaining_paid, row_payment)
+            row_interest = Decimal(str(row['interest']))
+            row_principal = Decimal(str(row['principal']))
+            interest_part = min(applied, row_interest)
+            principal_part = applied - interest_part
+            if principal_part > row_principal:
+                principal_part = row_principal
+
+            target_interest += interest_part
+            target_principal += principal_part
+            remaining_paid -= applied
+
+        current_interest_paid = Decimal(str(loan.interest_paid or 0))
+        current_principal_paid = Decimal(str(loan.principal_paid or 0))
+        interest_amount = max(target_interest - current_interest_paid, Decimal('0'))
+        principal_amount = max(target_principal - current_principal_paid, Decimal('0'))
+
+        loan.interest_paid = current_interest_paid + interest_amount
+        loan.principal_paid = current_principal_paid + principal_amount
+        loan.amount_paid = current_paid + interest_amount + principal_amount
+
+        return principal_amount, interest_amount
+
     interest_due = Decimal(str(loan.outstanding_interest or 0))
     principal_due = Decimal(str(loan.outstanding_principal or 0))
 
@@ -160,7 +274,7 @@ def allocate_loan_payment(loan, amount):
 
 def refresh_active_loans():
     changed = False
-    loans = Loan.query.filter_by(is_deleted=False).all()
+    loans = Loan.query.filter(Loan.is_deleted == False, Loan.status != 'renewed').all()
     for loan in loans:
         changed = refresh_loan_state(loan) or changed
     if changed:
@@ -170,7 +284,7 @@ def refresh_active_loans():
 
 def summarize_outstanding_portfolio():
     """Split the active portfolio into remaining principal and interest portions."""
-    loan_rows = Loan.query.filter(Loan.is_deleted == False, Loan.balance > 0).all()
+    loan_rows = Loan.query.filter(Loan.is_deleted == False, Loan.status != 'renewed', Loan.balance > 0).all()
     group_rows = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.balance > 0).all()
 
     principal_outstanding = sum((loan.outstanding_principal for loan in loan_rows), Decimal('0'))
@@ -200,7 +314,7 @@ def parse_individual_loan_form(form):
         raise ValueError('Duration must be between 1 and 120.')
     if duration_type not in ('weeks', 'months'):
         raise ValueError('Invalid loan period selected.')
-    if interest_mode not in ('flat_rate', 'monthly_accrual'):
+    if interest_mode not in INDIVIDUAL_INTEREST_MODES:
         raise ValueError('Invalid interest mode selected.')
 
     if interest_mode == 'monthly_accrual':
@@ -211,6 +325,17 @@ def parse_individual_loan_form(form):
         interest_rate = (monthly_interest_amount / principal) * Decimal('100')
         interest_amount = Decimal('0')
         total_amount = principal
+    elif interest_mode == 'reducing_balance_equal':
+        if duration_type != 'months':
+            raise ValueError('Reducing-balance loans must use a monthly duration.')
+        if interest_rate < 0 or interest_rate > MAX_INTEREST_RATE:
+            raise ValueError('Monthly interest rate must be between 0 and 100.')
+        schedule = calculate_reducing_balance_schedule(principal, interest_rate, duration_weeks, issue_date)
+        if not schedule:
+            raise ValueError('Unable to calculate reducing-balance schedule.')
+        monthly_interest_amount = schedule[0]['payment']
+        interest_amount = sum((row['interest'] for row in schedule), Decimal('0'))
+        total_amount = sum((row['payment'] for row in schedule), Decimal('0'))
     else:
         if interest_rate < 0 or interest_rate > MAX_INTEREST_RATE:
             raise ValueError('Interest rate must be between 0 and 100.')
@@ -297,9 +422,9 @@ def index():
         ).update({'status': 'overdue'}, synchronize_session=False)
         db.session.commit()
 
-        active_loans = Loan.query.filter(Loan.is_deleted == False, Loan.balance > 0).count()
+        active_loans = Loan.query.filter(Loan.is_deleted == False, Loan.status != 'renewed', Loan.balance > 0).count()
         active_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.balance > 0).count()
-        overdue_loans = Loan.query.filter(Loan.is_deleted == False, Loan.status == 'overdue').count()
+        overdue_loans = Loan.query.filter(Loan.is_deleted == False, Loan.status == 'overdue', Loan.balance > 0).count()
         overdue_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.status == 'overdue').count()
 
         total_outstanding, total_interest_expected = summarize_outstanding_portfolio()
@@ -425,9 +550,19 @@ def delete_client(id):
 @login_required('finance')
 def loans():
     refresh_active_loans()
-    all_loans = Loan.query.filter_by(is_deleted=False).order_by(Loan.issue_date.desc()).all()
+    show_renewed = request.args.get('show_renewed') == '1'
+    query = Loan.query.filter_by(is_deleted=False)
+    if not show_renewed:
+        query = query.filter(Loan.status != 'renewed')
+    all_loans = query.order_by(Loan.issue_date.desc()).all()
     clients = LoanClient.query.filter_by(is_active=True).order_by(LoanClient.name).all()
-    return render_template('finance/loans.html', loans=all_loans, clients=clients, today=get_local_today())
+    return render_template(
+        'finance/loans.html',
+        loans=all_loans,
+        clients=clients,
+        today=get_local_today(),
+        show_renewed=show_renewed,
+    )
 
 
 @finance_bp.route('/loans/create', methods=['POST'])
@@ -473,7 +608,13 @@ def view_loan(id):
     if refresh_loan_state(loan):
         db.session.commit()
     payments = loan.payments.filter_by(is_deleted=False).order_by(LoanPayment.payment_date.desc()).all()
-    return render_template('finance/loan_detail.html', loan=loan, payments=payments, today=get_local_today())
+    return render_template(
+        'finance/loan_detail.html',
+        loan=loan,
+        payments=payments,
+        payment_schedule=get_loan_payment_schedule(loan),
+        today=get_local_today(),
+    )
 
 
 @finance_bp.route('/loans/<int:id>/pay', methods=['POST'])
@@ -680,9 +821,13 @@ def edit_loan(id):
             loan.issue_date = issue_date
             loan.due_date = due_date
 
-            # Recalculate duration_weeks
-            delta = due_date - issue_date
-            loan.duration_weeks = delta.days // 7
+            # Recalculate the stored duration unit without forcing monthly loans into weeks.
+            if (loan.duration_type or 'weeks') == 'months':
+                delta = relativedelta(due_date, issue_date)
+                loan.duration_weeks = max((delta.years * 12) + delta.months, 1)
+            else:
+                delta = due_date - issue_date
+                loan.duration_weeks = max(delta.days // 7, 1)
 
             # Update status based on new due date
             today = get_local_today()
@@ -923,9 +1068,17 @@ def preview_loan_agreement():
         return redirect(url_for('finance.loans'))
     projected_interest_amount = loan_data['interest_amount']
     projected_total_amount = loan_data['total_amount']
+    payment_schedule = []
     if loan_data['interest_mode'] == 'monthly_accrual':
         projected_interest_amount = loan_data['monthly_interest_amount'] * loan_data['duration_weeks']
         projected_total_amount = loan_data['principal'] + projected_interest_amount
+    elif loan_data['interest_mode'] == 'reducing_balance_equal':
+        payment_schedule = calculate_reducing_balance_schedule(
+            loan_data['principal'],
+            loan_data['interest_rate'],
+            loan_data['duration_weeks'],
+            loan_data['issue_date'],
+        )
 
     # Default agreement terms that can be edited
     default_terms = [
@@ -949,6 +1102,7 @@ def preview_loan_agreement():
         projected_interest_amount=float(projected_interest_amount),
         total_amount=float(loan_data['total_amount']),
         projected_total_amount=float(projected_total_amount),
+        payment_schedule=payment_schedule,
         duration_weeks=loan_data['duration_weeks'],
         duration_type=loan_data['duration_type'],
         issue_date=loan_data['issue_date'],
@@ -1041,6 +1195,7 @@ def download_loan_agreement_pdf(id):
     if loan.interest_mode == 'monthly_accrual':
         projected_interest = float((loan.monthly_interest_amount or 0) * loan.duration_weeks)
         projected_total = float(loan.principal) + projected_interest
+    payment_schedule = get_loan_payment_schedule(loan)
 
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -1076,7 +1231,12 @@ def download_loan_agreement_pdf(id):
     c.setFont("Helvetica", 10)
     c.drawString(50, y, f"Principal Amount: UGX {float(loan.principal):,.0f}")
     y -= 15
-    c.drawString(50, y, f"Interest Plan: {'Monthly Accrual' if loan.interest_mode == 'monthly_accrual' else 'Flat Rate'}")
+    plan_label = 'Monthly Accrual'
+    if loan.interest_mode == 'reducing_balance_equal':
+        plan_label = 'Reducing Balance - Equal Monthly Payments'
+    elif loan.interest_mode != 'monthly_accrual':
+        plan_label = 'Flat Rate'
+    c.drawString(50, y, f"Interest Plan: {plan_label}")
     y -= 15
     c.drawString(50, y, f"Equivalent Rate: {float(loan.interest_rate):,.2f}%")
     y -= 15
@@ -1093,6 +1253,14 @@ def download_loan_agreement_pdf(id):
         c.setFont("Helvetica", 10)
         y -= 15
         c.drawString(50, y, f"Projected Amount By Due Date: UGX {projected_total:,.0f}")
+    elif loan.interest_mode == 'reducing_balance_equal':
+        c.drawString(50, y, f"Monthly Payment: UGX {float(loan.monthly_interest_amount or 0):,.0f}")
+        y -= 15
+        c.drawString(50, y, f"Total Scheduled Interest: UGX {float(loan.interest_amount):,.0f}")
+        y -= 15
+        c.setFont("Helvetica-Bold", 10)
+        c.drawString(50, y, f"Total Scheduled Repayment: UGX {float(loan.total_amount):,.0f}")
+        c.setFont("Helvetica", 10)
     else:
         c.drawString(50, y, f"Interest Amount: UGX {float(loan.interest_amount):,.0f}")
         y -= 15
@@ -1107,6 +1275,30 @@ def download_loan_agreement_pdf(id):
     c.drawString(50, y, f"Issue Date: {loan.issue_date.strftime('%B %d, %Y')}")
     y -= 15
     c.drawString(50, y, f"Due Date: {loan.due_date.strftime('%B %d, %Y')}")
+
+    if payment_schedule:
+        y -= 28
+        c.setFont("Helvetica-Bold", 11)
+        c.drawString(50, y, "REDUCING BALANCE REPAYMENT SCHEDULE")
+        y -= 18
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(50, y, "Month")
+        c.drawRightString(170, y, "Payment")
+        c.drawRightString(270, y, "Interest")
+        c.drawRightString(380, y, "Principal")
+        c.drawRightString(500, y, "Balance")
+        y -= 12
+        c.setFont("Helvetica", 8)
+        for row in payment_schedule:
+            if y < 120:
+                c.showPage()
+                y = height - 60
+            c.drawString(50, y, str(row['period']))
+            c.drawRightString(170, y, f"{float(row['payment']):,.0f}")
+            c.drawRightString(270, y, f"{float(row['interest']):,.0f}")
+            c.drawRightString(380, y, f"{float(row['principal']):,.0f}")
+            c.drawRightString(500, y, f"{float(row['balance_after']):,.0f}")
+            y -= 12
 
     y -= 30
     c.line(50, y, width-50, y)
@@ -1147,6 +1339,71 @@ def download_loan_agreement_pdf(id):
         buffer.getvalue(),
         mimetype='application/pdf',
         headers={'Content-Disposition': f'attachment; filename=loan_agreement_{loan.id}.pdf'}
+    )
+
+
+@finance_bp.route('/loans/<int:id>/statement-pdf')
+@login_required('finance')
+def download_loan_statement_pdf(id):
+    """Download a printable/shareable statement for an individual loan."""
+    loan = Loan.query.get_or_404(id)
+    if refresh_loan_state(loan):
+        db.session.commit()
+
+    payments = loan.payments.filter_by(is_deleted=False).order_by(LoanPayment.payment_date.asc()).all()
+    buffer = generate_loan_statement_pdf(loan, payments, get_loan_payment_schedule(loan))
+
+    log_action(session.get('username'), 'finance', 'view', 'loan_statement', loan.id,
+               {'client': loan.client.name if loan.client else 'Unknown'})
+
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename=loan_statement_{loan.id}.pdf'}
+    )
+
+
+@finance_bp.route('/loans/<int:id>/payment-plan-pdf')
+@login_required('finance')
+def download_payment_plan_pdf(id):
+    """Download a proposed payment plan PDF for a delayed borrower."""
+    loan = Loan.query.get_or_404(id)
+    if refresh_loan_state(loan):
+        db.session.commit()
+
+    plan_months = get_form_value(request.args, 'months', 3, int) or 3
+    plan_months = max(1, min(plan_months, 24))
+    payments = loan.payments.filter_by(is_deleted=False).order_by(LoanPayment.payment_date.asc()).all()
+    buffer = generate_payment_plan_pdf(loan, payments, plan_months, get_loan_payment_schedule(loan))
+
+    log_action(session.get('username'), 'finance', 'view', 'payment_plan', loan.id,
+               {'client': loan.client.name if loan.client else 'Unknown', 'plan_months': plan_months})
+
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename=payment_plan_{loan.id}.pdf'}
+    )
+
+
+@finance_bp.route('/loans/<int:id>/overdue-reminder-pdf')
+@login_required('finance')
+def download_overdue_reminder_pdf(id):
+    """Download a reminder letter with the borrower's current financial summary."""
+    loan = Loan.query.get_or_404(id)
+    if refresh_loan_state(loan):
+        db.session.commit()
+
+    payments = loan.payments.filter_by(is_deleted=False).order_by(LoanPayment.payment_date.asc()).all()
+    buffer = generate_overdue_reminder_pdf(loan, payments, get_loan_payment_schedule(loan))
+
+    log_action(session.get('username'), 'finance', 'view', 'overdue_reminder', loan.id,
+               {'client': loan.client.name if loan.client else 'Unknown'})
+
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f'attachment; filename=overdue_reminder_{loan.id}.pdf'}
     )
 
 

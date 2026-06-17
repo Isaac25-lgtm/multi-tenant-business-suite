@@ -53,7 +53,15 @@
                 </tr>
                 <tr>
                     <td class="py-1"><strong>Interest Plan:</strong></td>
-                    <td>{{ 'Monthly Accrual' if interest_mode == 'monthly_accrual' else 'Flat Rate' }}</td>
+                    <td>
+                        {% if interest_mode == 'monthly_accrual' %}
+                        Monthly Accrual
+                        {% elif interest_mode == 'reducing_balance_equal' %}
+                        Reducing Balance - Equal Monthly Payments
+                        {% else %}
+                        Flat Rate
+                        {% endif %}
+                    </td>
                 </tr>
                 <tr>
                     <td class="py-1"><strong>Equivalent Rate:</strong></td>
@@ -80,6 +88,19 @@
                     <td class="py-1"><strong>Current Amount Due:</strong></td>
                     <td>UGX {{ "{:,.0f}".format(total_amount) }}</td>
                 </tr>
+                {% elif interest_mode == 'reducing_balance_equal' %}
+                <tr>
+                    <td class="py-1"><strong>Equal Monthly Payment:</strong></td>
+                    <td>UGX {{ "{:,.0f}".format(monthly_interest_amount) }}</td>
+                </tr>
+                <tr class="font-bold text-lg">
+                    <td class="py-2"><strong>Total Scheduled Interest:</strong></td>
+                    <td>UGX {{ "{:,.0f}".format(interest_amount) }}</td>
+                </tr>
+                <tr class="font-bold text-lg">
+                    <td class="py-2"><strong>Total Scheduled Repayment:</strong></td>
+                    <td>UGX {{ "{:,.0f}".format(total_amount) }}</td>
+                </tr>
                 {% else %}
                 <tr class="font-bold text-lg">
                     <td class="py-2"><strong>Flat Interest Amount:</strong></td>
@@ -103,6 +124,45 @@
                     <td>{{ due_date.strftime('%B %d, %Y') }}</td>
                 </tr>
             </table>
+
+            {% if payment_schedule %}
+            <div class="section-title">REDUCING BALANCE PAYMENT SCHEDULE</div>
+            <div class="overflow-x-auto mb-4">
+                <table class="data-table text-sm finance-schedule-table">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>Due Date</th>
+                            <th class="text-right">Payment</th>
+                            <th class="text-right">Interest</th>
+                            <th class="text-right">Principal</th>
+                            <th class="text-right">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in payment_schedule %}
+                        <tr>
+                            <td>{{ row.period }}</td>
+                            <td>{{ row.due_date.strftime('%Y-%m-%d') if row.due_date else '-' }}</td>
+                            <td class="text-right">UGX {{ "{:,.0f}".format(row.payment) }}</td>
+                            <td class="text-right">UGX {{ "{:,.0f}".format(row.interest) }}</td>
+                            <td class="text-right">UGX {{ "{:,.0f}".format(row.principal) }}</td>
+                            <td class="text-right">UGX {{ "{:,.0f}".format(row.balance_after) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2">Total</td>
+                            <td class="text-right">UGX {{ "{:,.0f}".format(payment_schedule|sum(attribute='payment')) }}</td>
+                            <td class="text-right">UGX {{ "{:,.0f}".format(payment_schedule|sum(attribute='interest')) }}</td>
+                            <td class="text-right">UGX {{ "{:,.0f}".format(payment_schedule|sum(attribute='principal')) }}</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            {% endif %}
 
             <div class="section-title">TERMS AND CONDITIONS</div>
             <div id="terms-container" class="space-y-2 mb-4">
