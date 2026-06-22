@@ -131,9 +131,11 @@
                 <a href="{{ url_for('finance.download_loan_statement_pdf', id=loan.id) }}" class="btn btn-outline">
                     Download Loan Statement
                 </a>
+                {% if current_section == 'manager' and loan.balance > 0 %}
                 <a href="{{ url_for('finance.download_payment_plan_pdf', id=loan.id) }}" class="btn btn-outline">
-                    Download Payment Plan
+                    Build Payment Plan
                 </a>
+                {% endif %}
                 <a href="{{ url_for('finance.download_overdue_reminder_pdf', id=loan.id) }}" class="btn btn-outline">
                     Download Reminder PDF
                 </a>

@@ -827,52 +827,130 @@ def generate_loan_statement_pdf(loan, payments, schedule=None):
     return _finish_loan_pdf(buffer, c, width, company_name, contact_phone, headquarters)
 
 
-def generate_payment_plan_pdf(loan, payments, plan_months=3, schedule=None):
-    """Generate a proposed repayment plan for an overdue or delayed borrower."""
+def _payment_plan_method_label(plan):
+    return {
+        'reducing_balance': 'Reducing balance',
+        'flat_rate': 'Flat rate',
+        'none': 'No additional interest',
+    }.get(plan.get('interest_method'), 'Manager selected')
+
+
+def _payment_frequency_label(value):
+    return {
+        'weekly': 'Weekly',
+        'bi_weekly': 'Every two weeks',
+        'monthly': 'Monthly',
+    }.get(value, str(value or '').replace('_', ' ').title())
+
+
+def _draw_payment_plan_configuration(c, width, height, y, plan):
+    if y < 245:
+        c.showPage()
+        y = height - 60
+
+    slate = HexColor('#0f172a')
+    gray = HexColor('#64748b')
+    border = HexColor('#e2e8f0')
+    c.setFillColor(slate)
+    c.setFont('Helvetica-Bold', 10)
+    c.drawString(50, y, 'MANAGER-SELECTED PLAN TERMS')
+    y -= 14
+
+    method = _payment_plan_method_label(plan)
+    if plan.get('interest_method') != 'none':
+        basis = 'per annum' if plan.get('rate_basis') == 'annum' else 'per month'
+        method = f"{method} at {Decimal(str(plan.get('rate_percent', 0))):,.2f}% {basis}"
+
+    rows = [
+        ('Amount placed on plan', format_currency(float(_money(plan.get('plan_amount', 0))))),
+        ('Deposit / upfront payment', format_currency(float(_money(plan.get('deposit', 0))))),
+        ('Amount financed', format_currency(float(_money(plan.get('financed_amount', 0))))),
+        ('Interest selection', method),
+        ('Payment frequency', _payment_frequency_label(plan.get('frequency'))),
+        ('Number of installments', str(plan.get('installments', ''))),
+        ('First payment date', plan.get('first_due_date').strftime('%B %d, %Y')),
+        ('Total plan interest', format_currency(float(_money(plan.get('total_interest', 0))))),
+        ('Scheduled installments', format_currency(float(_money(plan.get('scheduled_payments', 0))))),
+        ('Total including deposit', format_currency(float(_money(plan.get('total_with_deposit', 0))))),
+    ]
+    unplanned = _money(plan.get('unplanned_balance', 0))
+    if unplanned > 0:
+        rows.append(('Balance outside this plan', format_currency(float(unplanned))))
+
+    box_height = len(rows) * 16 + 14
+    c.setFillColor(HexColor('#f8fafc'))
+    c.roundRect(50, y - box_height, width - 100, box_height, 5, fill=1, stroke=0)
+    c.setStrokeColor(border)
+    c.roundRect(50, y - box_height, width - 100, box_height, 5, fill=0, stroke=1)
+    row_y = y - 16
+    for label, value in rows:
+        c.setFillColor(gray)
+        c.setFont('Helvetica', 8.5)
+        c.drawString(62, row_y, label)
+        c.setFillColor(slate)
+        c.setFont('Helvetica-Bold', 8.5)
+        c.drawRightString(width - 62, row_y, str(value)[:70])
+        row_y -= 16
+    return y - box_height - 18
+
+
+def _draw_payment_plan_text(c, width, height, y, heading, text):
+    if not text:
+        return y
+    styles = getSampleStyleSheet()
+    style = styles['Normal']
+    style.fontName = 'Helvetica'
+    style.fontSize = 9
+    style.leading = 13
+    style.textColor = HexColor('#0f172a')
+    paragraph = Paragraph(_paragraph_text(text).replace('\n', '<br/>'), style)
+    paragraph_height = paragraph.wrap(width - 100, height - 140)[1]
+    if y - paragraph_height < 75:
+        c.showPage()
+        y = height - 60
+    c.setFont('Helvetica-Bold', 10)
+    c.setFillColor(HexColor('#0f172a'))
+    c.drawString(50, y, heading)
+    y -= 15
+    paragraph.drawOn(c, 50, y - paragraph_height)
+    return y - paragraph_height - 18
+
+
+def _draw_payment_plan_signatures(c, width, height, y, prepared_by):
+    if y < 125:
+        c.showPage()
+        y = height - 70
+    c.setFillColor(HexColor('#0f172a'))
+    c.setFont('Helvetica-Bold', 10)
+    c.drawString(50, y, 'APPROVAL AND ACCEPTANCE')
+    y -= 45
+    right_x = width / 2 + 18
+    c.setStrokeColor(HexColor('#94a3b8'))
+    c.line(50, y, 230, y)
+    c.line(right_x, y, width - 50, y)
+    y -= 13
+    c.setFont('Helvetica', 8)
+    c.setFillColor(HexColor('#64748b'))
+    c.drawString(50, y, 'Borrower Signature & Date')
+    c.drawString(right_x, y, 'Manager Signature & Date')
+    y -= 15
+    c.drawString(right_x, y, f"Prepared by: {str(prepared_by or 'Manager')[:60]}")
+    return y - 18
+
+
+def generate_payment_plan_pdf(loan, payments, plan):
+    """Generate the complete report from the manager's validated selections."""
     ref = f"PLAN-{loan.id:05d}"
     buffer, c, width, height, y, company_name, contact_phone, headquarters = _start_loan_pdf(
-        "PROPOSED PAYMENT PLAN", ref
+        str(plan.get('title') or 'PROPOSED PAYMENT PLAN').upper(), ref
     )
     y = _draw_loan_summary(c, width, y, loan)
-
-    balance = _money(getattr(loan, 'balance', 0))
-    months = max(1, int(plan_months or 1))
-    monthly_amount = _money(balance / Decimal(months)) if balance > 0 else Decimal('0')
-    start_date = get_local_now().date()
-
-    styles = getSampleStyleSheet()
-    body_style = styles['Normal']
-    body_style.fontName = 'Helvetica'
-    body_style.fontSize = 9
-    body_style.leading = 14
-    body_style.textColor = HexColor('#0f172a')
-    client_name = getattr(getattr(loan, 'client', None), 'name', 'the borrower')
-    text = (
-        f"This proposal gives {client_name} a structured way to clear the outstanding "
-        f"balance of <b>{format_currency(float(balance))}</b> over <b>{months}</b> months. "
-        "Payments may be adjusted by management if the borrower pays early or makes an additional deposit."
-    )
-    para = Paragraph(text, body_style)
-    para_h = para.wrap(width - 100, 90)[1]
-    para.drawOn(c, 50, y - para_h)
-    y -= para_h + 18
-
-    plan_rows = []
-    remaining = balance
-    for idx in range(1, months + 1):
-        amount = monthly_amount if idx < months else remaining
-        remaining -= amount
-        due_date = start_date + relativedelta(months=idx)
-        plan_rows.append({
-            'period': idx,
-            'payment': amount,
-            'interest': Decimal('0'),
-            'principal': amount,
-            'balance_after': max(remaining, Decimal('0')),
-            'due_date': due_date,
-        })
-    y = _draw_schedule_table(c, width, height, y, plan_rows, title="PROPOSED CLEARANCE PLAN")
+    y = _draw_payment_plan_configuration(c, width, height, y, plan)
+    y = _draw_payment_plan_text(c, width, height, y, 'MANAGER NOTES', plan.get('manager_notes'))
+    y = _draw_schedule_table(c, width, height, y, plan.get('schedule'), title='APPROVED PAYMENT SCHEDULE')
+    y = _draw_payment_plan_text(c, width, height, y, 'TERMS AND CONDITIONS', plan.get('plan_terms'))
     y = _draw_payments_table(c, width, height, y, payments)
+    y = _draw_payment_plan_signatures(c, width, height, y, plan.get('prepared_by'))
     return _finish_loan_pdf(buffer, c, width, company_name, contact_phone, headquarters)
 
 

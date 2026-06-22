@@ -11,6 +11,7 @@ from app.utils.pdf_generator import (
     generate_payment_plan_pdf,
     generate_overdue_reminder_pdf,
 )
+from app.utils.payment_plan import calculate_manager_payment_plan
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from dateutil.relativedelta import relativedelta
@@ -1363,21 +1364,108 @@ def download_loan_statement_pdf(id):
     )
 
 
-@finance_bp.route('/loans/<int:id>/payment-plan-pdf')
+@finance_bp.route('/loans/<int:id>/payment-plan-pdf', methods=['GET', 'POST'])
 @login_required('finance')
 def download_payment_plan_pdf(id):
-    """Download a proposed payment plan PDF for a delayed borrower."""
+    """Let a manager author and print an exact client-specific payment plan."""
     loan = Loan.query.get_or_404(id)
     if refresh_loan_state(loan):
         db.session.commit()
 
-    plan_months = get_form_value(request.args, 'months', 3, int) or 3
-    plan_months = max(1, min(plan_months, 24))
+    if session.get('section') != 'manager':
+        flash('Only a manager can prepare and issue a payment plan.', 'error')
+        return redirect(url_for('finance.view_loan', id=id))
+    if round_money(loan.balance) <= 0:
+        flash('A payment plan can only be prepared for a loan with an outstanding balance.', 'error')
+        return redirect(url_for('finance.view_loan', id=id))
+
+    defaults = {
+        'plan_title': 'Proposed Payment Plan',
+        'plan_amount': str(round_money(loan.balance)),
+        'deposit': '0',
+        'interest_method': 'reducing_balance',
+        'rate_percent': '31',
+        'rate_basis': 'annum',
+        'frequency': 'monthly',
+        'installments': '3',
+        'first_due_date': str(get_local_today() + relativedelta(months=1)),
+        'manager_notes': '',
+        'plan_terms': (
+            'Payments must be made on or before each due date. '
+            'Any changes to this plan must be approved by management in writing.'
+        ),
+    }
+
+    if request.method == 'GET':
+        return render_template(
+            'finance/payment_plan_builder.html',
+            loan=loan,
+            form_values=defaults,
+            today=get_local_today(),
+        )
+
+    form_values = {key: request.form.get(key, value) for key, value in defaults.items()}
+    try:
+        plan_amount = safe_decimal(form_values['plan_amount'])
+        current_balance = round_money(loan.balance)
+        if plan_amount > current_balance:
+            raise ValueError(
+                f'Plan amount cannot exceed the current balance of UGX {current_balance:,.0f}.'
+            )
+        installments = int(form_values['installments'])
+        first_due_date = date.fromisoformat(form_values['first_due_date'])
+        if first_due_date < get_local_today():
+            raise ValueError('The first payment date cannot be in the past.')
+
+        plan = calculate_manager_payment_plan(
+            plan_amount=plan_amount,
+            deposit=safe_decimal(form_values['deposit']),
+            interest_method=form_values['interest_method'],
+            rate_percent=safe_decimal(form_values['rate_percent']),
+            rate_basis=form_values['rate_basis'],
+            frequency=form_values['frequency'],
+            installments=installments,
+            first_due_date=first_due_date,
+        )
+        title = str(form_values['plan_title'] or '').strip()
+        if not title or len(title) > 100:
+            raise ValueError('Plan title is required and must not exceed 100 characters.')
+        notes = str(form_values['manager_notes'] or '').strip()
+        terms = str(form_values['plan_terms'] or '').strip()
+        if len(notes) > 2000 or len(terms) > 3000:
+            raise ValueError('Notes or terms are too long for the payment-plan report.')
+
+        plan.update({
+            'title': title,
+            'manager_notes': notes,
+            'plan_terms': terms,
+            'prepared_by': session.get('username') or 'Manager',
+            'prepared_on': get_local_today(),
+            'current_balance': current_balance,
+            'unplanned_balance': current_balance - plan_amount,
+        })
+    except (ValueError, TypeError, InvalidOperation) as exc:
+        flash(str(exc) or 'Please review the payment-plan details.', 'error')
+        return render_template(
+            'finance/payment_plan_builder.html',
+            loan=loan,
+            form_values=form_values,
+            today=get_local_today(),
+        ), 400
+
     payments = loan.payments.filter_by(is_deleted=False).order_by(LoanPayment.payment_date.asc()).all()
-    buffer = generate_payment_plan_pdf(loan, payments, plan_months, get_loan_payment_schedule(loan))
+    buffer = generate_payment_plan_pdf(loan, payments, plan)
 
     log_action(session.get('username'), 'finance', 'view', 'payment_plan', loan.id,
-               {'client': loan.client.name if loan.client else 'Unknown', 'plan_months': plan_months})
+               {
+                   'client': loan.client.name if loan.client else 'Unknown',
+                   'plan_amount': float(plan['plan_amount']),
+                   'interest_method': plan['interest_method'],
+                   'rate_percent': float(plan['rate_percent']),
+                   'rate_basis': plan['rate_basis'],
+                   'frequency': plan['frequency'],
+                   'installments': plan['installments'],
+               })
 
     return Response(
         buffer.getvalue(),

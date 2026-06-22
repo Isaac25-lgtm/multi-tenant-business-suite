@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Build Payment Plan{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Build Payment Plan</h1>
+        <p class="page-subtitle">Choose every term for {{ loan.client.name }}. The system calculates the schedule and prints exactly what you approve.</p>
+    </div>
+    <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="btn btn-secondary">Back to Loan</a>
+</div>
+
+<div class="grid lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2">
+        <form method="POST" id="payment-plan-form" class="section-card">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <div class="rounded-lg p-4 mb-6" style="background:var(--navy-50);">
+                <div class="grid md:grid-cols-3 gap-4 text-sm">
+                    <div><span class="text-gray-500">Client</span><div class="font-semibold">{{ loan.client.name }}</div></div>
+                    <div><span class="text-gray-500">Loan Reference</span><div class="font-semibold">LOAN-{{ "%05d"|format(loan.id) }}</div></div>
+                    <div><span class="text-gray-500">Current Balance</span><div class="font-semibold">UGX {{ "{:,.0f}".format(loan.balance) }}</div></div>
+                </div>
+            </div>
+
+            <h2 class="font-semibold text-lg mb-4">Plan Details</h2>
+            <div class="grid md:grid-cols-2 gap-4 mb-6">
+                <div class="md:col-span-2">
+                    <label class="form-label" for="plan-title">Report Title</label>
+                    <input id="plan-title" class="form-input" type="text" name="plan_title" maxlength="100" required value="{{ form_values.get('plan_title', '') }}">
+                </div>
+                <div>
+                    <label class="form-label" for="plan-amount">Amount to Place on Plan (UGX)</label>
+                    <input id="plan-amount" class="form-input plan-input" type="number" name="plan_amount" min="1" max="{{ loan.balance }}" step="1" required value="{{ form_values.get('plan_amount', '') }}">
+                    <p class="text-xs text-gray-500 mt-1">May be all or part of the current outstanding balance.</p>
+                </div>
+                <div>
+                    <label class="form-label" for="deposit">Deposit / Upfront Payment (UGX)</label>
+                    <input id="deposit" class="form-input plan-input" type="number" name="deposit" min="0" step="1" required value="{{ form_values.get('deposit', '0') }}">
+                </div>
+            </div>
+
+            <h2 class="font-semibold text-lg mb-4">Interest Decision</h2>
+            <div class="grid md:grid-cols-3 gap-4 mb-6">
+                <div>
+                    <label class="form-label" for="interest-method">Interest Method</label>
+                    <select id="interest-method" name="interest_method" class="form-select plan-input" required>
+                        <option value="reducing_balance" {% if form_values.get('interest_method') == 'reducing_balance' %}selected{% endif %}>Reducing balance</option>
+                        <option value="flat_rate" {% if form_values.get('interest_method') == 'flat_rate' %}selected{% endif %}>Flat rate</option>
+                        <option value="none" {% if form_values.get('interest_method') == 'none' %}selected{% endif %}>No additional interest</option>
+                    </select>
+                </div>
+                <div id="rate-value-group">
+                    <label class="form-label" for="rate-percent">Interest Rate (%)</label>
+                    <input id="rate-percent" class="form-input plan-input" type="number" name="rate_percent" min="0" max="100" step="0.01" required value="{{ form_values.get('rate_percent', '31') }}">
+                </div>
+                <div id="rate-basis-group">
+                    <label class="form-label" for="rate-basis">Rate Applies</label>
+                    <select id="rate-basis" name="rate_basis" class="form-select plan-input" required>
+                        <option value="annum" {% if form_values.get('rate_basis') == 'annum' %}selected{% endif %}>Per annum</option>
+                        <option value="month" {% if form_values.get('rate_basis') == 'month' %}selected{% endif %}>Per month</option>
+                    </select>
+                    <p id="rate-warning" class="text-xs text-amber-600 mt-1"></p>
+                </div>
+            </div>
+
+            <h2 class="font-semibold text-lg mb-4">Schedule Decision</h2>
+            <div class="grid md:grid-cols-3 gap-4 mb-6">
+                <div>
+                    <label class="form-label" for="frequency">Payment Frequency</label>
+                    <select id="frequency" name="frequency" class="form-select plan-input" required>
+                        <option value="weekly" {% if form_values.get('frequency') == 'weekly' %}selected{% endif %}>Weekly</option>
+                        <option value="bi_weekly" {% if form_values.get('frequency') == 'bi_weekly' %}selected{% endif %}>Every two weeks</option>
+                        <option value="monthly" {% if form_values.get('frequency') == 'monthly' %}selected{% endif %}>Monthly</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label" for="installments">Number of Installments</label>
+                    <input id="installments" class="form-input plan-input" type="number" name="installments" min="1" max="120" step="1" required value="{{ form_values.get('installments', '3') }}">
+                </div>
+                <div>
+                    <label class="form-label" for="first-due-date">First Payment Date</label>
+                    <input id="first-due-date" class="form-input plan-input" type="date" name="first_due_date" min="{{ today }}" required value="{{ form_values.get('first_due_date', '') }}">
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label class="form-label" for="manager-notes">Manager Notes</label>
+                    <textarea id="manager-notes" class="form-input" name="manager_notes" rows="5" maxlength="2000" placeholder="Purpose, special arrangement, or explanation...">{{ form_values.get('manager_notes', '') }}</textarea>
+                </div>
+                <div>
+                    <label class="form-label" for="plan-terms">Plan Terms</label>
+                    <textarea id="plan-terms" class="form-input" name="plan_terms" rows="5" maxlength="3000">{{ form_values.get('plan_terms', '') }}</textarea>
+                </div>
+            </div>
+
+            <div class="rounded-lg p-4 mb-6 text-sm" style="background:#fffbeb;border:1px solid #fde68a;color:#78350f;">
+                The PDF is generated from the validated server calculation. Creating this report does not alter the original loan or record a payment.
+            </div>
+
+            <div class="flex gap-3 flex-wrap">
+                <button type="submit" class="btn btn-primary">Generate Full PDF Report</button>
+                <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="lg:col-span-1">
+        <div class="section-card sticky top-4">
+            <h2 class="font-semibold text-lg mb-1">Live Calculation</h2>
+            <p class="text-xs text-gray-500 mb-4">Preview only. The server verifies the final figures before printing.</p>
+            <div id="calculation-error" class="hidden rounded bg-red-50 text-red-700 p-3 text-sm mb-4"></div>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between gap-3"><span class="text-gray-500">Financed amount</span><strong id="preview-financed">-</strong></div>
+                <div class="flex justify-between gap-3"><span class="text-gray-500">Rate selection</span><strong id="preview-rate" class="text-right">-</strong></div>
+                <div class="flex justify-between gap-3"><span class="text-gray-500">First installment</span><strong id="preview-installment">-</strong></div>
+                <div class="flex justify-between gap-3"><span class="text-gray-500">Total interest</span><strong id="preview-interest">-</strong></div>
+                <div class="flex justify-between gap-3 border-t pt-3"><span>Total repayment</span><strong id="preview-total">-</strong></div>
+            </div>
+            <div class="mt-5 overflow-x-auto">
+                <table class="data-table text-xs">
+                    <thead><tr><th>#</th><th>Due</th><th class="text-right">Payment</th></tr></thead>
+                    <tbody id="schedule-preview"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const money = new Intl.NumberFormat('en-UG', {maximumFractionDigits: 0});
+    const byId = id => document.getElementById(id);
+    const roundMoney = value => Math.round((Number(value) || 0) + Number.EPSILON);
+
+    function nextDate(firstDate, frequency, index) {
+        const date = new Date(firstDate + 'T12:00:00');
+        if (frequency === 'monthly') date.setMonth(date.getMonth() + index);
+        else date.setDate(date.getDate() + index * (frequency === 'bi_weekly' ? 14 : 7));
+        return date;
+    }
+
+    function calculate() {
+        const method = byId('interest-method').value;
+        const amount = roundMoney(byId('plan-amount').value);
+        const deposit = roundMoney(byId('deposit').value);
+        const rate = Number(byId('rate-percent').value || 0);
+        const basis = byId('rate-basis').value;
+        const frequency = byId('frequency').value;
+        const count = Number(byId('installments').value || 0);
+        const firstDate = byId('first-due-date').value;
+        const error = byId('calculation-error');
+        byId('rate-value-group').style.opacity = method === 'none' ? '0.45' : '1';
+        byId('rate-basis-group').style.opacity = method === 'none' ? '0.45' : '1';
+        byId('rate-percent').disabled = method === 'none';
+        byId('rate-basis').disabled = method === 'none';
+        byId('rate-warning').textContent = method !== 'none' && basis === 'month'
+            ? rate + '% will be calculated per month, not per annum.' : '';
+
+        if (amount <= 0 || deposit < 0 || deposit >= amount || count < 1 || count > 120 || !firstDate) {
+            error.textContent = 'Enter a valid plan amount, deposit, installment count, and first payment date.';
+            error.classList.remove('hidden');
+            byId('schedule-preview').innerHTML = '';
+            return;
+        }
+        error.classList.add('hidden');
+        const financed = amount - deposit;
+        const periodsPerYear = {weekly: 52, bi_weekly: 26, monthly: 12}[frequency];
+        const annualRate = method === 'none' ? 0 : (basis === 'annum' ? rate : rate * 12);
+        const periodicRate = annualRate / 100 / periodsPerYear;
+        let remaining = financed;
+        let totalInterest = 0;
+        let totalPayments = 0;
+        const rows = [];
+
+        if (method === 'reducing_balance') {
+            const growth = Math.pow(1 + periodicRate, count);
+            const regular = periodicRate === 0
+                ? roundMoney(financed / count)
+                : roundMoney(financed * periodicRate * growth / (growth - 1));
+            for (let i = 0; i < count; i++) {
+                const interest = roundMoney(remaining * periodicRate);
+                const principal = i === count - 1 ? remaining : Math.min(remaining, regular - interest);
+                const payment = principal + interest;
+                remaining = Math.max(0, remaining - principal);
+                totalInterest += interest;
+                totalPayments += payment;
+                rows.push({payment, due: nextDate(firstDate, frequency, i)});
+            }
+        } else {
+            const basisPeriods = basis === 'annum' ? periodsPerYear : periodsPerYear / 12;
+            let interestLeft = method === 'flat_rate'
+                ? roundMoney(financed * (rate / 100) * (count / basisPeriods)) : 0;
+            let principalLeft = financed;
+            const regularPrincipal = roundMoney(financed / count);
+            const regularInterest = roundMoney(interestLeft / count);
+            for (let i = 0; i < count; i++) {
+                const principal = i === count - 1 ? principalLeft : Math.min(regularPrincipal, principalLeft);
+                const interest = i === count - 1 ? interestLeft : Math.min(regularInterest, interestLeft);
+                principalLeft -= principal;
+                interestLeft -= interest;
+                const payment = principal + interest;
+                totalInterest += interest;
+                totalPayments += payment;
+                rows.push({payment, due: nextDate(firstDate, frequency, i)});
+            }
+        }
+
+        byId('preview-financed').textContent = 'UGX ' + money.format(financed);
+        const methodLabel = {reducing_balance: 'Reducing balance', flat_rate: 'Flat rate', none: 'No added interest'}[method];
+        byId('preview-rate').textContent = method === 'none' ? methodLabel : `${methodLabel}, ${rate}% per ${basis === 'annum' ? 'annum' : 'month'}`;
+        byId('preview-installment').textContent = rows.length ? 'UGX ' + money.format(rows[0].payment) : '-';
+        byId('preview-interest').textContent = 'UGX ' + money.format(totalInterest);
+        byId('preview-total').textContent = 'UGX ' + money.format(deposit + totalPayments);
+        byId('schedule-preview').innerHTML = rows.slice(0, 12).map((row, index) =>
+            `<tr><td>${index + 1}</td><td>${row.due.toLocaleDateString('en-GB')}</td><td class="text-right">${money.format(row.payment)}</td></tr>`
+        ).join('') + (rows.length > 12 ? `<tr><td colspan="3">+ ${rows.length - 12} more installments in PDF</td></tr>` : '');
+    }
+
+    document.querySelectorAll('.plan-input').forEach(input => {
+        input.addEventListener('input', calculate);
+        input.addEventListener('change', calculate);
+    });
+    calculate();
+})();
+</script>
+{% endblock %}
