@@ -25,8 +25,8 @@ from app.models.website import (
     WebsiteSettings,
 )
 from app.models.finance import LoanClient
-from app.models.boutique import BoutiqueStock, BoutiqueCategory
-from app.models.hardware import HardwareStock, HardwareCategory
+from app.models.boutique import BoutiqueStock
+from app.models.hardware import HardwareStock
 from app.modules.auth import get_session_user, log_action as audit_log_action
 from app.utils.branding import get_site_settings
 from app.utils.timezone import get_local_now
@@ -284,7 +284,7 @@ def website_settings():
             flash('Approval turnaround must be between 1 and 720 hours.', 'error')
             return redirect(url_for('website.website_settings'))
 
-        settings.company_name = request.form.get('company_name', 'Denove').strip() or 'Denove'
+        settings.company_name = request.form.get('company_name', 'NoRongir').strip() or 'NoRongir'
         settings.company_suffix = request.form.get('company_suffix', 'APS').strip() or 'APS'
         settings.tagline = request.form.get('tagline', '').strip() or None
         settings.announcement_text = request.form.get('announcement_text', '').strip() or None

@@ -30,6 +30,19 @@ def get_secret_key():
     return key or 'local-dev-only-not-for-production'
 
 
+def normalize_postgres_url(url):
+    """Pin plain PostgreSQL URLs to the installed psycopg2 driver.
+
+    Render supplies postgres:// or postgresql:// URLs. SQLAlchemy 2.1 maps a
+    bare postgresql:// to the psycopg (v3) driver, which is not installed, so
+    the driver is named explicitly. URLs that already name a driver are kept.
+    """
+    for prefix in ('postgres://', 'postgresql://'):
+        if url.startswith(prefix):
+            return 'postgresql+psycopg2://' + url[len(prefix):]
+    return url
+
+
 def get_database_url():
     """Build a PostgreSQL connection URL. SQLite is not supported.
 
@@ -45,10 +58,7 @@ def get_database_url():
                 'SQLite is not supported. Set DATABASE_URL to a PostgreSQL '
                 'connection string (postgresql://user:pass@host:port/dbname).'
             )
-        # Render and older Heroku supply postgres:// but SQLAlchemy needs postgresql://
-        if url.startswith('postgres://'):
-            url = url.replace('postgres://', 'postgresql://', 1)
-        return url
+        return normalize_postgres_url(url)
 
     # Assemble from individual PG* variables (convenient for local dev).
     # URL.create safely escapes passwords with special characters.
@@ -128,6 +138,17 @@ class Config:
     SESSION_COOKIE_SAMESITE = 'Lax'
     SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', is_render() or is_production())
     PERMANENT_SESSION_LIFETIME = timedelta(hours=12)
+
+    # Monthly-accrual interest timing: 'arrears' (charge on each monthly
+    # anniversary; historical behaviour) or 'advance' (first month charged on
+    # the issue date). Changing this changes live balances; confirm with the
+    # business before switching.
+    MONTHLY_ACCRUAL_TIMING = os.getenv('MONTHLY_ACCRUAL_TIMING', 'arrears').strip().lower()
+
+    # Dedicated key for encrypting personal ID numbers (Fernet key). When set,
+    # new values are encrypted with it and values written under the old
+    # SECRET_KEY-derived key can still be read. See utils/pii.py.
+    PII_ENCRYPTION_KEY = os.getenv('PII_ENCRYPTION_KEY') or None
 
     # Database — PostgreSQL only (local and production)
     SQLALCHEMY_DATABASE_URI = get_database_url()

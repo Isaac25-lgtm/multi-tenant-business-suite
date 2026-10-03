@@ -5,7 +5,6 @@ tries plain-text extraction first and then falls back to rasterizing the first
 page for AI vision OCR when a vision model is configured.
 """
 
-import base64
 import json
 import logging
 import os

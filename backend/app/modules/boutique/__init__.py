@@ -9,10 +9,10 @@ from app.models.boutique import (
 from app.models.customer import Customer
 from app.models.user import User
 from app.modules.auth import login_required, log_action
+from app.utils.integrity import DUPLICATE_MESSAGE, find_recent_duplicate
 from app.extensions import db
-from app.utils.timezone import get_local_today
+from app.utils.timezone import get_local_now, get_local_today
 from app.utils.utils import generate_reference_number
-from app.utils.image_fetch import fetch_product_image_async, fetch_product_image
 from app.utils.pdf_generator import generate_receipt_pdf
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
@@ -24,8 +24,6 @@ BRANCHES = {
     'K': 'Kapchorwa Branch',
     'M': 'Bukwo Branch'
 }
-
-AUTO_IMAGE_FETCH_SESSION_KEY = 'boutique_auto_image_fetch_date'
 
 
 def get_current_branch():
@@ -83,20 +81,6 @@ def safe_decimal(value, default='0'):
         return Decimal(str(value).strip())
     except (InvalidOperation, ValueError):
         return Decimal(default)
-
-
-def auto_fetch_missing_images():
-    """Auto-fetch images for items missing an image URL."""
-    items = BoutiqueStock.query.filter(
-        BoutiqueStock.is_active == True,
-        db.or_(BoutiqueStock.image_url == None, BoutiqueStock.image_url == '')
-    ).all()
-
-    for item in items:
-        category_name = item.category.name if item.category else None
-        fetch_product_image_async(item.id, item.item_name, category_name)
-
-    return len(items)
 
 
 def parse_receipt_items(form):
@@ -168,14 +152,6 @@ def index():
 
     today = get_local_today()
 
-    # Auto-fetch missing images once per day per session
-    today_str = str(today)
-    if session.get(AUTO_IMAGE_FETCH_SESSION_KEY) != today_str:
-        try:
-            auto_fetch_missing_images()
-        except Exception:
-            pass
-        session[AUTO_IMAGE_FETCH_SESSION_KEY] = today_str
 
     try:
         # Build queries with branch filter
@@ -283,11 +259,6 @@ def stock():
     if not current_branch:
         return redirect(url_for('boutique.index'))
 
-    # Auto-fetch missing images once per day per session
-    today_str = str(get_local_today())
-    if session.get(AUTO_IMAGE_FETCH_SESSION_KEY) != today_str:
-        auto_fetch_missing_images()
-        session[AUTO_IMAGE_FETCH_SESSION_KEY] = today_str
 
     show_inactive = request.args.get('show_inactive', 'false').lower() == 'true'
     query = BoutiqueStock.query
@@ -377,13 +348,6 @@ def add_stock():
         db.session.add(stock_item)
         db.session.commit()
 
-        # Auto-fetch product image in the background
-        category_name = None
-        if category_id:
-            cat = BoutiqueCategory.query.get(category_id)
-            if cat:
-                category_name = cat.name
-        fetch_product_image_async(stock_item.id, item_name, category_name)
 
         log_action(session['username'], 'boutique', 'create', 'stock', stock_item.id,
                    {'item_name': item_name, 'quantity': quantity,
@@ -442,7 +406,6 @@ def edit_stock(id):
         if files:
             upload_dir = os.path.join(current_app.static_folder, 'uploads', 'products')
             os.makedirs(upload_dir, exist_ok=True)
-            from datetime import datetime
             existing_count = ProductImage.query.filter_by(
                 product_type='boutique', product_id=id
             ).count()
@@ -546,22 +509,6 @@ def reactivate_stock(id):
     return redirect(url_for('boutique.stock'))
 
 
-@boutique_bp.route('/stock/<int:id>/refresh-image', methods=['POST'])
-@login_required('boutique')
-def refresh_image(id):
-    """Re-fetch the product image for a stock item"""
-    item = BoutiqueStock.query.get_or_404(id)
-    category_name = item.category.name if item.category else None
-    image_url = fetch_product_image(item.item_name, category_name)
-    if image_url:
-        item.image_url = image_url
-        db.session.commit()
-        flash(f'Image updated for "{item.item_name}"', 'success')
-    else:
-        flash(f'No image found for "{item.item_name}"', 'warning')
-    return redirect(url_for('boutique.stock'))
-
-
 @boutique_bp.route('/stock/<int:id>/delete-image/<int:image_id>', methods=['POST'])
 @login_required('boutique')
 def delete_image(id, image_id):
@@ -581,25 +528,6 @@ def delete_image(id, image_id):
         item.image_url = next_img.image_url if next_img else None
     db.session.commit()
     flash('Image deleted', 'success')
-    return redirect(url_for('boutique.stock'))
-
-
-@boutique_bp.route('/stock/fetch-all-images', methods=['POST'])
-@login_required('boutique')
-def fetch_all_images():
-    """Fetch images for all stock items that don't have one yet"""
-    items = BoutiqueStock.query.filter(
-        BoutiqueStock.is_active == True,
-        db.or_(BoutiqueStock.image_url == None, BoutiqueStock.image_url == '')
-    ).all()
-
-    count = 0
-    for item in items:
-        category_name = item.category.name if item.category else None
-        fetch_product_image_async(item.id, item.item_name, category_name)
-        count += 1
-
-    flash(f'Fetching images for {count} items in the background...', 'success')
     return redirect(url_for('boutique.stock'))
 
 
@@ -710,7 +638,6 @@ def create_sale():
                 continue
 
             subtotal = qty * price
-            total_amount += subtotal
 
             stock_item = db.session.query(BoutiqueStock).filter_by(
                 id=int(item_id),
@@ -722,12 +649,14 @@ def create_sale():
                     flash(f'Not enough stock for "{stock_item.item_name}". Available: {stock_item.quantity}.', 'error')
                     db.session.rollback()
                     return redirect(url_for('boutique.new_sale'))
+                total_amount += subtotal
                 items_data.append({
                     'stock_id': stock_item.id,
                     'item_name': stock_item.item_name,
                     'quantity': qty,
                     'unit_price': price,
                     'subtotal': subtotal,
+                    'unit_cost': stock_item.cost_price,
                     'stock': stock_item,
                 })
 
@@ -737,6 +666,10 @@ def create_sale():
 
         if payment_type == 'full':
             amount_paid = total_amount
+        elif amount_paid < 0 or amount_paid > total_amount:
+            db.session.rollback()
+            flash('Amount paid must be between 0 and the sale total.', 'error')
+            return redirect(url_for('boutique.new_sale'))
 
         balance = total_amount - amount_paid
 
@@ -773,7 +706,8 @@ def create_sale():
                 item_name=item_data['item_name'],
                 quantity=item_data['quantity'],
                 unit_price=item_data['unit_price'],
-                subtotal=item_data['subtotal']
+                subtotal=item_data['subtotal'],
+                unit_cost_at_sale=item_data['unit_cost'],
             )
             db.session.add(sale_item)
 
@@ -865,6 +799,25 @@ def download_receipt(id):
 
         balance_value = max(total_amount - amount_paid_value, 0)
         payment_type = 'full' if balance_value <= 0 else 'part'
+
+        # Money on a receipt must match the recorded sale. Staff may change
+        # descriptions; only a manager may issue different amounts, and that
+        # copy is stamped and audited.
+        amounts_changed = (
+            round(total_amount) != round(float(sale.total_amount or 0))
+            or round(amount_paid_value) != round(float(sale.amount_paid or 0))
+        )
+        if amounts_changed:
+            if session.get('section') != 'manager':
+                flash('Receipt amounts must match the recorded sale. Ask a manager if a different receipt is needed.', 'error')
+                return redirect(url_for('boutique.receipt_preview', id=id))
+            meta_override['edited'] = True
+            log_action(session['username'], 'boutique', 'edit', 'receipt', sale.id,
+                       {'reference': sale.reference_number,
+                        'recorded_total': float(sale.total_amount or 0),
+                        'receipt_total': float(total_amount),
+                        'recorded_paid': float(sale.amount_paid or 0),
+                        'receipt_paid': amount_paid_value})
         totals_override = {
             'total_amount': total_amount,
             'amount_paid': amount_paid_value,
@@ -892,7 +845,10 @@ def download_receipt(id):
 @login_required('boutique')
 def delete_sale(id):
     """Soft delete a sale and restore stock"""
-    sale = BoutiqueSale.query.get_or_404(id)
+    sale = BoutiqueSale.query.filter_by(id=id).with_for_update().first_or_404()
+    if sale.is_deleted:
+        flash(f'Sale {sale.reference_number} was already deleted.', 'warning')
+        return redirect(url_for('boutique.sales'))
 
     try:
         # Restore stock quantities
@@ -940,11 +896,16 @@ def credits():
 @login_required('boutique')
 def pay_credit(id):
     """Record a credit payment"""
-    sale = BoutiqueSale.query.get_or_404(id)
+    sale = BoutiqueSale.query.filter_by(id=id).with_for_update().first_or_404()
 
     try:
         amount = safe_decimal(request.form.get('amount', '0'))
         payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
+
+        if find_recent_duplicate(BoutiqueCreditPayment, sale_id=sale.id, amount=amount, payment_date=payment_date):
+            db.session.rollback()
+            flash(DUPLICATE_MESSAGE, 'warning')
+            return redirect(url_for('boutique.credits'))
 
         # Check date permission for non-managers
         user_section = session.get('section', '')
@@ -1228,14 +1189,24 @@ def extend_hire(id):
 @login_required('boutique')
 def pay_hire(id):
     """Record payment for hire"""
-    hire = BoutiqueHire.query.get_or_404(id)
+    hire = BoutiqueHire.query.filter_by(id=id).with_for_update().first_or_404()
 
     try:
         amount = safe_decimal(request.form.get('amount', '0'))
         payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
 
+        if find_recent_duplicate(BoutiqueHirePayment, hire_id=hire.id, amount=amount, payment_date=payment_date):
+            db.session.rollback()
+            flash(DUPLICATE_MESSAGE, 'warning')
+            return redirect(url_for('boutique.view_hire', id=id))
+        if not check_date_permission(payment_date, session.get('section', '')):
+            flash('You can only enter payments for today or yesterday. Contact a manager for older entries.', 'error')
+            return redirect(url_for('boutique.view_hire', id=id))
         if amount <= 0:
             flash('Payment amount must be greater than 0', 'error')
+            return redirect(url_for('boutique.view_hire', id=id))
+        if amount > (hire.balance or 0):
+            flash(f'Payment cannot exceed the balance of UGX {hire.balance:,.0f}.', 'error')
             return redirect(url_for('boutique.view_hire', id=id))
 
         hire.amount_paid += amount
@@ -1286,7 +1257,10 @@ def hire_receipt(id):
 @login_required('boutique')
 def delete_hire(id):
     """Soft delete a hire"""
-    hire = BoutiqueHire.query.get_or_404(id)
+    hire = BoutiqueHire.query.filter_by(id=id).with_for_update().first_or_404()
+    if hire.is_deleted:
+        flash(f'Hire {hire.reference_number} was already deleted.', 'warning')
+        return redirect(url_for('boutique.hires'))
 
     try:
         # If hire is still active, restore stock

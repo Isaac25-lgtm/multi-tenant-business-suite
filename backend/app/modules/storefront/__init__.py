@@ -9,11 +9,9 @@ FORBIDDEN: Inventory, Sales, Loans, Finance tables
 """
 import re
 
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for
+from flask import Blueprint, current_app, render_template, request, jsonify, redirect, url_for
 from app.extensions import csrf
 from app.extensions import db
-from app.models.boutique import BoutiqueStock, BoutiqueCategory
-from app.models.hardware import HardwareStock, HardwareCategory
 from app.models.website import (
     PublishedProduct,
     WebsiteImage,
@@ -256,8 +254,9 @@ def submit_loan_inquiry():
             'message': 'Your loan inquiry has been submitted. Our team will contact you soon.'
         })
         
-    except Exception as e:
+    except Exception:
         db.session.rollback()
+        current_app.logger.exception('Public loan inquiry could not be saved')
         return jsonify({'success': False, 'error': 'Failed to submit inquiry'}), 500
 
 
@@ -311,6 +310,7 @@ def submit_order_request():
             'message': 'Your order request has been submitted. Our team will contact you to confirm.'
         })
         
-    except Exception as e:
+    except Exception:
         db.session.rollback()
+        current_app.logger.exception('Public order request could not be saved')
         return jsonify({'success': False, 'error': 'Failed to submit order'}), 500

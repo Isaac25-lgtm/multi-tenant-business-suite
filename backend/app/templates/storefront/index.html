@@ -5,6 +5,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{ brand_display_name }} - {{ settings.tagline }} | Serving {{ settings.service_area }}</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32.png') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -87,7 +89,7 @@
       <div class="sec__header reveal">
         <div class="sec__tag">Nationwide Reach</div>
         <h2 class="sec__title">Serving all of Uganda</h2>
-        <p class="sec__desc">Denove APS serves customers across the country, with Bukwo and Kapchorwa highlighted as strong service centers.</p>
+        <p class="sec__desc">{{ brand_display_name }} serves customers across the country, with Bukwo and Kapchorwa highlighted as strong service centers.</p>
       </div>
       <div class="media-wall">
         {% for image in website_images %}
@@ -398,7 +400,7 @@
       </div>
 
       <div class="cart-actions">
-        <button onclick="submitOrderRequest()" class="hero__btn hero__btn--pri">Submit Order</button>
+        <button onclick="submitOrderRequest()" class="hero__btn hero__btn--pri">Send order request</button>
         <button onclick="checkoutWhatsApp()" class="hero__btn hero__btn--gho" style="background:#25D366;color:#fff;border-color:#25D366">WhatsApp Order</button>
       </div>
       <p class="cart-note">Your request is reviewed by staff before anything is sold or reserved.</p>

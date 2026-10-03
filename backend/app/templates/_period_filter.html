@@ -1,0 +1,19 @@
+{# Shared period filter. Expects `period` from services.periods.resolve_period. #}
+<form method="GET" class="period-filter" aria-label="Reporting period">
+    {% for key, label in period.choices %}
+    {% if key != 'custom' %}
+    <a href="?period={{ key }}{% for name, value in (extra_filters or {}).items() %}&{{ name }}={{ value }}{% endfor %}"
+       class="period-chip {% if period.key == key %}is-active{% endif %}">{{ label }}</a>
+    {% endif %}
+    {% endfor %}
+    <span class="period-custom">
+        <input type="hidden" name="period" value="custom">
+        {% for name, value in (extra_filters or {}).items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+        <label class="sr-only" for="period-start">From</label>
+        <input type="date" id="period-start" name="start" value="{{ period.start }}" class="form-input form-input-sm">
+        <label class="sr-only" for="period-end">To</label>
+        <input type="date" id="period-end" name="end" value="{{ period.end }}" class="form-input form-input-sm">
+        <button type="submit" class="btn btn-sm btn-outline">Apply</button>
+    </span>
+    <span class="period-range">{{ period.start.strftime('%d %b %Y') }}{% if period.end != period.start %} – {{ period.end.strftime('%d %b %Y') }}{% endif %}</span>
+</form>

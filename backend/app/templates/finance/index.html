@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Finance - Devs APS{% endblock %}
+{% block title %}Finance - {{ brand_display_name }}{% endblock %}
 
 {% block page_header %}
 <h2>Finance</h2>
@@ -9,68 +9,85 @@
 
 {% block content %}
 
-<!-- Quick Guide -->
-<div class="guideline mb-6">
-    <div class="font-semibold text-gray-700 mb-2">How This Page Works</div>
-    <ul class="list-disc list-inside space-y-1 text-sm">
-        <li><strong>Finance Overview:</strong> Monitor loan portfolio at a glance - click any card to view details (display only)</li>
-        <li><strong>Quick Actions:</strong> Start all data entry here - add clients, issue loans, record payments</li>
-    </ul>
-    <div class="mt-3 pt-3 border-t border-gray-200">
-        <div class="font-semibold text-gray-700 mb-2">Loan Processing Flow</div>
-        <ul class="list-disc list-inside space-y-1 text-sm">
-            <li><strong>For Individual Loans:</strong> First add the client in <strong>Clients</strong>, then create loan in <strong>Individual Loans</strong></li>
-            <li><strong>For Group Loans:</strong> Go directly to <strong>Group Loans</strong> - enter group name, members, and loan details</li>
-            <li><strong>Agreement Preview:</strong> Review all details before issuing - you can add member details and upload collateral</li>
-            <li><strong>Recording Payments:</strong> Click on any loan to view details and record payments</li>
-            <li><strong>Track Progress:</strong> Use <strong>Payments</strong> to see all recent payment history</li>
-        </ul>
-    </div>
-    <div class="mt-3 pt-3 border-t border-gray-200">
-        <div class="font-semibold text-gray-700 mb-2">Access Permissions</div>
-        <ul class="list-disc list-inside space-y-1 text-sm">
-            <li><strong>Employees:</strong> Can only add/edit entries for <strong>today</strong> and <strong>yesterday</strong></li>
-            <li><strong>Managers:</strong> Can view and edit entries for the <strong>past 30 days</strong>, with date filtering</li>
-        </ul>
-    </div>
-</div>
+<details class="help-details mb-6">
+    <summary>How the finance section works</summary>
+    <ol>
+        <li>Individual loans: add the borrower under <strong>Clients</strong>, then issue the loan under <strong>Individual Loans</strong>.</li>
+        <li>Group loans: go straight to <strong>Group Loans</strong> and enter the group and its members.</li>
+        <li>Open any loan to record a payment, download statements, or (managers) record discounts and reverse mistakes.</li>
+        <li>Employees can enter today's and yesterday's transactions; managers can enter any date.</li>
+    </ol>
+</details>
 
 <!-- Finance Overview - Display Only -->
+{% if load_error %}
+<div class="flash-message flash-error mb-6">
+    <span>Finance figures could not be loaded just now. The numbers below are unavailable, not zero. Refresh the page or contact support if this continues.</span>
+</div>
+{% endif %}
 <div class="section-card mb-6">
     <div class="section-card-header">
         <h2 class="section-card-title">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
             Finance Overview
         </h2>
-        <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">View Only - Click to see details</span>
+        <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Individual and group loans combined</span>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
         <a href="{{ url_for('finance.loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
-            <div class="stat-card-value">{{ active_loans }}</div>
-            <div class="stat-card-label">Active Loans</div>
+            <div class="stat-card-value">{{ '—' if load_error else active_loans }}</div>
+            <div class="stat-card-label">Active Individual Loans</div>
             <div class="text-xs text-indigo-600 mt-1">View loans &rarr;</div>
         </a>
         <a href="{{ url_for('finance.group_loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
-            <div class="stat-card-value">{{ active_groups }}</div>
-            <div class="stat-card-label">Active Groups</div>
+            <div class="stat-card-value">{{ '—' if load_error else active_groups }}</div>
+            <div class="stat-card-label">Active Group Loans</div>
             <div class="text-xs text-indigo-600 mt-1">View groups &rarr;</div>
         </a>
         <a href="{{ url_for('finance.loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
-            <div class="stat-card-value {% if overdue_loans + overdue_groups > 0 %}text-red-600{% endif %}">{{ overdue_loans + overdue_groups }}</div>
+            <div class="stat-card-value {% if not load_error and overdue_loans + overdue_groups > 0 %}text-red-600{% endif %}">{{ '—' if load_error else overdue_loans + overdue_groups }}</div>
             <div class="stat-card-label">Overdue</div>
-            <div class="text-xs text-indigo-600 mt-1">Check overdue &rarr;</div>
-        </a>
-        <a href="{{ url_for('finance.payments') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
-            <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(total_outstanding) }}</div>
-            <div class="stat-card-label">Principal Outstanding</div>
-            <div class="text-xs text-indigo-600 mt-1">View payments &rarr;</div>
-        </a>
-        <a href="{{ url_for('finance.loans') }}" class="stat-card hover:shadow-lg transition-shadow cursor-pointer">
-            <div class="stat-card-value text-amber-600">UGX {{ "{:,.0f}".format(total_interest_expected) }}</div>
-            <div class="stat-card-label">Interest Expected</div>
-            <div class="text-xs text-indigo-600 mt-1">View loans &rarr;</div>
+            <div class="text-xs text-gray-500 mt-1">{% if not load_error %}{{ overdue_loans }} individual · {{ overdue_groups }} group{% endif %}</div>
         </a>
     </div>
+
+    {% if portfolio %}
+    <div class="overflow-x-auto">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Outstanding (UGX)</th>
+                    <th class="text-right">Individual loans</th>
+                    <th class="text-right">Group loans</th>
+                    <th class="text-right">Combined</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="font-medium">Principal outstanding</td>
+                    <td class="text-right">{{ "{:,.0f}".format(portfolio.individual_principal) }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(portfolio.group_principal) }}</td>
+                    <td class="text-right font-semibold">{{ "{:,.0f}".format(portfolio.combined_principal) }}</td>
+                </tr>
+                <tr>
+                    <td class="font-medium">Interest outstanding</td>
+                    <td class="text-right">{{ "{:,.0f}".format(portfolio.individual_interest) }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(portfolio.group_interest) }}</td>
+                    <td class="text-right font-semibold">{{ "{:,.0f}".format(portfolio.combined_interest) }}</td>
+                </tr>
+            </tbody>
+            <tfoot class="table-subtotal">
+                <tr>
+                    <td>Total balance owed</td>
+                    <td class="text-right">{{ "{:,.0f}".format(portfolio.individual_balance) }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(portfolio.group_balance) }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(portfolio.combined_balance) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <p class="text-xs text-gray-500 mt-2">Interest outstanding is interest already charged and not yet paid. Monthly-interest loans add one charge per month until they are settled.</p>
+    {% endif %}
 </div>
 
 <!-- Quick Actions - Data Entry -->

@@ -40,7 +40,7 @@
       </div>
       <div style="padding: 16px; text-align: center;">
         {% if extraction.file_type in ('jpg', 'jpeg', 'png', 'gif', 'webp') %}
-          <img src="{{ url_for('static', filename=extraction.public_file_path) if extraction.public_file_path else '' }}"
+          <img src="{{ url_for('ai.ocr_file', id=extraction.id) if extraction.public_file_path else '' }}"
                alt="Document" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border);"
                onerror="this.parentElement.innerHTML='<p style=color:var(--navy-400)>Preview not available</p>'">
         {% elif extraction.file_type == 'pdf' %}

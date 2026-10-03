@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, current_app
 from app.models.customer import Customer
 from app.modules.auth import login_required, get_session_user
 from app.extensions import db

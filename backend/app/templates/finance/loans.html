@@ -1,127 +1,132 @@
 {% extends "base.html" %}
 
-{% block title %}Loans - Denove APS{% endblock %}
+{% block title %}Loans - {{ brand_display_name }}{% endblock %}
 
 {% block page_header %}
 <h2>Individual Loans</h2>
-<p>{{ loans|length }} loans</p>
+<p>{{ loans|length }} loan{{ '' if loans|length == 1 else 's' }}{% if search %} matching “{{ search }}”{% endif %}</p>
 {% endblock %}
 
 {% block content %}
-<div class="flex justify-end mb-6">
-    {% if show_renewed %}
-    <a href="{{ url_for('finance.loans') }}" class="btn btn-outline mr-2">Hide Renewed Loans</a>
-    {% else %}
-    <a href="{{ url_for('finance.loans', show_renewed=1) }}" class="btn btn-outline mr-2">Show Renewed Loans</a>
-    {% endif %}
-    <button onclick="showModal('add-loan-modal')" class="btn btn-primary">New Loan</button>
-</div>
-
-<!-- Quick Tip -->
 {% if clients|length == 0 %}
 <div class="quick-tip mb-6">
-    <div class="quick-tip-title">No Clients Found!</div>
-    You need to <a href="{{ url_for('finance.clients') }}" class="text-blue-600 underline font-medium">add a client first</a> before you can issue a loan.
-</div>
-{% else %}
-<div class="guideline mb-6">
-    <div class="font-semibold text-gray-700 mb-2">Data Entry Guide - Individual Loans</div>
-    <ul class="list-disc list-inside space-y-1 text-sm">
-        <li><strong>Step 1:</strong> Click "New Loan" to start - select a client from the list</li>
-        <li><strong>Step 2:</strong> Choose a flat rate or a monthly accrual plan, then enter the duration</li>
-        <li><strong>Step 3:</strong> Click "Preview Agreement" to review all calculations before issuing</li>
-        <li><strong>Step 4:</strong> Upload any collateral documents in the preview screen</li>
-        <li><strong>Step 5:</strong> Click "Issue Loan" to finalize</li>
-        <li><strong>Payments:</strong> Click "View" on any loan to record payments</li>
-    </ul>
+    <div class="quick-tip-title">No clients yet</div>
+    <a href="{{ url_for('finance.clients') }}" class="text-blue-600 underline font-medium">Add a client first</a>, then issue their loan here.
 </div>
 {% endif %}
 
-<!-- Loans Table -->
-<div class="section-card">
-    <div class="section-card-header">
-        <h2 class="section-card-title">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-            All Loans
-        </h2>
-    </div>
+<div class="list-toolbar">
+    <form method="GET" class="list-search" role="search">
+        {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+        <label class="sr-only" for="loan-search">Search loans</label>
+        <input type="search" id="loan-search" name="q" value="{{ search }}" class="form-input" placeholder="Search borrower name or phone">
+        <button type="submit" class="btn btn-outline">Search</button>
+        {% if search %}<a href="{{ url_for('finance.loans', status=status or None) }}" class="btn btn-ghost">Clear</a>{% endif %}
+    </form>
+    <button onclick="showModal('add-loan-modal')" class="btn btn-primary" {% if not clients %}disabled{% endif %}>New loan</button>
+</div>
+
+<nav class="filter-tabs" aria-label="Loan status">
+    {% for key, label in filters.items() %}
+    <a href="{{ url_for('finance.loans', status=key or None, q=search or None) }}" class="filter-tab {% if status == key %}is-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+</nav>
+
+<details class="help-details mb-4">
+    <summary>How issuing a loan works</summary>
+    <ol>
+        <li>Click <strong>New loan</strong> and choose the borrower.</li>
+        <li>Pick a flat rate, monthly interest, or reducing-balance plan and the duration.</li>
+        <li><strong>Preview agreement</strong> to check the figures and upload collateral, then issue.</li>
+        <li>Open a loan to record payments. Employees can enter today's or yesterday's payments; managers any date.</li>
+    </ol>
+</details>
+
+<div class="section-card" style="padding:0;">
     <div class="overflow-x-auto">
-        <table class="data-table finance-loans-table">
+        <table class="data-table finance-loans-table responsive-table">
             <thead>
                 <tr>
-                    <th>Client</th>
-                    <th class="text-right">Principal</th>
-                    <th>Interest Plan</th>
-                    <th class="text-right">Current Due</th>
+                    <th>Borrower</th>
+                    <th class="text-right">Principal (UGX)</th>
+                    <th>Interest plan</th>
+                    <th class="text-right">Current due</th>
                     <th class="text-right">Balance</th>
-                    <th>Due Date</th>
+                    <th>Due date</th>
                     <th>Status</th>
-                    <th style="min-width: 160px; white-space: nowrap;">Actions</th>
+                    <th><span class="sr-only">Actions</span></th>
                 </tr>
             </thead>
             <tbody>
                 {% for loan in loans %}
-                <tr style="{% if loan.client and loan.client.payer_status == 'bad' %}background:#fef2f2;{% elif loan.client and loan.client.payer_status == 'good' %}background:#f0fdf4;{% endif %}">
-                    <td class="font-medium">
-                        {{ loan.client.name }}
+                <tr>
+                    <td data-label="Borrower">
+                        <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="row-link">{{ loan.client.name }}</a>
                         {% if loan.client and loan.client.payer_status != 'neutral' %}
-                        <div class="mt-1">
-                            <span class="badge badge-{{ 'success' if loan.client.payer_status == 'good' else 'danger' }}">
-                                {{ loan.client.payer_status_label }}
-                            </span>
-                        </div>
+                        <span class="badge badge-{{ 'success' if loan.client.payer_status == 'good' else 'danger' }} badge-sm">{{ loan.client.payer_status_label }}</span>
                         {% endif %}
                     </td>
-                    <td class="text-right">{{ "{:,.0f}".format(loan.principal) }}</td>
-                    <td>
+                    <td data-label="Principal" class="text-right">{{ "{:,.0f}".format(loan.principal) }}</td>
+                    <td data-label="Plan"><span>
                         {% if loan.interest_mode == 'monthly_accrual' %}
-                        <div class="font-medium">UGX {{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }}/month</div>
-                        <div class="text-xs text-gray-500">Accrued: UGX {{ "{:,.0f}".format(loan.interest_amount) }}</div>
+                        {{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }}/month
+                        <span class="cell-sub">charged so far {{ "{:,.0f}".format(loan.interest_amount) }}</span>
                         {% elif loan.interest_mode == 'reducing_balance_equal' %}
-                        <div class="font-medium">{{ "{:.1f}".format(loan.interest_rate) }}% reducing</div>
-                        <div class="text-xs text-gray-500">Payment: UGX {{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }}/month</div>
+                        {{ "{:.1f}".format(loan.interest_rate) }}% reducing
+                        <span class="cell-sub">{{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }}/month payment</span>
                         {% else %}
-                        <div class="font-medium">{{ "{:.1f}".format(loan.interest_rate) }}% flat</div>
+                        {{ "{:.1f}".format(loan.interest_rate) }}% flat
                         {% endif %}
+                    </span></td>
+                    <td data-label="Current due" class="text-right">{{ "{:,.0f}".format(loan.total_amount) }}</td>
+                    <td data-label="Balance" class="text-right font-semibold {% if loan.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">{{ "{:,.0f}".format(loan.balance) }}</td>
+                    <td data-label="Due" class="nowrap">{{ loan.due_date.strftime('%d %b %Y') }}</td>
+                    <td data-label="Status">
+                        {% if loan.status == 'paid' %}<span class="badge badge-success">Paid</span>
+                        {% elif loan.status == 'renewed' %}<span class="badge badge-info">Renewed</span>
+                        {% elif loan.status == 'overdue' %}<span class="badge badge-danger">Overdue</span>
+                        {% else %}<span class="badge badge-info">Active</span>{% endif %}
                     </td>
-                    <td class="text-right">{{ "{:,.0f}".format(loan.total_amount) }}</td>
-                    <td class="text-right {% if loan.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">{{ "{:,.0f}".format(loan.balance) }}</td>
-                    <td>{{ loan.due_date.strftime('%Y-%m-%d') }}</td>
-                    <td>
-                        {% if loan.status == 'paid' %}
-                        <span class="badge badge-success">Paid</span>
-                        {% elif loan.status == 'renewed' %}
-                        <span class="badge badge-info">Renewed</span>
-                        {% elif loan.status == 'overdue' %}
-                        <span class="badge badge-danger">Overdue</span>
-                        {% else %}
-                        <span class="badge badge-info">Active</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div class="finance-actions">
-                        <a href="{{ url_for('finance.view_loan', id=loan.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
-                        {% if loan.status in ['active', 'overdue'] and loan.balance > 0 %}
-                        <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.outstanding_principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.outstanding_interest }}, '{{ loan.duration_type or 'weeks' }}', '{{ loan.interest_mode or 'flat_rate' }}', {{ loan.monthly_interest_amount or 0 }}, {{ loan.principal }})" class="text-blue-600 hover:underline text-sm">Renew</button>
-                        {% endif %}
-                        {% if current_section == 'manager' %}
-                        <a href="{{ url_for('finance.edit_loan', id=loan.id) }}" class="text-green-600 hover:underline text-sm">Edit</a>
-                        {% endif %}
-                        <form method="POST" action="{{ url_for('finance.delete_loan', id=loan.id) }}" class="inline" onsubmit="return confirm('Delete this loan?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="text-red-600 hover:underline text-sm">Delete</button>
-                        </form>
-                        </div>
+                    <td class="row-actions">
+                        <a href="{{ url_for('finance.view_loan', id=loan.id) }}" class="btn btn-sm btn-outline">{{ 'Record payment' if loan.balance > 0 and loan.status != 'renewed' else 'View' }}</a>
+                        <details class="action-menu">
+                            <summary aria-label="More actions for {{ loan.client.name }}">&#8943;</summary>
+                            <div class="action-menu__list">
+                                {% if loan.status in ['active', 'overdue'] and loan.balance > 0 %}
+                                <button type="button" onclick="openRenewModal({{ loan.id }}, '{{ loan.client.name|e }}', {{ loan.outstanding_principal }}, {{ loan.interest_rate }}, {{ loan.duration_weeks }}, {{ loan.outstanding_interest }}, '{{ loan.duration_type or 'weeks' }}', '{{ loan.interest_mode or 'flat_rate' }}', {{ loan.monthly_interest_amount or 0 }}, {{ loan.principal }})">Renew</button>
+                                {% endif %}
+                                <a href="{{ url_for('finance.download_loan_statement_pdf', id=loan.id) }}">Statement (PDF)</a>
+                                {% if current_section == 'manager' %}
+                                <a href="{{ url_for('finance.edit_loan', id=loan.id) }}">Edit dates</a>
+                                {% endif %}
+                                <form method="POST" action="{{ url_for('finance.delete_loan', id=loan.id) }}" onsubmit="return confirm('Delete this loan for {{ loan.client.name|e }}? It will be hidden from all lists.')">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <button type="submit" class="is-danger">Delete loan</button>
+                                </form>
+                            </div>
+                        </details>
                     </td>
                 </tr>
                 {% else %}
                 <tr>
                     <td colspan="8" class="text-center text-gray-500 py-8">
-                        No loans found. Click "New Loan" to create one.
+                        {% if search or status %}No loans match this filter.{% else %}No loans yet. Click “New loan” to issue one.{% endif %}
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
+            {% if loans %}
+            <tfoot class="table-subtotal">
+                <tr>
+                    <td data-label="">Subtotal <span class="cell-sub">{{ totals.count }} loan{{ '' if totals.count == 1 else 's' }} shown</span></td>
+                    <td data-label="Principal" class="text-right">{{ "{:,.0f}".format(totals.principal) }}</td>
+                    <td class="hide-mobile"></td>
+                    <td data-label="Current due" class="text-right">{{ "{:,.0f}".format(totals.current_due) }}</td>
+                    <td data-label="Balance" class="text-right">{{ "{:,.0f}".format(totals.balance) }}</td>
+                    <td colspan="3" class="hide-mobile"></td>
+                </tr>
+            </tfoot>
+            {% endif %}
         </table>
     </div>
 </div>
@@ -175,7 +180,7 @@
                 <div class="form-group hidden" id="loan-monthly-group">
                     <label class="form-label">Monthly Interest Amount (UGX)</label>
                     <input type="number" name="monthly_interest_amount" min="1" step="0.01" class="form-input" placeholder="e.g., 60000">
-                    <p class="text-xs text-gray-500 mt-1">This amount is added automatically for every completed month.</p>
+                    <p class="text-xs text-gray-500 mt-1">{% if config.MONTHLY_ACCRUAL_TIMING == 'advance' %}The first month is charged on the issue date, then once more each month the loan stays unpaid past its monthly date.{% else %}This amount is added automatically for every completed month.{% endif %} Charges stop when the loan is fully paid.</p>
                 </div>
             </div>
             <div class="grid grid-cols-3 gap-4">

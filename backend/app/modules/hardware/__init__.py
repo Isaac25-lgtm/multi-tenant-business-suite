@@ -7,17 +7,15 @@ from app.models.hardware import (
 )
 from app.models.customer import Customer
 from app.modules.auth import login_required, log_action
+from app.utils.integrity import DUPLICATE_MESSAGE, find_recent_duplicate
 from app.extensions import db
-from app.utils.timezone import get_local_today
+from app.utils.timezone import get_local_now, get_local_today
 from app.utils.utils import generate_reference_number
-from app.utils.image_fetch import fetch_product_image_async, fetch_product_image
 from app.utils.pdf_generator import generate_receipt_pdf
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 
 hardware_bp = Blueprint('hardware', __name__)
-
-AUTO_IMAGE_FETCH_SESSION_KEY = 'hardware_auto_image_fetch_date'
 
 
 def safe_decimal(value, default='0'):
@@ -70,20 +68,6 @@ def check_date_permission(entry_date, user_section):
     if user_section == 'manager':
         return True
     return yesterday <= entry_date <= today
-
-
-def auto_fetch_missing_images():
-    """Auto-fetch images for hardware items missing an image URL."""
-    items = HardwareStock.query.filter(
-        HardwareStock.is_active == True,
-        db.or_(HardwareStock.image_url == None, HardwareStock.image_url == '')
-    ).all()
-
-    for item in items:
-        category_name = item.category.name if item.category else None
-        fetch_product_image_async(item.id, item.item_name, category_name, model_class='HardwareStock')
-
-    return len(items)
 
 
 @hardware_bp.route('/')
@@ -145,11 +129,6 @@ def add_category():
 @hardware_bp.route('/stock')
 @login_required('hardware')
 def stock():
-    # Auto-fetch missing images once per day per session
-    today_str = str(get_local_today())
-    if session.get(AUTO_IMAGE_FETCH_SESSION_KEY) != today_str:
-        auto_fetch_missing_images()
-        session[AUTO_IMAGE_FETCH_SESSION_KEY] = today_str
 
     show_inactive = request.args.get('show_inactive', 'false').lower() == 'true'
     query = HardwareStock.query
@@ -214,13 +193,6 @@ def add_stock():
         db.session.add(stock_item)
         db.session.commit()
 
-        # Auto-fetch product image in the background
-        category_name = None
-        if category_id:
-            cat = HardwareCategory.query.get(category_id)
-            if cat:
-                category_name = cat.name
-        fetch_product_image_async(stock_item.id, item_name, category_name, model_class='HardwareStock')
 
         log_action(session['username'], 'hardware', 'create', 'stock', stock_item.id,
                    {'item_name': item_name, 'quantity': quantity, 'cost_price': float(stock_item.cost_price)})
@@ -270,7 +242,6 @@ def edit_stock(id):
         if files:
             upload_dir = os.path.join(current_app.static_folder, 'uploads', 'products')
             os.makedirs(upload_dir, exist_ok=True)
-            from datetime import datetime
             existing_count = ProductImage.query.filter_by(
                 product_type='hardware', product_id=id
             ).count()
@@ -391,22 +362,6 @@ def permanent_delete_stock(id):
     return redirect(url_for('hardware.stock'))
 
 
-@hardware_bp.route('/stock/<int:id>/refresh-image', methods=['POST'])
-@login_required('hardware')
-def refresh_image(id):
-    """Re-fetch the product image for a stock item"""
-    item = HardwareStock.query.get_or_404(id)
-    category_name = item.category.name if item.category else None
-    image_url = fetch_product_image(item.item_name, category_name, search_context='hardware building material')
-    if image_url:
-        item.image_url = image_url
-        db.session.commit()
-        flash(f'Image refreshed for "{item.item_name}"', 'success')
-    else:
-        flash(f'No image found for "{item.item_name}"', 'warning')
-    return redirect(url_for('hardware.stock'))
-
-
 @hardware_bp.route('/stock/<int:id>/delete-image/<int:image_id>', methods=['POST'])
 @login_required('hardware')
 def delete_image(id, image_id):
@@ -425,27 +380,6 @@ def delete_image(id, image_id):
         item.image_url = next_img.image_url if next_img else None
     db.session.commit()
     flash('Image deleted', 'success')
-    return redirect(url_for('hardware.stock'))
-
-
-@hardware_bp.route('/stock/fetch-all-images', methods=['POST'])
-@login_required('hardware')
-def fetch_all_images():
-    """Clear all existing images and re-fetch for all active stock items"""
-    items = HardwareStock.query.filter(HardwareStock.is_active == True).all()
-
-    # Clear all existing images first so they all get re-fetched
-    for item in items:
-        item.image_url = None
-    db.session.commit()
-
-    count = 0
-    for item in items:
-        category_name = item.category.name if item.category else None
-        fetch_product_image_async(item.id, item.item_name, category_name, model_class='HardwareStock')
-        count += 1
-
-    flash(f'Re-fetching images for {count} items in the background. Refresh the page in a few seconds.', 'success')
     return redirect(url_for('hardware.stock'))
 
 
@@ -511,7 +445,6 @@ def create_sale():
                 continue
 
             subtotal = qty * price
-            total_amount += subtotal
             stock_item = db.session.query(HardwareStock).filter_by(
                 id=int(item_id),
                 is_active=True
@@ -521,9 +454,11 @@ def create_sale():
                     flash(f'Not enough stock for "{stock_item.item_name}". Available: {stock_item.quantity}.', 'error')
                     db.session.rollback()
                     return redirect(url_for('hardware.new_sale'))
+                total_amount += subtotal
                 items_data.append({
                     'stock_id': stock_item.id, 'item_name': stock_item.item_name,
                     'quantity': qty, 'unit_price': price, 'subtotal': subtotal,
+                    'unit_cost': stock_item.cost_price,
                     'stock': stock_item,
                 })
 
@@ -533,6 +468,10 @@ def create_sale():
 
         if payment_type == 'full':
             amount_paid = total_amount
+        elif amount_paid < 0 or amount_paid > total_amount:
+            db.session.rollback()
+            flash('Amount paid must be between 0 and the sale total.', 'error')
+            return redirect(url_for('hardware.new_sale'))
         balance = total_amount - amount_paid
 
         if payment_type == 'part' and not customer_id:
@@ -557,7 +496,8 @@ def create_sale():
             sale_item = HardwareSaleItem(
                 sale_id=sale.id, stock_id=item_data['stock_id'],
                 item_name=item_data['item_name'], quantity=item_data['quantity'],
-                unit_price=item_data['unit_price'], subtotal=item_data['subtotal']
+                unit_price=item_data['unit_price'], subtotal=item_data['subtotal'],
+                unit_cost_at_sale=item_data['unit_cost'],
             )
             db.session.add(sale_item)
             stock = item_data.get('stock')
@@ -640,6 +580,25 @@ def download_receipt(id):
 
         balance_value = max(total_amount - amount_paid_value, 0)
         payment_type = 'full' if balance_value <= 0 else 'part'
+
+        # Money on a receipt must match the recorded sale. Staff may change
+        # descriptions; only a manager may issue different amounts, and that
+        # copy is stamped and audited.
+        amounts_changed = (
+            round(total_amount) != round(float(sale.total_amount or 0))
+            or round(amount_paid_value) != round(float(sale.amount_paid or 0))
+        )
+        if amounts_changed:
+            if session.get('section') != 'manager':
+                flash('Receipt amounts must match the recorded sale. Ask a manager if a different receipt is needed.', 'error')
+                return redirect(url_for('hardware.receipt_preview', id=id))
+            meta_override['edited'] = True
+            log_action(session['username'], 'hardware', 'edit', 'receipt', sale.id,
+                       {'reference': sale.reference_number,
+                        'recorded_total': float(sale.total_amount or 0),
+                        'receipt_total': float(total_amount),
+                        'recorded_paid': float(sale.amount_paid or 0),
+                        'receipt_paid': amount_paid_value})
         totals_override = {
             'total_amount': total_amount,
             'amount_paid': amount_paid_value,
@@ -666,7 +625,10 @@ def download_receipt(id):
 @hardware_bp.route('/sales/<int:id>/delete', methods=['POST'])
 @login_required('hardware')
 def delete_sale(id):
-    sale = HardwareSale.query.get_or_404(id)
+    sale = HardwareSale.query.filter_by(id=id).with_for_update().first_or_404()
+    if sale.is_deleted:
+        flash(f'Sale {sale.reference_number} was already deleted.', 'warning')
+        return redirect(url_for('hardware.sales'))
     try:
         for item in sale.items:
             if item.stock_id:
@@ -699,10 +661,15 @@ def credits():
 @hardware_bp.route('/credits/<int:id>/pay', methods=['POST'])
 @login_required('hardware')
 def pay_credit(id):
-    sale = HardwareSale.query.get_or_404(id)
+    sale = HardwareSale.query.filter_by(id=id).with_for_update().first_or_404()
     try:
         amount = safe_decimal(request.form.get('amount', '0'))
         payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
+
+        if find_recent_duplicate(HardwareCreditPayment, sale_id=sale.id, amount=amount, payment_date=payment_date):
+            db.session.rollback()
+            flash(DUPLICATE_MESSAGE, 'warning')
+            return redirect(url_for('hardware.credits'))
 
         # Check date permission for non-managers
         user_section = session.get('section', '')

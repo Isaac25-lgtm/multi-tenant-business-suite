@@ -3,7 +3,7 @@
 
 {% block page_header %}
 <h1 class="page-title">Website Settings</h1>
-<p class="page-subtitle">Control the public Denove website, branding, contact details, and public loan messaging.</p>
+<p class="page-subtitle">Control the public website, branding, contact details, and public loan messaging.</p>
 {% endblock %}
 
 {% block content %}
@@ -44,7 +44,7 @@
                     </div>
                     <div class="form-group md:col-span-2">
                         <label class="form-label">Hero Description</label>
-                        <textarea name="hero_description" class="form-input" rows="4" placeholder="Describe what the public should understand about Denove.">{{ settings.hero_description }}</textarea>
+                        <textarea name="hero_description" class="form-input" rows="4" placeholder="Describe what the public should understand about {{ settings.company_name }}.">{{ settings.hero_description }}</textarea>
                     </div>
                     <div class="form-group md:col-span-2">
                         <label class="form-label">Footer Description</label>
@@ -69,7 +69,7 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Email Address</label>
-                        <input type="email" name="contact_email" value="{{ settings.contact_email }}" class="form-input" placeholder="hello@denove.ug">
+                        <input type="email" name="contact_email" value="{{ settings.contact_email }}" class="form-input" placeholder="norongir@gmail.com">
                     </div>
                     <div class="form-group">
                         <label class="form-label">Headquarters</label>

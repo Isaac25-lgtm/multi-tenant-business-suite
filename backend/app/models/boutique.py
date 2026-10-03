@@ -109,6 +109,9 @@ class BoutiqueSaleItem(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Numeric(12, 2), nullable=False)
     subtotal = db.Column(db.Numeric(12, 2), nullable=False)
+    # Stock cost at the moment of sale. NULL means unknown (legacy row or an
+    # item sold without a stock link), so profit for it is reported as unknown.
+    unit_cost_at_sale = db.Column(db.Numeric(12, 2), nullable=True)
     is_other_item = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
 

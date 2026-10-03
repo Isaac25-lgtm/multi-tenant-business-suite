@@ -1,0 +1,27 @@
+{# Shared presentation helpers for figures. No calculations live here. #}
+
+{% macro ugx(value) -%}UGX {{ "{:,.0f}".format(value or 0) }}{%- endmacro %}
+
+{% macro num(value) -%}{{ "{:,.0f}".format(value or 0) }}{%- endmacro %}
+
+{% macro pct(value) -%}{% if value is none %}—{% else %}{{ "{:.1f}".format(value) }}%{% endif %}{%- endmacro %}
+
+{% macro change(value, label='vs previous period') -%}
+{%- if value is none -%}
+<span class="kpi-change is-flat" title="No figure to compare with">— {{ label }}</span>
+{%- elif value >= 0 -%}
+<span class="kpi-change is-up">&#9650; {{ "{:.0f}".format(value) }}% {{ label }}</span>
+{%- else -%}
+<span class="kpi-change is-down">&#9660; {{ "{:.0f}".format(-value) }}% {{ label }}</span>
+{%- endif -%}
+{%- endmacro %}
+
+{# Pass delta_label to show a comparison line; delta=None renders "—". #}
+{% macro kpi(label, value, note=None, delta=None, delta_label=None, tone='') -%}
+<div class="kpi-card {{ tone }}">
+    <div class="kpi-label">{{ label }}</div>
+    <div class="kpi-value">{{ value }}</div>
+    {% if delta_label %}{{ change(delta, delta_label) }}{% endif %}
+    {% if note %}<div class="kpi-note">{{ note }}</div>{% endif %}
+</div>
+{%- endmacro %}

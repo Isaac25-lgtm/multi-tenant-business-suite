@@ -1,0 +1,109 @@
+{# Dashboard figures. Rendered by the page and by /dashboard/summary for auto refresh. #}
+{% from '_macros.html' import ugx, num, pct, kpi %}
+{% if load_error %}
+<div class="flash-message flash-error">
+    <span>The dashboard figures could not be calculated just now. Nothing is shown so that no figure is mistaken for a real zero. The page will retry automatically.</span>
+</div>
+{% else %}
+{% set t = metrics.today %}
+{% set y = metrics.yesterday %}
+{% set p = metrics.portfolio %}
+{% set inv = metrics.inventory %}
+{% set g = metrics.growth %}
+
+<section class="kpi-grid" aria-label="Today's headline figures">
+    {{ kpi('Sales today', ugx(t.sales_value), num(t.transactions) ~ ' sale' ~ ('' if t.transactions == 1 else 's') ~ ' · full value incl. credit', g.sales_value, 'vs yesterday') }}
+    {{ kpi('Cash received today', ugx(t.cash_received), 'Retail ' ~ num(t.cash_breakdown.retail_at_sale + t.cash_breakdown.retail_credit_collections) ~ ' · Loans ' ~ num(t.loans.total) ~ ' · Hire ' ~ num(t.cash_breakdown.hire), g.cash_received, 'vs yesterday', 'tone-green') }}
+    {% set gp_note = (pct(t.gross_margin_pct) ~ ' margin') if t.gross_margin_pct is not none else 'Sales minus cost of goods' %}
+    {% if t.unknown_cost_lines %}{% set gp_note = gp_note ~ ' · ' ~ t.unknown_cost_lines ~ ' item(s) with unknown cost left out' %}
+    {% elif t.estimated_cost_lines %}{% set gp_note = gp_note ~ ' · estimated for older items' %}{% endif %}
+    {{ kpi('Gross profit today (retail)', ugx(t.gross_profit), gp_note, g.gross_profit, 'vs yesterday', 'tone-emerald') }}
+    {% if metrics.show_net_profit %}
+    {{ kpi('Net profit today', ugx(t.net_profit), 'Gross profit + interest + hire − expenses (' ~ num(t.expenses) ~ ')', g.net_profit, 'vs yesterday', 'tone-navy') }}
+    {% else %}
+    <a href="{{ url_for('expenses.index') }}" class="kpi-card kpi-card--action">
+        <div class="kpi-label">Net profit</div>
+        <div class="kpi-value kpi-value--muted">Not available yet</div>
+        <div class="kpi-note">Record expenses to see real net profit &rarr;</div>
+    </a>
+    {% endif %}
+</section>
+
+<section class="kpi-grid kpi-grid--secondary" aria-label="Balances">
+    {{ kpi('Interest earned today', ugx(t.interest_earned), 'Interest collected; principal repaid is not income', g.interest_earned, 'vs yesterday') }}
+    {{ kpi('Owed by retail customers', ugx(metrics.receivables_total), 'Unpaid credit sales') }}
+    {% set overdue = metrics.overdue_loans + metrics.overdue_groups %}
+    {{ kpi('Loan principal outstanding', ugx(p.combined_principal), '+ ' ~ ugx(p.combined_interest) ~ ' interest · ' ~ (overdue ~ ' overdue' if overdue else 'none overdue'), None, None, 'tone-red' if overdue else '') }}
+    {% set low = inv.boutique_low + inv.hardware_low %}
+    {{ kpi('Inventory value (cost)', ugx(inv.total_value), (low ~ ' item' ~ ('' if low == 1 else 's') ~ ' low on stock') if low else 'Stock levels healthy', None, None, 'tone-red' if low else '') }}
+</section>
+
+<section class="drill-grid" aria-label="Detailed views">
+    <a href="{{ url_for('dashboard.retail_analytics') }}" class="drill-card">
+        <div class="drill-card__head"><h3>Retail performance</h3><span class="drill-card__go" aria-hidden="true">&rarr;</span></div>
+        <dl class="drill-card__rows">
+            <div><dt>Boutique sales</dt><dd>{{ ugx(t.boutique.sales_value) }}</dd></div>
+            <div><dt>Hardware sales</dt><dd>{{ ugx(t.hardware.sales_value) }}</dd></div>
+            <div><dt>Cash received</dt><dd>{{ ugx(t.boutique.cash_received + t.hardware.cash_received) }}</dd></div>
+            <div><dt>Gross profit</dt><dd>{{ ugx(t.gross_profit) }}</dd></div>
+        </dl>
+        <p class="drill-card__hint">Trends, branches, top and slow-moving products</p>
+    </a>
+    <a href="{{ url_for('dashboard.finance_analytics') }}" class="drill-card">
+        <div class="drill-card__head"><h3>Finance portfolio</h3><span class="drill-card__go" aria-hidden="true">&rarr;</span></div>
+        <dl class="drill-card__rows">
+            <div><dt>Principal (individual / group)</dt><dd>{{ num(p.individual_principal) }} / {{ num(p.group_principal) }}</dd></div>
+            <div><dt>Interest owed</dt><dd>{{ ugx(p.combined_interest) }}</dd></div>
+            <div><dt>Collected today</dt><dd>{{ ugx(t.loans.total) }}</dd></div>
+            <div><dt>Overdue loans</dt><dd class="{{ 'is-bad' if overdue else '' }}">{{ overdue }}</dd></div>
+        </dl>
+        <p class="drill-card__hint">Aging, PAR30, collections and adjustments</p>
+    </a>
+    <a href="{{ url_for('dashboard.inventory_analytics') }}" class="drill-card">
+        <div class="drill-card__head"><h3>Inventory</h3><span class="drill-card__go" aria-hidden="true">&rarr;</span></div>
+        <dl class="drill-card__rows">
+            <div><dt>Boutique stock</dt><dd>{{ ugx(inv.boutique_value) }}</dd></div>
+            <div><dt>Hardware stock</dt><dd>{{ ugx(inv.hardware_value) }}</dd></div>
+            <div><dt>Low on stock</dt><dd class="{{ 'is-bad' if low else '' }}">{{ low }}</dd></div>
+        </dl>
+        <p class="drill-card__hint">Value by category and branch, best sellers</p>
+    </a>
+</section>
+
+<section class="section-card">
+    <div class="section-card-header">
+        <h2 class="section-card-title">Last 7 days</h2>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Day</th>
+                    <th class="text-right">Sales (UGX)</th>
+                    <th class="text-right">Cash received</th>
+                    <th class="text-right">Gross profit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for day in metrics.trend %}
+                <tr>
+                    <td class="font-medium">{{ day.label }} {{ day.date.strftime('%d') }}</td>
+                    <td class="text-right">{{ num(day.sales_value) }}</td>
+                    <td class="text-right">{{ num(day.cash_received) }}</td>
+                    <td class="text-right">{{ num(day.gross_profit) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-subtotal">
+                <tr>
+                    <td>7-day total</td>
+                    <td class="text-right">{{ num(metrics.trend|sum(attribute='sales_value')) }}</td>
+                    <td class="text-right">{{ num(metrics.trend|sum(attribute='cash_received')) }}</td>
+                    <td class="text-right">{{ num(metrics.trend|sum(attribute='gross_profit')) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <p class="text-xs text-gray-500 mt-2">Cash received includes loan and hire collections; sales never do.</p>
+</section>
+{% endif %}

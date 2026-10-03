@@ -1,6 +1,6 @@
-"""AI module — morning briefing, manager chatbot, OCR extraction.
+"""AI module — morning briefing and OCR extraction.
 
-All routes require authentication. The chatbot is manager-only.
+All routes require authentication.
 OCR and briefing are role-aware.
 """
 
@@ -10,14 +10,15 @@ import os
 from datetime import datetime, time, timedelta
 
 from flask import (
-    Blueprint, jsonify, render_template, request, session,
+    Blueprint, abort, jsonify, render_template, request, send_from_directory, session,
     flash, redirect, url_for, current_app,
 )
 from werkzeug.utils import secure_filename
 
 from app.extensions import db
-from app.models.ai import BriefingDismissal, ChatMessage, OcrExtraction
-from app.modules.auth import manager_required, get_session_user, log_action
+from app.models.ai import BriefingDismissal, OcrExtraction
+from app.modules.auth import get_session_user, log_action
+from app.utils.branding import get_site_settings
 from app.utils.timezone import EAT_TIMEZONE, get_local_today, get_local_now
 from app.utils.uploads import allowed_file, validate_and_save
 
@@ -62,11 +63,6 @@ def _get_ocr_quota_status(client_reference=None):
     used_count = len(used_refs)
     next_new_client_number = used_count + (1 if is_new_client else 0)
     limit_reached_for_new_client = is_new_client and used_count >= limits['daily_client_limit']
-    warning_active = (
-        is_new_client
-        and next_new_client_number >= limits['warning_client_number']
-        and next_new_client_number <= limits['daily_client_limit']
-    )
     return {
         'used_count': used_count,
         'limit': limits['daily_client_limit'],
@@ -92,7 +88,7 @@ def _build_briefing_preview(scope, metrics, ai_narrative):
     if ai_narrative:
         preview = ' '.join(str(ai_narrative).split())
         return {
-            'title': 'Denove Assistant',
+            'title': f'{get_site_settings().company_name} Assistant',
             'message': preview[:220] + ('...' if len(preview) > 220 else ''),
         }
 
@@ -240,73 +236,13 @@ def check_briefing():
             except Exception as exc:
                 logger.warning('Briefing preview unavailable: %s', exc.__class__.__name__)
                 payload.update({
-                    'title': 'Denove Assistant',
+                    'title': f'{get_site_settings().company_name} Assistant',
                     'message': 'Your morning briefing is ready with today’s priorities and yesterday’s business summary.',
                 })
         return jsonify(payload)
     except Exception as exc:
         logger.warning('Briefing check unavailable: %s', exc.__class__.__name__)
         return jsonify({'show': False, 'date': today.isoformat()})
-
-
-# ============================================================================
-# Manager AI Chatbot
-# ============================================================================
-
-@ai_bp.route('/chat')
-@manager_required
-def chat_page():
-    """Open the floating assistant from the dashboard instead of a full page."""
-    return redirect(url_for('dashboard.index', open_assistant='1'))
-
-
-@ai_bp.route('/chat/send', methods=['POST'])
-@manager_required
-def chat_send():
-    """Process a chat message and return structured + narrated response."""
-    user = get_session_user()
-    data = request.get_json(silent=True) or {}
-    message = (data.get('message') or '').strip()
-
-    if not message:
-        return jsonify({'error': 'Empty message'}), 400
-    if len(message) > 1000:
-        return jsonify({'error': 'Message too long (max 1000 characters)'}), 400
-
-    # Log the user's message
-    try:
-        user_msg = ChatMessage(user_id=user.id, role='user', content=message)
-        db.session.add(user_msg)
-        db.session.flush()
-    except Exception:
-        db.session.rollback()
-
-    # Process through intent engine
-    from app.utils.chat_engine import process_chat_message, classify_intent
-    intent = classify_intent(message)
-
-    try:
-        result = process_chat_message(message)
-    except Exception as exc:
-        logger.warning('Chat processing failed: %s', exc.__class__.__name__)
-        result = {
-            'intent': 'error',
-            'summary': 'Sorry, something went wrong processing your request.',
-        }
-
-    # Log the assistant response
-    try:
-        response_text = result.get('ai_narrative') or result.get('summary', '')
-        assistant_msg = ChatMessage(
-            user_id=user.id, role='assistant',
-            content=response_text[:2000], intent=intent,
-        )
-        db.session.add(assistant_msg)
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
-
-    return jsonify(result)
 
 
 # ============================================================================
@@ -480,6 +416,24 @@ def ocr_review(id):
         fields=fields,
         return_to=(request.args.get('next') or '').strip(),
     )
+
+
+@ai_bp.route('/ocr/<int:id>/file')
+def ocr_file(id):
+    """Serve an uploaded OCR document to its uploader or a manager only."""
+    user = get_session_user()
+    if not user:
+        return redirect(url_for('auth.login'))
+
+    extraction = OcrExtraction.query.get_or_404(id)
+    if extraction.uploaded_by != user.id and user.role != 'manager':
+        abort(404)
+
+    relative = extraction.public_file_path
+    if not relative:
+        abort(404)
+    static_root = os.path.join(current_app.root_path, 'static')
+    return send_from_directory(static_root, relative, max_age=0)
 
 
 @ai_bp.route('/ocr/<int:id>/confirm', methods=['POST'])

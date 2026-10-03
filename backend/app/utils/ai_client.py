@@ -30,7 +30,6 @@ def _ai_config():
         'timeout': int(_env('AI_TIMEOUT_SECONDS', '15')),
         'max_tokens': int(_env('AI_MAX_TOKENS', '1024')),
         'briefing_enabled': _env('AI_DAILY_BRIEFING_ENABLED', 'true').lower() in ('1', 'true', 'yes'),
-        'chat_enabled': _env('AI_MANAGER_CHAT_ENABLED', 'true').lower() in ('1', 'true', 'yes'),
     }
 
 
@@ -55,10 +54,6 @@ def is_ai_enabled():
 
 def is_briefing_ai_enabled():
     return is_ai_enabled() and _ai_config()['briefing_enabled']
-
-
-def is_chat_enabled():
-    return is_ai_enabled() and _ai_config()['chat_enabled']
 
 
 def is_ocr_enabled():

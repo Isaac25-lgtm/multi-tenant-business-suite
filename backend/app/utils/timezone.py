@@ -1,5 +1,5 @@
 """Timezone utilities for East Africa Time (UTC+3) and Germany (CET/CEST)"""
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 # East Africa Time (UTC+3) timezone - Uganda
 EAT_TIMEZONE = timezone(timedelta(hours=3))

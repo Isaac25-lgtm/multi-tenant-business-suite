@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, current_app, has_request_context, render_template, request, redirect, url_for, flash, session
 from app.models.user import User, AuditLog
 from app.extensions import db
 from app.utils.rate_limit import consume_limit, clear_limit
@@ -14,7 +14,10 @@ LOGIN_BLOCK_SECONDS = 900
 
 
 def log_action(username, section, action, entity, entity_id=None, details=None):
-    """Log an action to the audit trail. Never crashes the app."""
+    """Log an action to the audit trail. Never crashes the app, but a failure
+    is reported in the server log instead of disappearing silently.
+
+    Works outside a web request too (CLI maintenance commands)."""
     try:
         log = AuditLog(
             username=username,
@@ -22,13 +25,16 @@ def log_action(username, section, action, entity, entity_id=None, details=None):
             action=action,
             entity=entity,
             entity_id=entity_id,
-            details=json.dumps(details) if details else None,
-            ip_address=request.remote_addr
+            details=json.dumps(details, default=str) if details else None,
+            ip_address=request.remote_addr if has_request_context() else None,
         )
         db.session.add(log)
         db.session.commit()
     except Exception:
         db.session.rollback()
+        current_app.logger.exception(
+            'Audit log write failed: %s %s %s #%s by %s', section, action, entity, entity_id, username
+        )
 
 
 def get_session_user():

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ group.group_name }} - Devs APS{% endblock %}
+{% block title %}{{ group.group_name }} - {{ brand_display_name }}{% endblock %}
 
 {% block page_header %}
 <h2>{{ group.group_name }}</h2>
@@ -235,10 +235,7 @@
                     <label class="form-label">Amount</label>
                     <input type="number" name="amount" min="1" value="{{ group.amount_per_period|round|int }}" required class="form-input">
                 </div>
-                <div class="form-group">
-                    <label class="form-label">Periods Covered</label>
-                    <input type="number" name="periods_covered" min="1" value="1" class="form-input">
-                </div>
+                <p class="text-xs text-gray-500 mb-3">Periods paid are worked out from the total paid (UGX {{ "{:,.0f}".format(group.amount_per_period) }} per period).</p>
                 <div class="form-group">
                     <label class="form-label">Date</label>
                     <input type="date" name="payment_date" value="{{ today }}" required class="form-input">
@@ -265,12 +262,27 @@
                         <span class="text-gray-500 block text-xs">{{ payment.notes }}</span>
                         {% endif %}
                     </div>
-                    <span class="font-medium">UGX {{ "{:,.0f}".format(payment.amount) }}</span>
+                    <div class="text-right">
+                        <span class="font-medium">UGX {{ "{:,.0f}".format(payment.amount) }}</span>
+                        {% if current_section == 'manager' %}
+                        <form method="POST" action="{{ url_for('finance.reverse_group_loan_payment', group_id=group.id, payment_id=payment.id) }}"
+                              class="block mt-1" onsubmit="return askReversalReason(this)">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="reason" value="">
+                            <button type="submit" class="text-red-600 hover:underline text-xs">Reverse</button>
+                        </form>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
+
+        {% with adjustment_action=url_for('finance.create_group_loan_adjustment', id=group.id),
+                allow_interest_adjustments=True %}
+        {% include 'finance/_adjustments.html' %}
+        {% endwith %}
     </div>
 </div>
 {% endblock %}

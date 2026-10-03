@@ -3,8 +3,8 @@ from types import SimpleNamespace
 
 
 DEFAULT_SITE_SETTINGS = {
-    'company_name': 'Denove',
-    'company_suffix': 'APS',
+    'company_name': 'NoRongir',
+    'company_suffix': 'Investments Limited',
     'tagline': 'Fashion, Hardware & Finance',
     'announcement_text': 'Serving all of Uganda with strong roots in Bukwo and Kapchorwa.',
     'hero_title': 'Fashion, hardware and financial freedom',
@@ -13,7 +13,7 @@ DEFAULT_SITE_SETTINGS = {
     ),
     'contact_phone': '+256 788 066 808',
     'whatsapp_number': '256788066808',
-    'contact_email': 'hello@denove.ug',
+    'contact_email': 'norongir@gmail.com',
     'headquarters': 'Bukwo and Kapchorwa',
     'service_area': 'all of Uganda',
     'loan_min_amount': Decimal('200000'),
@@ -25,13 +25,16 @@ DEFAULT_SITE_SETTINGS = {
     'footer_description': (
         'Your one-stop partner for boutique shopping, hardware supplies, and business-friendly finance across all of Uganda.'
     ),
-    'logo_path': 'images/denove.jpg',
+    'logo_path': 'images/norongir-logo.png',
 }
 
+# Retired built-in logos from the previous brand. Settings that still point at
+# one of these fall back to the current default logo.
 BUILTIN_LOGO_PATHS = {
     'images/denove-logo.svg',
     'images/denovo.png',
     'images/denove.jpg',
+    'images/devs.png',
 }
 
 
@@ -51,7 +54,7 @@ def get_site_settings():
             if value not in (None, ''):
                 merged[key] = value
 
-    # Keep user-uploaded logos, but migrate the old built-in defaults to the new denove.jpg.
+    # Keep user-uploaded logos, but replace retired built-in logos with the current default.
     if merged.get('logo_path') in BUILTIN_LOGO_PATHS:
         merged['logo_path'] = DEFAULT_SITE_SETTINGS['logo_path']
 

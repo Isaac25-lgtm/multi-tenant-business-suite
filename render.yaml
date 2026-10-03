@@ -61,3 +61,11 @@ services:
         value: "1"
       - key: SECRET_KEY
         sync: false  # Set manually in Render dashboard - must be a stable 64+ char random string
+      - key: PII_ENCRYPTION_KEY
+        sync: false  # Fernet key for ID numbers; then run `flask pii-reencrypt --apply` once
+      - key: MONTHLY_ACCRUAL_TIMING
+        value: arrears  # change to "advance" only after the business confirms the rule
+      - key: SENTRY_DSN
+        sync: false  # optional error monitoring
+      - key: OCR_MODEL
+        sync: false  # e.g. claude-haiku-4-5 (the old claude-3-5-haiku model is retired)

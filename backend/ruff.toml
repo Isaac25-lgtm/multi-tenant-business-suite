@@ -1,0 +1,8 @@
+# Ruff lint settings. Start with errors that indicate real bugs (syntax errors,
+# undefined names, unused imports/variables); widen once the codebase is tidier.
+target-version = "py311"
+line-length = 120
+extend-exclude = ["migrations/versions", "venv"]
+
+[lint]
+select = ["E9", "F63", "F7", "F82", "F401", "F841"]

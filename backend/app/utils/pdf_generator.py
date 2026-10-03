@@ -1,5 +1,4 @@
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph
@@ -7,7 +6,6 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.utils import ImageReader
 from datetime import datetime, date
 from decimal import Decimal, ROUND_HALF_UP
-from dateutil.relativedelta import relativedelta
 import io
 import os
 from xml.sax.saxutils import escape
@@ -46,34 +44,35 @@ def _resolve_logo_path(settings):
 
 
 def _draw_logo_image(c, x, y, width, height, image_path):
+    """Draw the logo scaled to fit the box. Returns the drawn width, or 0."""
     if not image_path or image_path.lower().endswith(('.svg', '.webp')):
-        return False
+        return 0
     try:
         logo = ImageReader(image_path)
         iw, ih = logo.getSize()
         if not iw or not ih:
-            return False
+            return 0
         scale = min(width / iw, height / ih)
         draw_w = iw * scale
         draw_h = ih * scale
         c.drawImage(logo, x, y + (height - draw_h) / 2, width=draw_w, height=draw_h, mask='auto')
-        return True
+        return draw_w
     except Exception:
-        return False
+        return 0
 
 
-def _draw_vector_brand_mark(c, x, y, size):
-    c.setFillColor(HexColor('#b85c38'))
+def _draw_vector_brand_mark(c, x, y, size, initial='N'):
+    c.setFillColor(HexColor('#0f172a'))
     c.roundRect(x, y, size, size, 12, fill=1, stroke=0)
-    c.setFillColor(HexColor('#fff7f5'))
+    c.setFillColor(HexColor('#f8fafc'))
     c.setFont("Helvetica-Bold", 28)
-    c.drawCentredString(x + (size / 2), y + 12, "D")
-    c.setFillColor(HexColor('#e8d5a0'))
+    c.drawCentredString(x + (size / 2), y + 12, (initial or 'N')[:1].upper())
+    c.setFillColor(HexColor('#c24b28'))
     c.circle(x + size - 10, y + size - 10, 4, fill=1, stroke=0)
 
 
 def draw_logo_header(c, width, y):
-    """Draw a branded PDF header that works with the default Denove logo."""
+    """Draw a branded PDF header using the configured company logo."""
     settings = get_site_settings()
     company_name = get_company_display_name(settings)
     tagline = getattr(settings, 'tagline', None) or 'Fashion, Hardware & Finance'
@@ -84,10 +83,11 @@ def draw_logo_header(c, width, y):
     logo_y = y - logo_height
     image_path = _resolve_logo_path(settings)
 
-    if _draw_logo_image(c, logo_x, logo_y, logo_width, logo_height, image_path):
-        text_x = logo_x + logo_width + 10
+    drawn_width = _draw_logo_image(c, logo_x, logo_y, logo_width, logo_height, image_path)
+    if drawn_width:
+        text_x = logo_x + drawn_width + 12
     else:
-        _draw_vector_brand_mark(c, logo_x, logo_y + 2, 48)
+        _draw_vector_brand_mark(c, logo_x, logo_y + 2, 48, initial=(getattr(settings, 'company_name', None) or company_name or 'N'))
         text_x = logo_x + 62
 
     c.setFillColor(HexColor('#0f172a'))
@@ -142,14 +142,13 @@ def generate_receipt_pdf(sale, business_name, served_by=None, items_override=Non
     y -= 24
     c.setFont("Helvetica-Bold", 13)
     c.setFillColor(HexColor('#c24b28'))
-    c.drawCentredString(width/2, y, "RECEIPT")
+    c.drawCentredString(width/2, y, "RECEIPT - EDITED COPY" if meta_override.get('edited') else "RECEIPT")
     c.setFillColor(HexColor('#0f172a'))
 
     # Receipt details
     y -= 24
     c.setFont("Helvetica", 10)
     customer_name = meta_override.get('customer_name') or (sale.customer.name if sale.customer else None)
-    customer_phone = sale.customer.phone if sale.customer else None
     receipt_date = _format_receipt_date(meta_override.get('sale_date'), sale.sale_date)
 
     detail_rows = [
@@ -765,6 +764,41 @@ def _draw_payments_table(c, width, height, y, payments):
     return y - 10
 
 
+def _draw_adjustments_table(c, width, height, y, adjustments):
+    """Approved discounts, waivers, write-offs and charges (reversed ones omitted)."""
+    active = [adj for adj in (adjustments or []) if not getattr(adj, 'is_reversed', False)]
+    if not active:
+        return y
+    if y < 120:
+        c.showPage()
+        y = height - 60
+    c.setFont("Helvetica-Bold", 10)
+    c.setFillColor(HexColor('#0f172a'))
+    c.drawString(50, y, "ADJUSTMENTS")
+    y -= 16
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(58, y, "Date")
+    c.drawString(140, y, "Type")
+    c.drawString(260, y, "Reason")
+    c.drawRightString(width - 58, y, "Amount")
+    y -= 10
+    c.setFont("Helvetica", 8)
+    for idx, adj in enumerate(active):
+        if y < 90:
+            c.showPage()
+            y = height - 60
+        c.setFillColor(HexColor('#f8fafc') if idx % 2 == 0 else HexColor('#ffffff'))
+        c.rect(50, y - 11, width - 100, 15, fill=1, stroke=0)
+        c.setFillColor(HexColor('#0f172a'))
+        c.drawString(58, y - 8, adj.effective_date.strftime('%b %d, %Y') if adj.effective_date else '-')
+        c.drawString(140, y - 8, str(getattr(adj, 'type_label', adj.adjustment_type))[:22])
+        c.drawString(260, y - 8, str(adj.reason or '')[:42])
+        sign = '+' if getattr(adj, 'increases_balance', False) else '-'
+        c.drawRightString(width - 58, y - 8, f"{sign} {format_currency(float(_money(adj.amount)))}")
+        y -= 15
+    return y - 10
+
+
 def _draw_schedule_table(c, width, height, y, schedule, title="REPAYMENT SCHEDULE"):
     if not schedule:
         return y
@@ -814,7 +848,7 @@ def _finish_loan_pdf(buffer, c, width, company_name, contact_phone, headquarters
     return buffer
 
 
-def generate_loan_statement_pdf(loan, payments, schedule=None):
+def generate_loan_statement_pdf(loan, payments, schedule=None, adjustments=None):
     """Generate a printable/shareable individual loan statement."""
     ref = f"LOAN-{loan.id:05d}"
     buffer, c, width, height, y, company_name, contact_phone, headquarters = _start_loan_pdf(
@@ -824,6 +858,7 @@ def generate_loan_statement_pdf(loan, payments, schedule=None):
     if schedule:
         y = _draw_schedule_table(c, width, height, y, schedule)
     y = _draw_payments_table(c, width, height, y, payments)
+    y = _draw_adjustments_table(c, width, height, y, adjustments)
     return _finish_loan_pdf(buffer, c, width, company_name, contact_phone, headquarters)
 
 

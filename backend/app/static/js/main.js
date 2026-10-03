@@ -1,4 +1,4 @@
-// ============ DEVS APS - MAIN JS ============
+// ============ BUSINESS SUITE - MAIN JS ============
 
 // ============ SIDEBAR TOGGLE (MOBILE) ============
 function toggleSidebar() {
@@ -38,6 +38,36 @@ function formatCurrency(amount) {
 function confirmDelete(message) {
     return confirm(message || 'Are you sure you want to delete this item?');
 }
+
+// ============ PAYMENT REVERSAL ============
+function askReversalReason(form, question) {
+    const reason = window.prompt((question || 'Why is this payment being reversed?') + ' This is recorded in the audit trail.');
+    if (reason === null) return false;
+    if (reason.trim().length < 5) {
+        alert('Please give a reason of at least 5 characters.');
+        return false;
+    }
+    form.querySelector('input[name="reason"]').value = reason.trim();
+    return true;
+}
+
+// ============ DOUBLE-SUBMIT PROTECTION ============
+// Disable a POST form's submit buttons right after it is sent so a double
+// click cannot record the same sale or payment twice. Buttons re-enable after
+// a few seconds because some forms (PDF downloads) keep the page open.
+document.addEventListener('submit', function(e) {
+    const form = e.target;
+    if (e.defaultPrevented || !(form instanceof HTMLFormElement)) return;
+    if ((form.method || '').toLowerCase() !== 'post') return;
+    const buttons = form.querySelectorAll('button[type="submit"], input[type="submit"], button:not([type])');
+    // Defer so the clicked button's own name/value is still included in the submission.
+    setTimeout(function() {
+        buttons.forEach(function(button) { button.disabled = true; });
+        setTimeout(function() {
+            buttons.forEach(function(button) { button.disabled = false; });
+        }, 6000);
+    }, 0);
+});
 
 // ============ MODALS ============
 function showModal(modalId) {
@@ -167,7 +197,7 @@ function previewLoanAgreement(loanType, loanData) {
 
 function populateAgreementPreview(loanType, data) {
     const fields = {
-        'agreement-company-name': 'DEVS APS',
+        'agreement-company-name': (document.body.dataset.brandName || '').toUpperCase(),
         'agreement-client-name': data.clientName || data.groupName || '',
         'agreement-principal': formatCurrency(data.principal || 0),
         'agreement-interest-rate': (data.interestRate || 0) + '%',

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% from '_macros.html' import ugx, num, pct, kpi %}
+
+{% block title %}Retail Performance - {{ brand_display_name }}{% endblock %}
+
+{% block page_header %}
+<a href="{{ url_for('dashboard.index') }}" class="back-link">&larr; Dashboard</a>
+<h2>Retail performance</h2>
+<p>Boutique and hardware sales, cash and profit</p>
+{% endblock %}
+
+{% block content %}
+{% set extra_filters = {} %}
+{% if request.args.get('unit') %}{% set _ = extra_filters.update({'unit': request.args.get('unit')}) %}{% endif %}
+{% if request.args.get('branch') %}{% set _ = extra_filters.update({'branch': request.args.get('branch')}) %}{% endif %}
+{% include '_period_filter.html' %}
+
+<nav class="filter-tabs" aria-label="Business unit">
+    {% for key, label in [('all', 'All retail'), ('boutique', 'Boutique'), ('hardware', 'Hardware')] %}
+    <a href="?period={{ period.key }}&start={{ period.start }}&end={{ period.end }}{% if key != 'all' %}&unit={{ key }}{% endif %}"
+       class="filter-tab {% if (data.unit if data else 'all') == key and not request.args.get('branch') %}is-active{% endif %}">{{ label }}</a>
+    {% endfor %}
+    {% for code, label in [('K', 'Kapchorwa'), ('M', 'Bukwo')] %}
+    <a href="?period={{ period.key }}&start={{ period.start }}&end={{ period.end }}&unit=boutique&branch={{ code }}"
+       class="filter-tab {% if request.args.get('branch') == code %}is-active{% endif %}">Boutique &middot; {{ label }}</a>
+    {% endfor %}
+</nav>
+
+{% if load_error %}
+<div class="flash-message flash-error"><span>These figures could not be calculated just now. Please refresh the page.</span></div>
+{% else %}
+{% set c = data.current %}
+<section class="kpi-grid">
+    {{ kpi('Sales value', ugx(c.sales_value), num(c.transactions) ~ ' sales', data.growth.sales_value, 'vs previous period') }}
+    {{ kpi('Cash received', ugx(c.cash_received), 'At the counter ' ~ num(c.cash_at_sale) ~ ' · credit collected ' ~ num(c.credit_collections), data.growth.cash_received, 'vs previous period', 'tone-green') }}
+    {{ kpi('Gross profit', ugx(c.gross_profit), pct(c.gross_margin_pct) ~ ' margin · cost of goods ' ~ num(c.cogs), data.growth.gross_profit, 'vs previous period', 'tone-emerald') }}
+    {{ kpi('Owed by customers', ugx(data.receivables), 'All unpaid credit sales today') }}
+</section>
+<section class="kpi-grid kpi-grid--secondary">
+    {{ kpi('Credit sales', ugx(c.credit_sales), pct(c.credit_ratio_pct) ~ ' of sales were on credit') }}
+    {{ kpi('Average sale', ugx(c.avg_transaction) if c.avg_transaction is not none else '—', 'Sales value ÷ number of sales') }}
+    {{ kpi('Transactions', num(c.transactions), None, data.growth.transactions, 'vs previous period') }}
+    {% if c.unknown_cost_lines or c.estimated_cost_lines %}
+    {{ kpi('Cost data quality', (c.unknown_cost_lines ~ ' unknown · ' ~ c.estimated_cost_lines ~ ' estimated'), 'Older sales have no recorded cost; profit for them is estimated or left out', None, None, 'tone-amber') }}
+    {% else %}
+    {{ kpi('Cost data quality', 'Exact', 'Every sale line has its cost at time of sale') }}
+    {% endif %}
+</section>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <section class="section-card">
+        <h2 class="section-card-title mb-3">By business unit</h2>
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead><tr><th>Unit</th><th class="text-right">Sales</th><th class="text-right">Cash</th><th class="text-right">Gross profit</th><th class="text-right">Margin</th></tr></thead>
+                <tbody>
+                    {% for row in data.by_unit %}
+                    <tr><td class="font-medium">{{ row.label }}</td><td class="text-right">{{ num(row.sales_value) }}</td><td class="text-right">{{ num(row.cash_received) }}</td><td class="text-right">{{ num(row.gross_profit) }}</td><td class="text-right">{{ pct(row.gross_margin_pct) }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% if data.by_branch %}
+    <section class="section-card">
+        <h2 class="section-card-title mb-3">Boutique branches</h2>
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead><tr><th>Branch</th><th class="text-right">Sales</th><th class="text-right">Cash</th><th class="text-right">Gross profit</th><th class="text-right">Owed</th></tr></thead>
+                <tbody>
+                    {% for row in data.by_branch %}
+                    <tr><td class="font-medium">{{ row.label }}</td><td class="text-right">{{ num(row.sales_value) }}</td><td class="text-right">{{ num(row.cash_received) }}</td><td class="text-right">{{ num(row.gross_profit) }}</td><td class="text-right">{{ num(row.receivables) }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
+</div>
+
+<section class="section-card mb-6">
+    <h2 class="section-card-title mb-3">Trend</h2>
+    <div class="overflow-x-auto">
+        <table class="data-table">
+            <thead><tr><th>Period</th><th class="text-right">Sales (UGX)</th><th class="text-right">Cash received</th><th class="text-right">Gross profit</th></tr></thead>
+            <tbody>
+                {% for row in data.trend %}
+                <tr><td>{{ row.label }}</td><td class="text-right">{{ num(row.sales_value) }}</td><td class="text-right">{{ num(row.cash_received) }}</td><td class="text-right">{{ num(row.gross_profit) }}</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-subtotal">
+                <tr><td>Total</td><td class="text-right">{{ num(c.sales_value) }}</td><td class="text-right">{{ num(c.cash_received) }}</td><td class="text-right">{{ num(c.gross_profit) }}</td></tr>
+            </tfoot>
+        </table>
+    </div>
+</section>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <section class="section-card">
+        <h2 class="section-card-title mb-3">Top products</h2>
+        {% if data.top_products %}
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead><tr><th>Item</th><th class="text-right">Qty</th><th class="text-right">Revenue</th><th class="text-right">Gross profit</th></tr></thead>
+                <tbody>
+                    {% for row in data.top_products %}
+                    <tr><td>{{ row.item }} <span class="text-xs text-gray-500">{{ row.unit }}</span></td><td class="text-right">{{ num(row.quantity) }}</td><td class="text-right">{{ num(row.revenue) }}</td><td class="text-right">{{ num(row.gross_profit) if row.gross_profit is not none else '—' }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<p class="text-sm text-gray-500">No sales in this period.</p>{% endif %}
+    </section>
+    <section class="section-card">
+        <h2 class="section-card-title mb-1">Not selling</h2>
+        <p class="text-xs text-gray-500 mb-3">Items in stock with no sales in this period, by stock value tied up</p>
+        {% if data.slow_movers %}
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead><tr><th>Item</th><th class="text-right">In stock</th><th class="text-right">Value (cost)</th></tr></thead>
+                <tbody>
+                    {% for row in data.slow_movers %}
+                    <tr><td>{{ row.item }} <span class="text-xs text-gray-500">{{ row.unit }}</span></td><td class="text-right">{{ num(row.quantity) }}</td><td class="text-right">{{ num(row.value) }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<p class="text-sm text-gray-500">Every item in stock sold at least once.</p>{% endif %}
+    </section>
+</div>
+{% endif %}
+{% endblock %}

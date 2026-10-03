@@ -1,4 +1,4 @@
-from flask import Flask, render_template, flash, redirect, request, url_for, jsonify
+from flask import Flask, abort, render_template, flash, redirect, request, url_for, jsonify
 from flask_wtf.csrf import CSRFError
 from app.extensions import db, migrate, csrf
 from app.config import Config
@@ -6,12 +6,16 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from sqlalchemy.exc import SQLAlchemyError, OperationalError, ProgrammingError
 import os
 import json
+import posixpath
 import click
 
 
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    from app.monitoring import init_monitoring
+    init_monitoring(app)
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
     # Initialize extensions
@@ -39,6 +43,7 @@ def create_app(config_class=Config):
     from app.modules.storefront import storefront_bp
     from app.modules.website_management import website_bp
     from app.modules.ai import ai_bp
+    from app.modules.expenses import expenses_bp
 
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
@@ -48,6 +53,7 @@ def create_app(config_class=Config):
     app.register_blueprint(finance_bp, url_prefix='/finance')
     app.register_blueprint(website_bp, url_prefix='/website')
     app.register_blueprint(ai_bp, url_prefix='/ai')
+    app.register_blueprint(expenses_bp, url_prefix='/expenses')
     
     # Public storefront at root - no authentication required
     app.register_blueprint(storefront_bp)
@@ -68,17 +74,32 @@ def create_app(config_class=Config):
     def inject_utilities():
         from flask import session
         from app.utils.branding import get_company_display_name, get_site_settings
-        from app.utils.ai_client import is_chat_enabled
         from app.utils.timezone import convert_to_dual_timezone
         site_settings = get_site_settings()
         return {
             'current_user': session.get('username'),
             'current_section': session.get('section'),
-            'ai_chat_enabled': is_chat_enabled(),
             'convert_to_dual_timezone': convert_to_dual_timezone,
             'site_settings': site_settings,
             'brand_display_name': get_company_display_name(site_settings),
         }
+
+    # Borrower documents live on the uploads disk under /static, but must never be
+    # served publicly. They are only available through authenticated routes
+    # (finance document download, OCR file preview).
+    private_upload_dirs = ('uploads/collateral/', 'uploads/ocr/')
+
+    @app.before_request
+    def block_private_uploads():
+        if request.endpoint != 'static':
+            return None
+        # Normalise exactly as the static file lookup will, so tricks such as
+        # "uploads/./collateral" or "uploads//ocr" cannot bypass the check.
+        filename = str((request.view_args or {}).get('filename') or '').replace('\\', '/')
+        normalised = posixpath.normpath('/' + filename).lstrip('/').lower() + '/'
+        if normalised.startswith(private_upload_dirs):
+            abort(404)
+        return None
 
     @app.get('/healthz')
     def healthz():
@@ -134,6 +155,9 @@ def create_app(config_class=Config):
         return render_template('errors/500.html'), 500
 
     # CLI commands
+    from app.cli import register_cli
+    register_cli(app)
+
     @app.cli.command('db-ensure')
     def db_ensure():
         """Safely prepare the database for Alembic migrations.
@@ -255,6 +279,11 @@ def create_app(config_class=Config):
             ('boutique_sales', 'branch'),
             ('boutique_hires', 'branch'),
             ('website_loan_inquiries', 'finance_client_id'),
+            ('loans', 'settled_on'),
+            ('loan_payments', 'reversed_at'),
+            ('group_loan_payments', 'reversed_at'),
+            ('boutique_sale_items', 'unit_cost_at_sale'),
+            ('hardware_sale_items', 'unit_cost_at_sale'),
         ]
 
         missing_tables = []

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Loan - {{ loan.client.name }} - Devs APS{% endblock %}
+{% block title %}Loan - {{ loan.client.name }} - {{ brand_display_name }}{% endblock %}
 
 {% block page_header %}
 <h2>Loan for {{ loan.client.name }}</h2>
@@ -117,7 +117,7 @@
                     {% if loan.interest_mode == 'monthly_accrual' %}
                     <tr>
                         <td class="text-gray-500">Repayment Rule</td>
-                        <td class="text-right font-medium">Adds UGX {{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }} for every completed month</td>
+                        <td class="text-right font-medium">Adds UGX {{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }} {% if config.MONTHLY_ACCRUAL_TIMING == 'advance' %}on the issue date and after each monthly date passes{% else %}for every completed month{% endif %}, until paid</td>
                     </tr>
                     {% endif %}
                 </tbody>
@@ -279,21 +279,54 @@
             {% if loan.balance > 0 %}
             <form method="POST" action="{{ url_for('finance.pay_loan', id=loan.id) }}" class="mt-6 pt-4" style="border-top:1px solid var(--border)">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <h3 class="font-semibold mb-3">Record Payment</h3>
+                <h3 class="font-semibold mb-3">Record payment</h3>
                 <div class="form-group">
-                    <label class="form-label">Amount</label>
-                    <input type="number" name="amount" min="1" max="{{ loan.balance }}" required class="form-input">
+                    <label class="form-label" for="payment-amount">Amount received (UGX)</label>
+                    <input type="number" id="payment-amount" name="amount" min="1" max="{{ loan.balance }}" required class="form-input" inputmode="numeric">
+                    <p class="text-xs text-gray-500 mt-1">Balance today: UGX {{ "{:,.0f}".format(loan.balance) }}</p>
                 </div>
                 <div class="form-group">
-                    <label class="form-label">Date</label>
-                    <input type="date" name="payment_date" value="{{ today }}" required class="form-input date-restricted-input">
+                    <label class="form-label" for="payment-date">Date received</label>
+                    <input type="date" id="payment-date" name="payment_date" value="{{ today }}" required class="form-input date-restricted-input">
                 </div>
+                <div id="payment-preview" class="payment-preview" aria-live="polite" hidden></div>
                 <div class="form-group">
-                    <label class="form-label">Notes</label>
-                    <input type="text" name="notes" class="form-input" placeholder="Optional notes">
+                    <label class="form-label" for="payment-notes">Notes</label>
+                    <input type="text" id="payment-notes" name="notes" class="form-input" placeholder="e.g. Mobile money ref 1234">
                 </div>
-                <button type="submit" class="btn btn-success w-full">Record Payment</button>
+                <button type="submit" class="btn btn-success w-full">Record payment</button>
             </form>
+            <script>
+            // Ask the server how this payment would split; the same code records it.
+            (function () {
+                const amount = document.getElementById('payment-amount');
+                const date = document.getElementById('payment-date');
+                const box = document.getElementById('payment-preview');
+                const url = "{{ url_for('finance.preview_loan_payment_split', id=loan.id) }}";
+                let timer;
+                function update() {
+                    clearTimeout(timer);
+                    if (!amount.value || Number(amount.value) <= 0) { box.hidden = true; return; }
+                    timer = setTimeout(async function () {
+                        try {
+                            const params = new URLSearchParams({ amount: amount.value, date: date.value });
+                            const res = await fetch(url + '?' + params.toString(), { credentials: 'same-origin' });
+                            const data = await res.json();
+                            if (!data.ok) { box.hidden = true; return; }
+                            box.innerHTML =
+                                (data.exceeds_balance ? '<p class="payment-preview__warn">More than the balance of UGX ' + data.balance_before + ' on that date.</p>' : '') +
+                                '<div><span>Goes to interest</span><strong>UGX ' + data.interest + '</strong></div>' +
+                                '<div><span>Goes to principal</span><strong>UGX ' + data.principal + '</strong></div>' +
+                                '<div class="payment-preview__total"><span>Balance after</span><strong>UGX ' + data.balance_after + '</strong></div>' +
+                                (data.settles_loan ? '<p class="payment-preview__ok">This payment clears the loan.</p>' : '');
+                            box.hidden = false;
+                        } catch (err) { box.hidden = true; }
+                    }, 250);
+                }
+                amount.addEventListener('input', update);
+                date.addEventListener('change', update);
+            })();
+            </script>
             {% endif %}
         </div>
 
@@ -314,12 +347,27 @@
                         <span class="text-gray-500 block text-xs">{{ payment.notes }}</span>
                         {% endif %}
                     </div>
-                    <span class="font-medium">UGX {{ "{:,.0f}".format(payment.amount) }}</span>
+                    <div class="text-right">
+                        <span class="font-medium">UGX {{ "{:,.0f}".format(payment.amount) }}</span>
+                        {% if current_section == 'manager' and (payment.payment_type or 'regular') != 'renewal' and loan.status != 'renewed' %}
+                        <form method="POST" action="{{ url_for('finance.reverse_loan_payment', loan_id=loan.id, payment_id=payment.id) }}"
+                              class="block mt-1" onsubmit="return askReversalReason(this)">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="reason" value="">
+                            <button type="submit" class="text-red-600 hover:underline text-xs">Reverse</button>
+                        </form>
+                        {% endif %}
+                    </div>
                 </div>
                 {% endfor %}
             </div>
         </div>
         {% endif %}
+
+        {% with adjustment_action=url_for('finance.create_loan_adjustment', id=loan.id),
+                allow_interest_adjustments=(loan.interest_mode or 'flat_rate') != 'reducing_balance_equal' %}
+        {% include 'finance/_adjustments.html' %}
+        {% endwith %}
     </div>
 </div>
 {% endblock %}

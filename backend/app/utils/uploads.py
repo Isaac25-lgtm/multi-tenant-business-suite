@@ -3,7 +3,6 @@
 Validates both extension and file content before saving.
 Images are verified with Pillow; PDFs are checked by header.
 """
-import io
 from PIL import Image
 from werkzeug.utils import secure_filename as _secure_filename
 

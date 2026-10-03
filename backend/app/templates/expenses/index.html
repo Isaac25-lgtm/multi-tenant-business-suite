@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}Expenses - {{ brand_display_name }}{% endblock %}
+
+{% block page_header %}
+<h2>Expenses</h2>
+<p>Operating costs, used to calculate net profit</p>
+{% endblock %}
+
+{% block content %}
+{% include '_period_filter.html' %}
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+    <div class="stat-card">
+        <div class="stat-card-label">Total expenses ({{ period.label|lower }})</div>
+        <div class="stat-card-value text-red-600">UGX {{ "{:,.0f}".format(total) }}</div>
+        <div class="text-xs text-gray-500 mt-1">{{ expenses|length }} entr{{ 'y' if expenses|length == 1 else 'ies' }}</div>
+    </div>
+    <div class="section-card lg:col-span-2">
+        <h3 class="font-semibold mb-2">By category</h3>
+        {% if by_category %}
+        <table class="data-table">
+            <tbody>
+                {% for label, amount in by_category %}
+                <tr>
+                    <td>{{ label }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(amount) }}</td>
+                    <td class="text-right text-gray-500">{{ "{:.0f}".format(amount / total * 100) if total else 0 }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-sm text-gray-500">No expenses in this period.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div class="section-card lg:col-span-2" style="padding:0;overflow-x:auto;">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Category</th>
+                    <th>Unit</th>
+                    <th class="text-right">Amount (UGX)</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for expense in expenses %}
+                <tr>
+                    <td>{{ expense.expense_date.strftime('%Y-%m-%d') }}</td>
+                    <td>
+                        {{ expense.description }}
+                        <span class="block text-xs text-gray-500">
+                            {{ methods.get(expense.payment_method, '') }}{% if expense.reference %} &middot; ref {{ expense.reference }}{% endif %} &middot; by {{ expense.created_by }}
+                        </span>
+                    </td>
+                    <td>{{ expense.category_label }}</td>
+                    <td>{{ expense.business_unit_label }}</td>
+                    <td class="text-right">{{ "{:,.0f}".format(expense.amount) }}</td>
+                    <td>
+                        <form method="POST" action="{{ url_for('expenses.delete', id=expense.id) }}" onsubmit="return askReversalReason(this, 'Why is this expense being deleted?')">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="reason" value="">
+                            <button type="submit" class="text-red-600 hover:underline text-xs">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-gray-500 py-8">No expenses recorded in this period.</td></tr>
+                {% endfor %}
+            </tbody>
+            {% if expenses %}
+            <tfoot class="table-subtotal">
+                <tr>
+                    <td colspan="4">Total</td>
+                    <td class="text-right">{{ "{:,.0f}".format(total) }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+
+    <div class="section-card">
+        <h3 class="font-semibold mb-3">Record an expense</h3>
+        <form method="POST" action="{{ url_for('expenses.add') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label" for="expense-date">Date</label>
+                <input type="date" id="expense-date" name="expense_date" value="{{ today }}" max="{{ today }}" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="expense-amount">Amount (UGX)</label>
+                <input type="number" id="expense-amount" name="amount" min="1" step="1" required class="form-input">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="expense-description">Description</label>
+                <input type="text" id="expense-description" name="description" maxlength="255" required class="form-input" placeholder="e.g. March shop rent, Kapchorwa">
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="expense-category">Category</label>
+                <select id="expense-category" name="category" class="form-select" required>
+                    {% for key, label in categories.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="expense-unit">Business unit</label>
+                <select id="expense-unit" name="business_unit" class="form-select" required>
+                    {% for key, label in units.items() %}<option value="{{ key }}" {% if key == 'shared' %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="expense-method">Paid by</label>
+                <select id="expense-method" name="payment_method" class="form-select">
+                    {% for key, label in methods.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label" for="expense-reference">Reference (optional)</label>
+                <input type="text" id="expense-reference" name="reference" maxlength="100" class="form-input" placeholder="Receipt or transaction number">
+            </div>
+            <button type="submit" class="btn btn-primary w-full">Save expense</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

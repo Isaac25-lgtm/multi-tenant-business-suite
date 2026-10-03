@@ -79,6 +79,10 @@ class Loan(db.Model):
     principal_paid = db.Column(db.Numeric(12, 2), default=0, nullable=False)
     interest_paid = db.Column(db.Numeric(12, 2), default=0, nullable=False)
     principal_rolled = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    # Running totals of approved LoanAdjustment rows (never edited by hand).
+    interest_waived = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    principal_written_off = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    charges_added = db.Column(db.Numeric(12, 2), default=0, nullable=False)
     balance = db.Column(db.Numeric(12, 2), nullable=False)
     duration_weeks = db.Column(db.Integer, nullable=False)
     duration_type = db.Column(db.String(10), default='weeks')  # 'weeks' or 'months'
@@ -87,6 +91,8 @@ class Loan(db.Model):
     status = db.Column(db.String(20), default='active')
     renewal_parent_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True)
     renewed_to_loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True)
+    # Date the balance reached zero; monthly interest stops accruing after it.
+    settled_on = db.Column(db.Date, nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, onupdate=get_local_now)
@@ -103,8 +109,9 @@ class Loan(db.Model):
         principal = Decimal(str(self.principal or 0))
         principal_paid = Decimal(str(self.principal_paid or 0))
         principal_rolled = Decimal(str(self.principal_rolled or 0))
+        written_off = Decimal(str(self.principal_written_off or 0))
         balance = Decimal(str(self.balance or 0))
-        remaining_principal = principal - principal_paid - principal_rolled
+        remaining_principal = principal - principal_paid - principal_rolled - written_off
         if remaining_principal < 0:
             remaining_principal = Decimal('0')
         if remaining_principal > balance:
@@ -114,8 +121,10 @@ class Loan(db.Model):
     @property
     def outstanding_interest(self):
         interest_amount = Decimal(str(self.interest_amount or 0))
+        charges = Decimal(str(self.charges_added or 0))
         interest_paid = Decimal(str(self.interest_paid or 0))
-        remaining_interest = interest_amount - interest_paid
+        waived = Decimal(str(self.interest_waived or 0))
+        remaining_interest = interest_amount + charges - interest_paid - waived
         if remaining_interest < 0:
             return Decimal('0')
         return remaining_interest
@@ -164,6 +173,9 @@ class LoanPayment(db.Model):
     balance_after = db.Column(db.Numeric(12, 2), nullable=False)
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
+    reversed_at = db.Column(db.DateTime, nullable=True)
+    reversed_by = db.Column(db.String(50), nullable=True)
+    reversal_reason = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
 
     def to_dict(self):
@@ -199,6 +211,9 @@ class GroupLoan(db.Model):
     period_type = db.Column(db.String(20), nullable=False, default='monthly')
     periods_paid = db.Column(db.Integer, default=0)
     amount_paid = db.Column(db.Numeric(12, 2), default=0)
+    interest_waived = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    principal_written_off = db.Column(db.Numeric(12, 2), default=0, nullable=False)
+    charges_added = db.Column(db.Numeric(12, 2), default=0, nullable=False)
     balance = db.Column(db.Numeric(12, 2), nullable=False)
     issue_date = db.Column(db.Date, nullable=True)
     due_date = db.Column(db.Date, nullable=True)
@@ -215,8 +230,9 @@ class GroupLoan(db.Model):
     def outstanding_principal(self):
         principal = Decimal(str(self.principal or 0))
         amount_paid = Decimal(str(self.amount_paid or 0))
+        written_off = Decimal(str(self.principal_written_off or 0))
         balance = Decimal(str(self.balance or 0))
-        remaining_principal = principal - amount_paid
+        remaining_principal = principal - amount_paid - written_off
         if remaining_principal < 0:
             remaining_principal = Decimal('0')
         if remaining_principal > balance:
@@ -302,6 +318,9 @@ class GroupLoanPayment(db.Model):
     balance_after = db.Column(db.Numeric(12, 2), nullable=False)
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
+    reversed_at = db.Column(db.DateTime, nullable=True)
+    reversed_by = db.Column(db.String(50), nullable=True)
+    reversal_reason = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
 
     def to_dict(self):
@@ -338,3 +357,50 @@ class LoanDocument(db.Model):
             'file_type': self.file_type,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+
+
+class LoanAdjustment(db.Model):
+    """An approved change to what a borrower owes, other than a payment.
+
+    Balances are never edited directly: a discount, waiver, write-off or
+    charge is recorded here with a reason and the approving manager, and the
+    loan's running totals are updated from it. Reversal keeps the row.
+    """
+    __tablename__ = 'loan_adjustments'
+
+    TYPES = {
+        'interest_discount': 'Interest discount',
+        'interest_waiver': 'Interest waiver',
+        'principal_write_off': 'Principal write-off',
+        'charge': 'Additional charge',
+    }
+
+    id = db.Column(db.Integer, primary_key=True)
+    loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True)
+    group_loan_id = db.Column(db.Integer, db.ForeignKey('group_loans.id'), nullable=True)
+    adjustment_type = db.Column(db.String(30), nullable=False)
+    amount = db.Column(db.Numeric(12, 2), nullable=False)
+    effective_date = db.Column(db.Date, nullable=False)
+    reason = db.Column(db.String(500), nullable=False)
+    created_by = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime, default=get_local_now)
+    is_reversed = db.Column(db.Boolean, default=False, nullable=False)
+    reversed_by = db.Column(db.String(50), nullable=True)
+    reversed_at = db.Column(db.DateTime, nullable=True)
+    reversal_reason = db.Column(db.String(255), nullable=True)
+
+    __table_args__ = (
+        db.CheckConstraint('(loan_id IS NULL) <> (group_loan_id IS NULL)', name='ck_loan_adjustments_one_target'),
+        db.CheckConstraint('amount > 0', name='ck_loan_adjustments_positive_amount'),
+    )
+
+    loan = db.relationship('Loan', backref=db.backref('adjustments', lazy='dynamic'))
+    group_loan = db.relationship('GroupLoan', backref=db.backref('adjustments', lazy='dynamic'))
+
+    @property
+    def type_label(self):
+        return self.TYPES.get(self.adjustment_type, self.adjustment_type)
+
+    @property
+    def increases_balance(self):
+        return self.adjustment_type == 'charge'

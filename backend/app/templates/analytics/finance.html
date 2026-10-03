@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% from '_macros.html' import ugx, num, pct, kpi %}
+
+{% block title %}Finance Portfolio - {{ brand_display_name }}{% endblock %}
+
+{% block page_header %}
+<a href="{{ url_for('dashboard.index') }}" class="back-link">&larr; Dashboard</a>
+<h2>Finance portfolio</h2>
+<p>Individual and group loans: exposure, collections and arrears</p>
+{% endblock %}
+
+{% block content %}
+{% include '_period_filter.html' %}
+
+{% if load_error %}
+<div class="flash-message flash-error"><span>These figures could not be calculated just now. Please refresh the page.</span></div>
+{% else %}
+{% set p = data.portfolio %}
+{% set col = data.collections %}
+<section class="kpi-grid">
+    {{ kpi('Principal outstanding', ugx(p.combined_principal), 'Individual ' ~ num(p.individual_principal) ~ ' · group ' ~ num(p.group_principal)) }}
+    {{ kpi('Interest owed', ugx(p.combined_interest), 'Charged and not yet paid', None, None, 'tone-amber') }}
+    {{ kpi('Total balance owed', ugx(p.combined_balance), num(p.individual_count) ~ ' individual · ' ~ num(p.group_count) ~ ' group loans open') }}
+    {{ kpi('PAR 30', pct(data.par30), 'Share of principal on loans more than 30 days past their final due date', None, None, 'tone-red' if (data.par30 or 0) > 0 else '') }}
+</section>
+<section class="kpi-grid kpi-grid--secondary">
+    {{ kpi('Collected (' ~ period.label|lower ~ ')', ugx(col.total), 'Principal ' ~ num(col.individual_principal + col.group_principal) ~ ' · interest ' ~ num(col.individual_interest + col.group_interest), data.growth.total, 'vs previous period', 'tone-green') }}
+    {{ kpi('Interest earned', ugx(col.individual_interest + col.group_interest), 'Individual ' ~ num(col.individual_interest) ~ ' · group ' ~ num(col.group_interest), data.growth.interest, 'vs previous period', 'tone-emerald') }}
+    {{ kpi('Active clients', num(data.client_count)) }}
+    {% if col.renewal_settlements %}
+    {{ kpi('Renewal settlements', ugx(col.renewal_settlements), 'Recorded at renewal; not counted as cash') }}
+    {% else %}
+    {{ kpi('Collection rate', '—', 'Needs per-installment schedules for every loan type before it can be measured honestly') }}
+    {% endif %}
+</section>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+    <section class="section-card">
+        <h2 class="section-card-title mb-1">Arrears aging</h2>
+        <p class="text-xs text-gray-500 mb-3">Open loans by days past their final due date</p>
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead><tr><th>Bucket</th><th class="text-right">Loans</th><th class="text-right">Principal</th><th class="text-right">Balance</th></tr></thead>
+                <tbody>
+                    {% for row in data.aging %}
+                    <tr><td>{{ row.label }}</td><td class="text-right">{{ row.count }}</td><td class="text-right">{{ num(row.principal) }}</td><td class="text-right">{{ num(row.balance) }}</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-subtotal">
+                    <tr><td>Total</td><td class="text-right">{{ data.aging|sum(attribute='count') }}</td><td class="text-right">{{ num(data.aging|sum(attribute='principal')) }}</td><td class="text-right">{{ num(data.aging|sum(attribute='balance')) }}</td></tr>
+                </tfoot>
+            </table>
+        </div>
+    </section>
+    <section class="section-card">
+        <h2 class="section-card-title mb-3">Loan status</h2>
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead><tr><th>Status</th><th class="text-right">Individual</th><th class="text-right">Group</th></tr></thead>
+                <tbody>
+                    {% for status in ['active', 'overdue', 'paid', 'renewed'] %}
+                    <tr><td>{{ status|title }}</td><td class="text-right">{{ data.status_counts.get(status, 0) }}</td><td class="text-right">{{ data.group_status_counts.get(status, 0) if status != 'renewed' else '—' }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if data.adjustments %}
+        <h3 class="font-semibold mt-4 mb-2">Adjustments in this period</h3>
+        <table class="data-table">
+            <tbody>
+                {% for label, amount in data.adjustments %}
+                <tr><td>{{ label }}</td><td class="text-right">{{ num(amount) }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </section>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <section class="section-card">
+        <h2 class="section-card-title mb-3">Collections, last 6 months</h2>
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead><tr><th>Month</th><th class="text-right">Principal</th><th class="text-right">Interest</th><th class="text-right">Total</th></tr></thead>
+                <tbody>
+                    {% for row in data.trend %}
+                    <tr><td>{{ row.label }}</td><td class="text-right">{{ num(row.principal) }}</td><td class="text-right">{{ num(row.interest) }}</td><td class="text-right">{{ num(row.total) }}</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section class="section-card">
+        <h2 class="section-card-title mb-3">Largest overdue balances</h2>
+        {% if data.overdue_list %}
+        <div class="overflow-x-auto">
+            <table class="data-table">
+                <thead><tr><th>Borrower</th><th class="text-right">Days late</th><th class="text-right">Balance</th></tr></thead>
+                <tbody>
+                    {% for row in data.overdue_list %}
+                    <tr>
+                        <td><a href="{{ url_for('finance.view_loan', id=row.id) if row.kind == 'Individual' else url_for('finance.view_group_loan', id=row.id) }}" class="hover:underline">{{ row.name }}</a> <span class="text-xs text-gray-500">{{ row.kind }}</span></td>
+                        <td class="text-right">{{ row.days }}</td>
+                        <td class="text-right">{{ num(row.balance) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<p class="text-sm text-gray-500">No overdue loans.</p>{% endif %}
+    </section>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,4 +1,4 @@
-# Denove APS User Guide
+# NoRongir Investments Limited — User Guide
 
 This guide explains the main workflows added and updated in the system.
 
@@ -34,7 +34,7 @@ How to use it:
 1. Open `Website Management`.
 2. Click `Settings`.
 3. Update the branding or public loan values you want.
-4. Upload the Denove logo if needed.
+4. Upload the company logo if needed.
 5. Save changes.
 
 ## 3. Manager Or Finance: Approve Website Loan Inquiries And Add Them To Finance Clients
@@ -99,9 +99,11 @@ Path:
 
 What monthly accrual means:
 
-- Interest grows every full month after the issue date.
-- Example: if the monthly interest amount is `60,000`, then after 3 full months the accrued interest becomes `180,000`.
-- The system refreshes the loan due amount automatically when the loan is viewed or processed.
+- Interest is added once per month for as long as the loan is unpaid.
+- Example: if the monthly interest amount is `60,000`, then after 3 full months the interest charged becomes `180,000`.
+- Interest stops on the day the loan is fully paid. A cleared loan never starts owing again.
+- The exact day each month's charge starts follows the company setting (charged after each completed month, or first month charged on the issue date). Ask the system administrator if unsure.
+- "Current due" is principal plus interest charged so far; "Balance" is what is still owed after payments.
 
 How to create one:
 
@@ -126,9 +128,22 @@ Path:
 
 What happens:
 
-- The system refreshes accrued interest before validating the payment.
-- Overpayments are blocked.
+- As you type the amount, the form shows how much goes to interest, how much to principal, and the balance after. Payments always go to interest first.
+- Overpayments are blocked, and the same payment cannot be saved twice by double-clicking.
 - The balance updates automatically after payment.
+
+Mistakes (managers):
+
+- Under `Payment History`, click `Reverse` next to a wrong payment and give a reason. The payment stays on record as reversed and the balance goes back to what it was.
+
+Discounts, waivers and write-offs (managers):
+
+- On the loan page, use `Adjustments -> Add adjustment`. Choose interest discount, interest waiver, principal write-off or additional charge, enter the amount and the reason.
+- Balances are never edited directly. Every adjustment shows on the loan page, on the loan statement PDF and in the audit trail, and can be reversed with a reason.
+
+Group loans:
+
+- Periods paid are worked out from the total paid, so a part-payment does not count as a whole period.
 
 ## 7. Website Management: Publish Products To The Public Website
 
@@ -147,9 +162,9 @@ Only published items appear on the public website.
 
 ## 8. Logo And Branded Documents
 
-Current shared logo:
+Current shared logo (temporary until the final NoRongir logo is ready):
 
-- `backend/app/static/images/denove.jpg`
+- `backend/app/static/images/norongir-logo.png`
 
 Used in:
 
@@ -163,7 +178,19 @@ If the logo changes:
 2. Upload the replacement logo.
 3. Save.
 
-## 9. Manager: Set Passwords For Users
+## 9. Manager: Dashboard, Analytics And Expenses
+
+- `Dashboard` shows today's sales, cash received, gross profit, net profit and interest earned, each compared with yesterday. It refreshes itself every minute.
+  - Sales are the full value of goods sold (including credit). Cash received is money actually collected, including loan and hire payments.
+  - Loan principal repaid is never counted as income.
+- Click `Retail performance`, `Finance portfolio` or `Inventory` (or use the sidebar) for the detailed pages. Each has date filters: today, last 7 days, this month, last month or a custom range.
+- `Expenses`: record rent, wages, transport and other costs with the date, category and business unit. Net profit only appears once expenses are being recorded, so it is never overstated.
+
+Receipts:
+
+- Staff may change item descriptions or customer details on a receipt, but the amounts must match the recorded sale. Only a manager can issue a receipt with different amounts; it is stamped `EDITED COPY` and logged.
+
+## 10. Manager: Set Passwords For Users
 
 Path:
 
@@ -175,12 +202,14 @@ Use this when:
 - A user forgot a password
 - You are activating an older account that never had a password
 
-## 10. Daily Operations Checklist
+## 11. Daily Operations Checklist
 
 - Managers:
   - Review `Website Management -> Loan Inquiries`
   - Review `Website Management -> Order Requests`
   - Check `Website Management -> Settings` after branding changes
+  - Record the day's expenses
+  - Review `Finance Analytics` for overdue loans
 
 - Finance staff:
   - Update payer status for reliable and risky clients

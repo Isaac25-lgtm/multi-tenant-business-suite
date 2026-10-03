@@ -1,242 +1,51 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Devs APS{% endblock %}
+{% block title %}Dashboard - {{ brand_display_name }}{% endblock %}
 
 {% block page_header %}
 <h2>Dashboard</h2>
-<p>{{ today.strftime('%A, %B %d, %Y') }}</p>
+<p>{{ today.strftime('%A, %B %d, %Y') }} &middot; <span id="dashboard-updated" aria-live="polite">Live &middot; updates every minute</span></p>
 {% endblock %}
 
 {% block content %}
-<!-- Main Stats Cards -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-    <div class="stat-card anim-up d1">
-        <div class="stat-card-label">Today's Revenue</div>
-        <div class="stat-card-value text-green-600">UGX {{ "{:,.0f}".format(stats.today_revenue) }}</div>
-        <div class="text-xs text-gray-400 mt-1">Yesterday: UGX {{ "{:,.0f}".format(stats.yesterday_revenue) }}</div>
-    </div>
-
-    <div class="stat-card anim-up d2">
-        <div class="stat-card-label">Credits Outstanding</div>
-        <div class="stat-card-value text-orange-600">UGX {{ "{:,.0f}".format(stats.credits_outstanding) }}</div>
-        <div class="text-xs text-gray-400 mt-1">Boutique + Hardware combined</div>
-    </div>
-
-    <div class="stat-card anim-up d3">
-        <div class="stat-card-label">Principal Outstanding</div>
-        <div class="stat-card-value text-blue-600">UGX {{ "{:,.0f}".format(stats.loans_outstanding) }}</div>
-        <div class="text-xs text-gray-400 mt-1">Interest expected: UGX {{ "{:,.0f}".format(stats.loan_interest_expected) }}</div>
-        {% if stats.overdue_loans > 0 %}
-        <div class="text-xs text-red-500 mt-1">{{ stats.overdue_loans }} overdue - needs attention!</div>
-        {% else %}
-        <div class="text-xs text-green-500 mt-1">All loans on track</div>
-        {% endif %}
-    </div>
-
-    <div class="stat-card anim-up d4">
-        <div class="stat-card-label">Low Stock Alerts</div>
-        <div class="stat-card-value {% if stats.low_stock_alerts > 0 %}text-red-600{% else %}text-gray-600{% endif %}">{{ stats.low_stock_alerts }}</div>
-        <div class="text-xs text-gray-400 mt-1">{{ stats.transactions_today }} transactions today</div>
-    </div>
-
-    <div class="stat-card anim-up d1">
-        <div class="stat-card-label">Inventory Value (Cost)</div>
-        <div class="stat-card-value text-indigo-600">UGX {{ "{:,.0f}".format(stats.inventory_value) }}</div>
-        <div class="text-xs text-gray-400 mt-1">Boutique + Hardware stock value</div>
-    </div>
-
-    <div class="stat-card anim-up d2">
-        <div class="stat-card-label">Profit Today</div>
-        <div class="stat-card-value text-emerald-600">UGX {{ "{:,.0f}".format(stats.profit_today) }}</div>
-        <div class="text-xs text-gray-400 mt-1">Retail profit from sales today</div>
-    </div>
+<div id="dashboard-content" data-refresh-url="{{ url_for('dashboard.summary_fragment') }}">
+    {% include 'dashboard/_content.html' %}
 </div>
+{% endblock %}
 
-<!-- Business Breakdown -->
-<div class="section-card mb-6">
-    <div class="section-card-header">
-        <h2 class="section-card-title">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
-            Business Units
-        </h2>
-    </div>
-    <p class="text-sm text-gray-500 mb-4">Click on any unit to go to its management page</p>
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <!-- Boutique -->
-        <a href="{{ url_for('boutique.index') }}" class="action-card">
-            <div class="action-card-title">Boutique</div>
-            <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Today's Sales</span>
-                    <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.boutique.today) }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Transactions</span>
-                    <span class="font-medium">{{ by_business.boutique.transactions }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Credits</span>
-                    <span class="font-medium text-orange-600">UGX {{ "{:,.0f}".format(by_business.boutique.credits) }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Inventory Value</span>
-                    <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.boutique.inventory_value) }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Profit Today</span>
-                    <span class="font-medium text-emerald-600">UGX {{ "{:,.0f}".format(by_business.boutique.profit_today) }}</span>
-                </div>
-                {% if by_business.boutique.low_stock > 0 %}
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Low Stock</span>
-                    <span class="font-medium text-red-600">{{ by_business.boutique.low_stock }} items</span>
-                </div>
-                {% endif %}
-            </div>
-            <div class="action-card-hint mt-3">Click to manage boutique inventory & sales</div>
-        </a>
+{% block extra_js %}
+<script>
+// Re-render the figures from the server every minute. All calculations stay
+// on the server; this only swaps in the freshly rendered HTML.
+(function () {
+    const container = document.getElementById('dashboard-content');
+    const status = document.getElementById('dashboard-updated');
+    if (!container) return;
+    const INTERVAL = 60000;
 
-        <!-- Hardware -->
-        <a href="{{ url_for('hardware.index') }}" class="action-card">
-            <div class="action-card-title">Hardware</div>
-            <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Today's Sales</span>
-                    <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.hardware.today) }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Transactions</span>
-                    <span class="font-medium">{{ by_business.hardware.transactions }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Credits</span>
-                    <span class="font-medium text-orange-600">UGX {{ "{:,.0f}".format(by_business.hardware.credits) }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Inventory Value</span>
-                    <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.hardware.inventory_value) }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Profit Today</span>
-                    <span class="font-medium text-emerald-600">UGX {{ "{:,.0f}".format(by_business.hardware.profit_today) }}</span>
-                </div>
-                {% if by_business.hardware.low_stock > 0 %}
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Low Stock</span>
-                    <span class="font-medium text-red-600">{{ by_business.hardware.low_stock }} items</span>
-                </div>
-                {% endif %}
-            </div>
-            <div class="action-card-hint mt-3">Click to manage hardware inventory & sales</div>
-        </a>
+    async function refresh() {
+        if (document.hidden) return;
+        try {
+            const response = await fetch(container.dataset.refreshUrl, {
+                headers: { 'X-Requested-With': 'fetch' },
+                credentials: 'same-origin',
+            });
+            if (response.redirected || response.status === 401 || response.status === 403) {
+                status.textContent = 'Signed out - reload to continue';
+                return;
+            }
+            container.innerHTML = await response.text();
+            const now = new Date();
+            status.textContent = 'Updated ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } catch (err) {
+            status.textContent = 'Offline - will retry';
+        }
+    }
 
-        <!-- Finance -->
-        <a href="{{ url_for('finance.index') }}" class="action-card">
-            <div class="action-card-title">Finance</div>
-            <div class="space-y-2 text-sm">
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Principal Outstanding</span>
-                    <span class="font-medium">UGX {{ "{:,.0f}".format(by_business.finance.outstanding) }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Interest Expected</span>
-                    <span class="font-medium text-amber-600">UGX {{ "{:,.0f}".format(by_business.finance.interest_expected) }}</span>
-                </div>
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Today's Repayments</span>
-                    <span class="font-medium text-green-600">UGX {{ "{:,.0f}".format(by_business.finance.repayments_today) }}</span>
-                </div>
-                {% if by_business.finance.overdue_count > 0 %}
-                <div class="flex justify-between">
-                    <span class="text-gray-600">Overdue</span>
-                    <span class="font-medium text-red-600">{{ by_business.finance.overdue_count }} loans</span>
-                </div>
-                {% endif %}
-            </div>
-            <div class="action-card-hint mt-3">Click to manage loans & payments</div>
-        </a>
-    </div>
-</div>
-
-<!-- Sales Trend & Alerts -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-    <!-- 7-Day Trend -->
-    <div class="section-card">
-        <div class="section-card-header">
-            <h2 class="section-card-title">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
-                7-Day Revenue Trend
-            </h2>
-        </div>
-        <div class="overflow-x-auto">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Day</th>
-                        <th class="text-right">Boutique</th>
-                        <th class="text-right">Hardware</th>
-                        <th class="text-right">Finance</th>
-                        <th class="text-right">Total</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for day in sales_trend %}
-                    <tr>
-                        <td class="font-medium">{{ day.date }}</td>
-                        <td class="text-right">{{ "{:,.0f}".format(day.boutique) }}</td>
-                        <td class="text-right">{{ "{:,.0f}".format(day.hardware) }}</td>
-                        <td class="text-right">{{ "{:,.0f}".format(day.finance) }}</td>
-                        <td class="text-right font-bold text-green-600">{{ "{:,.0f}".format(day.total) }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td class="font-bold">Week Total</td>
-                        <td class="text-right font-bold">{{ "{:,.0f}".format(sales_trend|sum(attribute='boutique')) }}</td>
-                        <td class="text-right font-bold">{{ "{:,.0f}".format(sales_trend|sum(attribute='hardware')) }}</td>
-                        <td class="text-right font-bold">{{ "{:,.0f}".format(sales_trend|sum(attribute='finance')) }}</td>
-                        <td class="text-right font-bold text-green-600">{{ "{:,.0f}".format(sales_trend|sum(attribute='total')) }}</td>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-
-    <!-- Low Stock Alerts -->
-    <div class="section-card">
-        <div class="section-card-header">
-            <h2 class="section-card-title">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                Low Stock Alerts
-            </h2>
-        </div>
-        {% if low_stock_items %}
-        <p class="text-sm text-red-600 mb-4">These items need restocking soon!</p>
-        <div class="space-y-2">
-            {% for item in low_stock_items %}
-            <div class="alert-low-stock">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <span class="font-medium">{{ item.item }}</span>
-                        <span class="text-sm text-gray-500">({{ item.business }})</span>
-                    </div>
-                    <span class="badge badge-warning">{{ item.quantity }} {{ item.unit }}</span>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        <div class="mt-4 flex gap-4">
-            <a href="{{ url_for('boutique.stock') }}" class="btn btn-sm btn-outline">Boutique Stock</a>
-            <a href="{{ url_for('hardware.stock') }}" class="btn btn-sm btn-outline">Hardware Stock</a>
-        </div>
-        {% else %}
-        <div class="text-center py-8">
-            <svg style="width:48px;height:48px;margin:0 auto;color:var(--forest-500)" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <p class="text-gray-500 mt-2">No low stock alerts</p>
-            <p class="text-sm text-gray-400">All inventory levels are healthy</p>
-        </div>
-        {% endif %}
-    </div>
-</div>
+    setInterval(refresh, INTERVAL);
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) refresh();
+    });
+})();
+</script>
 {% endblock %}

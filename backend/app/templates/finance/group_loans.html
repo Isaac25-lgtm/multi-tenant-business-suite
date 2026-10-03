@@ -1,80 +1,93 @@
 {% extends "base.html" %}
 
-{% block title %}Group Loans - Devs APS{% endblock %}
+{% block title %}Group Loans - {{ brand_display_name }}{% endblock %}
 
 {% block page_header %}
 <h2>Group Loans</h2>
-<p>{{ groups|length }} group loans</p>
+<p>{{ groups|length }} group loan{{ '' if groups|length == 1 else 's' }}</p>
 {% endblock %}
 
 {% block content %}
 <div class="flex justify-end mb-6">
-    <button onclick="showModal('add-group-modal')" class="btn btn-primary">New Group Loan</button>
+    <button onclick="showModal('add-group-modal')" class="btn btn-primary">New group loan</button>
 </div>
 
-<!-- Quick Guide -->
-<div class="guideline mb-6">
-    <div class="font-semibold text-gray-700 mb-2">Data Entry Guide - Group Loans</div>
-    <ul class="list-disc list-inside space-y-1 text-sm">
-        <li><strong>Step 1:</strong> Click "New Group Loan" and fill in group name, member count, and loan amount</li>
-        <li><strong>Step 2:</strong> Set interest rate and select payment period (weekly, bi-weekly, monthly, bi-monthly)</li>
-        <li><strong>Step 3:</strong> Click "Preview Agreement" to review before issuing</li>
-        <li><strong>Step 4:</strong> In preview, fill in ALL member details (name, phone) - these are required</li>
-        <li><strong>Step 5:</strong> Upload any collateral documents (optional) and click "Issue Group Loan"</li>
-        <li><strong>Payments:</strong> Click "View" on any loan to record payments</li>
-    </ul>
-</div>
+<details class="help-details mb-4">
+    <summary>How issuing a group loan works</summary>
+    <ol>
+        <li>Click <strong>New group loan</strong>: group name, member count, amount, interest rate and repayment period.</li>
+        <li><strong>Preview agreement</strong>, fill in every member's name and phone, optionally upload collateral, then issue.</li>
+        <li>Open a group loan to record payments. Periods paid are worked out from the total paid.</li>
+    </ol>
+</details>
 
 <!-- Group Loans Table -->
-<div class="section-card" style="padding:0;overflow-x:auto;">
-    <table class="data-table">
+<div class="section-card" style="padding:0;">
+    <div class="overflow-x-auto">
+    <table class="data-table responsive-table">
         <thead>
             <tr>
-                <th>Group Name</th>
+                <th>Group</th>
                 <th class="text-right">Members</th>
-                <th class="text-right">Principal</th>
+                <th class="text-right">Principal (UGX)</th>
                 <th class="text-right">Total</th>
                 <th class="text-right">Balance</th>
-                <th>Period</th>
-                <th>Progress</th>
+                <th>Repayment</th>
                 <th>Status</th>
-                <th style="min-width: 140px; white-space: nowrap;">Actions</th>
+                <th><span class="sr-only">Actions</span></th>
             </tr>
         </thead>
         <tbody>
             {% for group in groups %}
             <tr>
-                <td class="font-medium">{{ group.group_name }}</td>
-                <td class="text-right">{{ group.member_count }}</td>
-                <td class="text-right">{{ "{:,.0f}".format(group.principal) }}</td>
-                <td class="text-right">{{ "{:,.0f}".format(group.total_amount) }}</td>
-                <td class="text-right {% if group.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">{{ "{:,.0f}".format(group.balance) }}</td>
-                <td>{{ group.period_type }}</td>
-                <td>{{ group.periods_paid }}/{{ group.total_periods }}</td>
-                <td>
-                    {% if group.status == 'paid' %}
-                    <span class="badge badge-success">Paid</span>
-                    {% elif group.status == 'overdue' %}
-                    <span class="badge badge-danger">Overdue</span>
-                    {% else %}
-                    <span class="badge badge-info">Active</span>
-                    {% endif %}
+                <td data-label="Group"><a href="{{ url_for('finance.view_group_loan', id=group.id) }}" class="row-link">{{ group.group_name }}</a></td>
+                <td data-label="Members" class="text-right">{{ group.member_count }}</td>
+                <td data-label="Principal" class="text-right">{{ "{:,.0f}".format(group.principal) }}</td>
+                <td data-label="Total" class="text-right">{{ "{:,.0f}".format(group.total_amount) }}</td>
+                <td data-label="Balance" class="text-right font-semibold {% if group.balance > 0 %}text-orange-600{% else %}text-green-600{% endif %}">{{ "{:,.0f}".format(group.balance) }}</td>
+                <td data-label="Repayment"><span>{{ group.periods_paid }} of {{ group.total_periods }} {{ group.period_type }} paid</span></td>
+                <td data-label="Status">
+                    {% if group.status == 'paid' %}<span class="badge badge-success">Paid</span>
+                    {% elif group.status == 'overdue' %}<span class="badge badge-danger">Overdue</span>
+                    {% else %}<span class="badge badge-info">Active</span>{% endif %}
                 </td>
-                <td style="white-space: nowrap;">
-                    <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" style="color:var(--terra-600);" class=" hover:underline text-sm">View</a>
-                    <form method="POST" action="{{ url_for('finance.delete_group_loan', id=group.id) }}" class="inline" onsubmit="return confirm('Delete this group loan?')">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="text-red-600 hover:underline text-sm ml-2">Delete</button>
-                    </form>
+                <td class="row-actions">
+                    <a href="{{ url_for('finance.view_group_loan', id=group.id) }}" class="btn btn-sm btn-outline">{{ 'Record payment' if group.balance > 0 else 'View' }}</a>
+                    <details class="action-menu">
+                        <summary aria-label="More actions for {{ group.group_name }}">&#8943;</summary>
+                        <div class="action-menu__list">
+                            <a href="{{ url_for('finance.download_group_agreement_pdf', id=group.id) }}">Agreement (PDF)</a>
+                            {% if current_section == 'manager' %}
+                            <a href="{{ url_for('finance.edit_group_loan', id=group.id) }}">Edit dates</a>
+                            {% endif %}
+                            <form method="POST" action="{{ url_for('finance.delete_group_loan', id=group.id) }}" onsubmit="return confirm('Delete the group loan for {{ group.group_name|e }}? It will be hidden from all lists.')">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="is-danger">Delete loan</button>
+                            </form>
+                        </div>
+                    </details>
                 </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="9" class="text-center text-gray-500 py-8">No group loans found</td>
+                <td colspan="8" class="text-center text-gray-500 py-8">No group loans yet.</td>
             </tr>
             {% endfor %}
         </tbody>
+        {% if groups %}
+        <tfoot class="table-subtotal">
+            <tr>
+                <td data-label="">Group subtotal <span class="cell-sub">{{ totals.count }} group{{ '' if totals.count == 1 else 's' }}</span></td>
+                <td class="hide-mobile"></td>
+                <td data-label="Principal" class="text-right">{{ "{:,.0f}".format(totals.principal) }}</td>
+                <td data-label="Total" class="text-right">{{ "{:,.0f}".format(totals.total) }}</td>
+                <td data-label="Balance" class="text-right">{{ "{:,.0f}".format(totals.balance) }}</td>
+                <td colspan="3" class="hide-mobile"></td>
+            </tr>
+        </tfoot>
+        {% endif %}
     </table>
+    </div>
 </div>
 
 <!-- Add Group Loan Modal -->

@@ -1,0 +1,60 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: denove_aps_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      FLASK_ENV: testing
+      SECRET_KEY: ci-only-secret-key-not-used-anywhere-else-0123456789
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/denove_aps_test
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/denove_aps_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: backend/.python-version
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Lint (errors only)
+        run: ruff check .
+
+      - name: Migrations apply cleanly to an empty database
+        run: |
+          python -m flask --app run:app db upgrade
+          python -m flask --app run:app db-doctor
+
+      - name: Reset database for the test suite
+        run: |
+          python -m flask --app run:app db downgrade base
+
+      - name: Run tests
+        run: python -m pytest -q

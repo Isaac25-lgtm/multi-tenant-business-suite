@@ -1,13 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
-from app.models.boutique import BoutiqueSale, BoutiqueStock, BoutiqueSaleItem
-from app.models.hardware import HardwareSale, HardwareStock, HardwareSaleItem
-from app.models.finance import Loan, GroupLoan, LoanPayment, GroupLoanPayment
 from app.models.user import User, AuditLog
 from app.modules.auth import manager_required, log_action
 from app.extensions import db
-from datetime import timedelta
 from app.utils.timezone import get_local_today
-from sqlalchemy import func
 from werkzeug.utils import secure_filename
 import os
 
@@ -19,281 +14,84 @@ from app.utils.uploads import allowed_image, validate_and_save_image
 @dashboard_bp.route('/')
 @manager_required
 def index():
-    """Unified dashboard view"""
+    """Manager dashboard. All figures come from app.services.business_metrics."""
+    from app.services.business_metrics import manager_dashboard
+    from app.services.loan_accounting import refresh_active_loans, refresh_open_group_loans
+
+    today = get_local_today()
     try:
-        from app.modules.finance import refresh_active_loans, summarize_outstanding_portfolio
-
         refresh_active_loans()
-        today = get_local_today()
-        yesterday = today - timedelta(days=1)
-
-        # ============ BOUTIQUE STATS ============
-        boutique_today_query = db.session.query(
-            func.sum(BoutiqueSale.amount_paid),
-            func.count(BoutiqueSale.id)
-        ).filter(
-            BoutiqueSale.sale_date == today,
-            BoutiqueSale.is_deleted == False
-        ).first()
-        boutique_today = float(boutique_today_query[0] or 0)
-        boutique_today_count = boutique_today_query[1] or 0
-
-        boutique_yesterday = float(db.session.query(
-            func.sum(BoutiqueSale.amount_paid)
-        ).filter(
-            BoutiqueSale.sale_date == yesterday,
-            BoutiqueSale.is_deleted == False
-        ).scalar() or 0)
-
-        boutique_credits = float(db.session.query(
-            func.sum(BoutiqueSale.balance)
-        ).filter(
-            BoutiqueSale.is_credit_cleared == False,
-            BoutiqueSale.payment_type == 'part',
-            BoutiqueSale.is_deleted == False
-        ).scalar() or 0)
-
-        boutique_low_stock = BoutiqueStock.query.filter(
-            BoutiqueStock.is_active == True,
-            BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
-        ).count()
-
-        # ============ HARDWARE STATS ============
-        hardware_today_query = db.session.query(
-            func.sum(HardwareSale.amount_paid),
-            func.count(HardwareSale.id)
-        ).filter(
-            HardwareSale.sale_date == today,
-            HardwareSale.is_deleted == False
-        ).first()
-        hardware_today = float(hardware_today_query[0] or 0)
-        hardware_today_count = hardware_today_query[1] or 0
-
-        hardware_yesterday = float(db.session.query(
-            func.sum(HardwareSale.amount_paid)
-        ).filter(
-            HardwareSale.sale_date == yesterday,
-            HardwareSale.is_deleted == False
-        ).scalar() or 0)
-
-        hardware_credits = float(db.session.query(
-            func.sum(HardwareSale.balance)
-        ).filter(
-            HardwareSale.is_credit_cleared == False,
-            HardwareSale.payment_type == 'part',
-            HardwareSale.is_deleted == False
-        ).scalar() or 0)
-
-        hardware_low_stock = HardwareStock.query.filter(
-            HardwareStock.is_active == True,
-            HardwareStock.quantity <= HardwareStock.low_stock_threshold
-        ).count()
-
-        # ============ FINANCE STATS ============
-        today_repayments = float(db.session.query(func.sum(LoanPayment.amount)).filter(
-            LoanPayment.payment_date == today,
-            LoanPayment.is_deleted == False
-        ).scalar() or 0)
-
-        today_group_repayments = float(db.session.query(func.sum(GroupLoanPayment.amount)).filter(
-            GroupLoanPayment.payment_date == today,
-            GroupLoanPayment.is_deleted == False
-        ).scalar() or 0)
-
-        total_outstanding_loans, total_interest_expected = summarize_outstanding_portfolio()
-
-        overdue_loans_count = Loan.query.filter(
-            Loan.is_deleted == False,
-            Loan.status == 'overdue'
-        ).count()
-
-        overdue_groups_count = GroupLoan.query.filter(
-            GroupLoan.is_deleted == False,
-            GroupLoan.status == 'overdue'
-        ).count()
-
-        # ============ INVENTORY VALUE (COST) ============
-        boutique_inventory_value = float(db.session.query(
-            func.sum(BoutiqueStock.cost_price * BoutiqueStock.quantity)
-        ).filter(
-            BoutiqueStock.is_active == True
-        ).scalar() or 0)
-
-        hardware_inventory_value = float(db.session.query(
-            func.sum(HardwareStock.cost_price * HardwareStock.quantity)
-        ).filter(
-            HardwareStock.is_active == True
-        ).scalar() or 0)
-
-        total_inventory_value = boutique_inventory_value + hardware_inventory_value
-
-        # ============ PROFIT (TODAY) ============
-        boutique_profit_today = float(db.session.query(
-            func.sum(
-                (BoutiqueSaleItem.unit_price - func.coalesce(BoutiqueStock.cost_price, 0)) *
-                BoutiqueSaleItem.quantity
-            )
-        ).join(
-            BoutiqueSale, BoutiqueSaleItem.sale_id == BoutiqueSale.id
-        ).outerjoin(
-            BoutiqueStock, BoutiqueSaleItem.stock_id == BoutiqueStock.id
-        ).filter(
-            BoutiqueSale.sale_date == today,
-            BoutiqueSale.is_deleted == False
-        ).scalar() or 0)
-
-        hardware_profit_today = float(db.session.query(
-            func.sum(
-                (HardwareSaleItem.unit_price - func.coalesce(HardwareStock.cost_price, 0)) *
-                HardwareSaleItem.quantity
-            )
-        ).join(
-            HardwareSale, HardwareSaleItem.sale_id == HardwareSale.id
-        ).outerjoin(
-            HardwareStock, HardwareSaleItem.stock_id == HardwareStock.id
-        ).filter(
-            HardwareSale.sale_date == today,
-            HardwareSale.is_deleted == False
-        ).scalar() or 0)
-
-        total_profit_today = boutique_profit_today + hardware_profit_today
-
-        # ============ TOTALS ============
-        total_today = boutique_today + hardware_today + today_repayments + today_group_repayments
-        total_yesterday = boutique_yesterday + hardware_yesterday
-        total_credits = boutique_credits + hardware_credits
-        total_low_stock = boutique_low_stock + hardware_low_stock
-        total_transactions = boutique_today_count + hardware_today_count
-
-        # ============ SALES TREND (LAST 7 DAYS) ============
-        sales_trend = []
-        for i in range(6, -1, -1):
-            target_date = today - timedelta(days=i)
-
-            daily_boutique = float(db.session.query(
-                func.sum(BoutiqueSale.amount_paid)
-            ).filter(
-                BoutiqueSale.sale_date == target_date,
-                BoutiqueSale.is_deleted == False
-            ).scalar() or 0)
-
-            daily_hardware = float(db.session.query(
-                func.sum(HardwareSale.amount_paid)
-            ).filter(
-                HardwareSale.sale_date == target_date,
-                HardwareSale.is_deleted == False
-            ).scalar() or 0)
-
-            daily_finance = float(db.session.query(
-                func.sum(LoanPayment.amount)
-            ).filter(
-                LoanPayment.payment_date == target_date,
-                LoanPayment.is_deleted == False
-            ).scalar() or 0)
-
-            daily_group_finance = float(db.session.query(
-                func.sum(GroupLoanPayment.amount)
-            ).filter(
-                GroupLoanPayment.payment_date == target_date,
-                GroupLoanPayment.is_deleted == False
-            ).scalar() or 0)
-
-            sales_trend.append({
-                'date': target_date.strftime('%a'),
-                'boutique': daily_boutique,
-                'hardware': daily_hardware,
-                'finance': daily_finance + daily_group_finance,
-                'total': daily_boutique + daily_hardware + daily_finance + daily_group_finance
-            })
-
-        # ============ LOW STOCK ALERTS ============
-        low_stock_items = []
-
-        boutique_low = BoutiqueStock.query.filter(
-            BoutiqueStock.is_active == True,
-            BoutiqueStock.quantity <= BoutiqueStock.low_stock_threshold
-        ).limit(5).all()
-        for item in boutique_low:
-            low_stock_items.append({
-                'business': 'Boutique',
-                'item': item.item_name,
-                'quantity': item.quantity,
-                'unit': item.unit
-            })
-
-        hardware_low = HardwareStock.query.filter(
-            HardwareStock.is_active == True,
-            HardwareStock.quantity <= HardwareStock.low_stock_threshold
-        ).limit(5).all()
-        for item in hardware_low:
-            low_stock_items.append({
-                'business': 'Hardware',
-                'item': item.item_name,
-                'quantity': item.quantity,
-                'unit': item.unit
-            })
-
-        return render_template('dashboard.html',
-            today=today,
-            stats={
-                'today_revenue': total_today,
-                'yesterday_revenue': total_yesterday,
-                'credits_outstanding': total_credits,
-                'loans_outstanding': total_outstanding_loans,
-                'loan_interest_expected': total_interest_expected,
-                'low_stock_alerts': total_low_stock,
-                'transactions_today': total_transactions,
-                'overdue_loans': overdue_loans_count + overdue_groups_count,
-                'inventory_value': total_inventory_value,
-                'profit_today': total_profit_today
-            },
-            by_business={
-                'boutique': {
-                    'today': boutique_today,
-                    'yesterday': boutique_yesterday,
-                    'credits': boutique_credits,
-                    'transactions': boutique_today_count,
-                    'low_stock': boutique_low_stock,
-                    'inventory_value': boutique_inventory_value,
-                    'profit_today': boutique_profit_today
-                },
-                'hardware': {
-                    'today': hardware_today,
-                    'yesterday': hardware_yesterday,
-                    'credits': hardware_credits,
-                    'transactions': hardware_today_count,
-                    'low_stock': hardware_low_stock,
-                    'inventory_value': hardware_inventory_value,
-                    'profit_today': hardware_profit_today
-                },
-                'finance': {
-                    'outstanding': total_outstanding_loans,
-                    'interest_expected': total_interest_expected,
-                    'repayments_today': today_repayments + today_group_repayments,
-                    'overdue_count': overdue_loans_count + overdue_groups_count
-                }
-            },
-            sales_trend=sales_trend,
-            low_stock_items=low_stock_items
-        )
+        refresh_open_group_loans()
+        metrics = manager_dashboard(today)
     except Exception:
         db.session.rollback()
-        # Return dashboard with zeroed-out stats so it doesn't crash
-        today = get_local_today()
-        empty_stats = {
-            'today_revenue': 0, 'yesterday_revenue': 0, 'credits_outstanding': 0,
-            'loans_outstanding': 0, 'loan_interest_expected': 0, 'low_stock_alerts': 0, 'transactions_today': 0,
-            'overdue_loans': 0, 'inventory_value': 0, 'profit_today': 0
-        }
-        empty_business = {
-            'boutique': {'today': 0, 'yesterday': 0, 'credits': 0, 'transactions': 0, 'low_stock': 0, 'inventory_value': 0, 'profit_today': 0},
-            'hardware': {'today': 0, 'yesterday': 0, 'credits': 0, 'transactions': 0, 'low_stock': 0, 'inventory_value': 0, 'profit_today': 0},
-            'finance': {'outstanding': 0, 'interest_expected': 0, 'repayments_today': 0, 'overdue_count': 0}
-        }
-        return render_template('dashboard.html',
-            today=today, stats=empty_stats, by_business=empty_business,
-            sales_trend=[], low_stock_items=[]
-        )
+        current_app.logger.exception('Manager dashboard calculation failed')
+        # Show an explicit "unavailable" state; never zeros that look like real figures.
+        return render_template('dashboard.html', today=today, load_error=True, metrics=None)
+
+    return render_template('dashboard.html', today=today, load_error=False, metrics=metrics)
+
+
+@dashboard_bp.route('/summary')
+@manager_required
+def summary_fragment():
+    """Dashboard figures only, for the in-page auto refresh (same service as the page)."""
+    from app.services.business_metrics import manager_dashboard
+    from app.services.loan_accounting import refresh_active_loans, refresh_open_group_loans
+
+    today = get_local_today()
+    try:
+        refresh_active_loans()
+        refresh_open_group_loans()
+        metrics = manager_dashboard(today)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Dashboard refresh failed')
+        return render_template('dashboard/_content.html', today=today, load_error=True, metrics=None), 503
+    return render_template('dashboard/_content.html', today=today, load_error=False, metrics=metrics)
+
+
+def _analytics_page(template, builder):
+    from app.services.periods import resolve_period
+
+    today = get_local_today()
+    period = resolve_period(request.args, today)
+    try:
+        data = builder(period, today)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('Analytics page failed: %s', template)
+        return render_template(template, period=period, data=None, load_error=True, today=today)
+    return render_template(template, period=period, data=data, load_error=False, today=today)
+
+
+@dashboard_bp.route('/retail')
+@manager_required
+def retail_analytics():
+    from app.services.analytics import retail_analytics as build
+
+    unit = request.args.get('unit')
+    branch = request.args.get('branch')
+    return _analytics_page('analytics/retail.html', lambda period, today: build(period, unit, branch))
+
+
+@dashboard_bp.route('/finance')
+@manager_required
+def finance_analytics():
+    from app.services.analytics import finance_analytics as build
+    from app.services.loan_accounting import refresh_active_loans, refresh_open_group_loans
+
+    refresh_active_loans()
+    refresh_open_group_loans()
+    return _analytics_page('analytics/finance.html', build)
+
+
+@dashboard_bp.route('/inventory')
+@manager_required
+def inventory_analytics():
+    from app.services.analytics import inventory_analytics as build
+
+    return _analytics_page('analytics/inventory.html', lambda period, today: build(period))
 
 
 @dashboard_bp.route('/audit-trail')

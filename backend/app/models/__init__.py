@@ -11,12 +11,13 @@ from app.models.hardware import (
 )
 from app.models.finance import (
     LoanClient, Loan, LoanPayment,
-    GroupLoan, GroupLoanPayment, LoanDocument
+    GroupLoan, GroupLoanPayment, LoanDocument, LoanAdjustment
 )
 from app.models.website import (
     WebsiteLoanInquiry, WebsiteOrderRequest,
     PublishedProduct, WebsiteImage
 )
+from app.models.expense import Expense
 from app.models.ai import (
     DailyBriefing, BriefingDismissal, ChatMessage, OcrExtraction
 )
@@ -25,8 +26,9 @@ __all__ = [
     'Customer', 'User', 'AuditLog',
     'BoutiqueCategory', 'BoutiqueStock', 'BoutiqueSale', 'BoutiqueSaleItem', 'BoutiqueCreditPayment',
     'HardwareCategory', 'HardwareStock', 'HardwareSale', 'HardwareSaleItem', 'HardwareCreditPayment',
-    'LoanClient', 'Loan', 'LoanPayment', 'GroupLoan', 'GroupLoanPayment', 'LoanDocument',
+    'LoanClient', 'Loan', 'LoanPayment', 'GroupLoan', 'GroupLoanPayment', 'LoanDocument', 'LoanAdjustment',
     'WebsiteLoanInquiry', 'WebsiteOrderRequest', 'PublishedProduct', 'WebsiteImage',
+    'Expense',
     'DailyBriefing', 'BriefingDismissal', 'ChatMessage', 'OcrExtraction',
 ]
 

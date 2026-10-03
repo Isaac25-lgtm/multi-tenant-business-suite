@@ -258,8 +258,8 @@ class WebsiteSettings(db.Model):
     __tablename__ = 'website_settings'
 
     id = db.Column(db.Integer, primary_key=True)
-    company_name = db.Column(db.String(120), nullable=False, default='Denove')
-    company_suffix = db.Column(db.String(40), nullable=True, default='APS')
+    company_name = db.Column(db.String(120), nullable=False, default='NoRongir')
+    company_suffix = db.Column(db.String(40), nullable=True, default='Investments Limited')
     tagline = db.Column(db.String(255), nullable=True, default='Fashion, Hardware & Finance')
     announcement_text = db.Column(db.String(255), nullable=True)
     hero_title = db.Column(db.String(255), nullable=True)
@@ -276,7 +276,7 @@ class WebsiteSettings(db.Model):
     loan_repayment_note = db.Column(db.String(255), nullable=True)
     loan_approval_hours = db.Column(db.Integer, nullable=True, default=48)
     footer_description = db.Column(db.Text, nullable=True)
-    logo_path = db.Column(db.String(255), nullable=True, default='images/denove.jpg')
+    logo_path = db.Column(db.String(255), nullable=True, default='images/norongir-logo.png')
     updated_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
     updated_at = db.Column(db.DateTime, default=get_local_now, onupdate=get_local_now)

@@ -11,10 +11,10 @@ from datetime import datetime, time, timedelta
 from sqlalchemy import func, or_
 
 from app.extensions import db
-from app.models.boutique import BoutiqueSale, BoutiqueStock, BoutiqueSaleItem
-from app.models.hardware import HardwareSale, HardwareStock, HardwareSaleItem
-from app.models.finance import Loan, GroupLoan, LoanPayment, GroupLoanPayment, LoanClient
-from app.models.user import User, AuditLog
+from app.models.boutique import BoutiqueSale, BoutiqueStock
+from app.models.hardware import HardwareSale, HardwareStock
+from app.models.finance import Loan, GroupLoan, LoanPayment, GroupLoanPayment
+from app.models.user import AuditLog
 from app.models.website import WebsiteLoanInquiry, WebsiteOrderRequest
 from app.models.ai import DailyBriefing
 from app.utils.timezone import EAT_TIMEZONE, get_local_today
@@ -259,7 +259,6 @@ def compute_manager_metrics(target_date=None):
 
     # --- Anomaly flags (deterministic rules) ---
     flags = []
-    total_yest = metrics['boutique_yesterday_revenue'] + metrics['hardware_yesterday_revenue']
     if metrics['overdue_loans'] > 5:
         flags.append(f"{metrics['overdue_loans']} overdue loans totalling UGX {metrics['overdue_balance']:,.0f}")
     if metrics['low_stock_count'] > 3:

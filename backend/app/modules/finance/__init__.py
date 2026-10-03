@@ -1,6 +1,7 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app, session, Response, send_file
-from app.models.finance import LoanClient, Loan, LoanPayment, GroupLoan, GroupLoanPayment, LoanDocument
-from app.modules.auth import login_required, log_action
+from flask import Blueprint, jsonify, render_template, request, redirect, url_for, flash, current_app, session, Response, send_file
+from app.models.finance import LoanClient, Loan, LoanPayment, GroupLoan, GroupLoanPayment, LoanDocument, LoanAdjustment
+from app.modules.auth import login_required, log_action, manager_required
+from app.utils.integrity import DUPLICATE_MESSAGE, find_recent_duplicate
 from app.extensions import db
 from app.utils.timezone import get_local_now, get_local_today
 from app.utils.pdf_generator import (
@@ -12,8 +13,26 @@ from app.utils.pdf_generator import (
     generate_overdue_reminder_pdf,
 )
 from app.utils.payment_plan import calculate_manager_payment_plan
+from app.services.loan_accounting import (
+    adjustment_limit,
+    allocate_loan_payment,
+    apply_adjustment,
+    calculate_due_date,
+    calculate_reducing_balance_schedule,
+    get_loan_payment_schedule,
+    group_table_totals,
+    loan_table_totals,
+    preview_loan_payment,
+    refresh_active_loans,
+    refresh_group_loan_state,
+    refresh_loan_state,
+    refresh_open_group_loans,
+    reverse_loan_payment_allocation,
+    round_money,
+    summarize_portfolio,
+)
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation
 from dateutil.relativedelta import relativedelta
 from werkzeug.utils import secure_filename
 import json
@@ -31,6 +50,15 @@ MAX_DURATION_UNITS = 120
 MAX_GROUP_PERIODS = 240
 MONEY_QUANT = Decimal('1')
 INDIVIDUAL_INTEREST_MODES = {'flat_rate', 'monthly_accrual', 'reducing_balance_equal'}
+# Loan list filters: '' = all except renewed.
+LOAN_LIST_FILTERS = {
+    '': 'Open & paid',
+    'active': 'Active',
+    'overdue': 'Overdue',
+    'paid': 'Paid',
+    'renewed': 'Renewed',
+    'everything': 'Everything',
+}
 from app.utils.uploads import allowed_file, validate_and_save
 
 
@@ -42,10 +70,6 @@ def safe_decimal(value, default='0'):
         return Decimal(str(value).strip())
     except (InvalidOperation, ValueError):
         return Decimal(default)
-
-
-def round_money(value):
-    return Decimal(str(value or 0)).quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)
 
 
 def get_form_value(source, key, default=None, cast=None):
@@ -82,219 +106,6 @@ def check_date_permission(entry_date, user_section):
     if user_section == 'manager':
         return True
     return yesterday <= entry_date <= today
-
-
-def calculate_due_date(issue_date, duration_units, duration_type):
-    if duration_type == 'months':
-        return issue_date + relativedelta(months=duration_units)
-    return issue_date + timedelta(weeks=duration_units)
-
-
-def calculate_reducing_balance_schedule(principal, monthly_rate_percent, periods, issue_date=None):
-    """Build an equal-payment reducing-balance monthly amortization schedule."""
-    principal = round_money(principal)
-    monthly_rate_percent = Decimal(str(monthly_rate_percent or 0))
-    periods = int(periods or 0)
-
-    if principal <= 0 or periods <= 0:
-        return []
-
-    monthly_rate = monthly_rate_percent / Decimal('100')
-    if monthly_rate == 0:
-        regular_payment = round_money(principal / Decimal(periods))
-    else:
-        discount = Decimal('1') - ((Decimal('1') + monthly_rate) ** -periods)
-        regular_payment = round_money((principal * monthly_rate) / discount)
-
-    rows = []
-    remaining = principal
-    for period in range(1, periods + 1):
-        interest = round_money(remaining * monthly_rate)
-        principal_component = regular_payment - interest
-
-        if period == periods or principal_component > remaining:
-            principal_component = remaining
-            payment = principal_component + interest
-        else:
-            payment = regular_payment
-
-        remaining -= principal_component
-        if remaining < 0:
-            remaining = Decimal('0')
-
-        due_date = issue_date + relativedelta(months=period) if issue_date else None
-        rows.append({
-            'period': period,
-            'due_date': due_date,
-            'payment': round_money(payment),
-            'interest': round_money(interest),
-            'principal': round_money(principal_component),
-            'balance_after': round_money(remaining),
-        })
-
-    return rows
-
-
-def get_loan_payment_schedule(loan):
-    if (loan.interest_mode or 'flat_rate') != 'reducing_balance_equal':
-        return []
-    return calculate_reducing_balance_schedule(
-        loan.principal or 0,
-        loan.interest_rate or 0,
-        loan.duration_weeks or 0,
-        loan.issue_date,
-    )
-
-
-def elapsed_full_months(issue_date, reference_date):
-    if not issue_date or not reference_date or reference_date <= issue_date:
-        return 0
-    delta = relativedelta(reference_date, issue_date)
-    months = (delta.years * 12) + delta.months
-    return max(months, 0)
-
-
-def refresh_loan_state(loan, as_of_date=None):
-    as_of_date = as_of_date or get_local_today()
-    changed = False
-
-    principal = Decimal(str(loan.principal or 0))
-    principal_paid = Decimal(str(loan.principal_paid or 0))
-    interest_paid = Decimal(str(loan.interest_paid or 0))
-    principal_rolled = Decimal(str(loan.principal_rolled or 0))
-    interest_mode = loan.interest_mode or 'flat_rate'
-
-    if interest_mode == 'monthly_accrual':
-        monthly_interest_amount = Decimal(str(loan.monthly_interest_amount or 0))
-        accrued_months = elapsed_full_months(loan.issue_date, as_of_date)
-        interest_amount = monthly_interest_amount * accrued_months
-    elif interest_mode == 'reducing_balance_equal':
-        schedule = get_loan_payment_schedule(loan)
-        interest_amount = sum((row['interest'] for row in schedule), Decimal('0'))
-    else:
-        interest_amount = Decimal(str(loan.interest_amount or 0))
-
-    total_amount = principal + interest_amount
-    if interest_mode == 'reducing_balance_equal':
-        total_amount = sum((row['payment'] for row in get_loan_payment_schedule(loan)), Decimal('0'))
-    principal_due = principal - principal_paid - principal_rolled
-    if principal_due < 0:
-        principal_due = Decimal('0')
-    interest_due = interest_amount - interest_paid
-    if interest_due < 0:
-        interest_due = Decimal('0')
-    balance = principal_due + interest_due
-    if balance < 0:
-        balance = Decimal('0')
-
-    if (loan.status or '').lower() == 'renewed' and balance <= 0:
-        status = 'renewed'
-    elif balance <= 0:
-        status = 'paid'
-    elif loan.due_date and loan.due_date < as_of_date:
-        status = 'overdue'
-    else:
-        status = 'active'
-
-    if Decimal(str(loan.interest_amount or 0)) != interest_amount:
-        loan.interest_amount = interest_amount
-        changed = True
-    if Decimal(str(loan.total_amount or 0)) != total_amount:
-        loan.total_amount = total_amount
-        changed = True
-    amount_paid = principal_paid + interest_paid
-    if Decimal(str(loan.amount_paid or 0)) != amount_paid:
-        loan.amount_paid = amount_paid
-        changed = True
-    if Decimal(str(loan.balance or 0)) != balance:
-        loan.balance = balance
-        changed = True
-    if (loan.status or 'active') != status:
-        loan.status = status
-        changed = True
-    return changed
-
-
-def allocate_loan_payment(loan, amount):
-    """Apply a payment interest-first, then principal, and return the allocation."""
-    amount = Decimal(str(amount or 0))
-
-    if (loan.interest_mode or 'flat_rate') == 'reducing_balance_equal':
-        schedule = get_loan_payment_schedule(loan)
-        current_paid = Decimal(str(loan.amount_paid or 0))
-        target_paid = current_paid + amount
-        scheduled_total = sum((row['payment'] for row in schedule), Decimal('0'))
-        if target_paid > scheduled_total:
-            target_paid = scheduled_total
-
-        remaining_paid = target_paid
-        target_interest = Decimal('0')
-        target_principal = Decimal('0')
-        for row in schedule:
-            row_payment = Decimal(str(row['payment']))
-            if remaining_paid <= 0:
-                break
-
-            applied = min(remaining_paid, row_payment)
-            row_interest = Decimal(str(row['interest']))
-            row_principal = Decimal(str(row['principal']))
-            interest_part = min(applied, row_interest)
-            principal_part = applied - interest_part
-            if principal_part > row_principal:
-                principal_part = row_principal
-
-            target_interest += interest_part
-            target_principal += principal_part
-            remaining_paid -= applied
-
-        current_interest_paid = Decimal(str(loan.interest_paid or 0))
-        current_principal_paid = Decimal(str(loan.principal_paid or 0))
-        interest_amount = max(target_interest - current_interest_paid, Decimal('0'))
-        principal_amount = max(target_principal - current_principal_paid, Decimal('0'))
-
-        loan.interest_paid = current_interest_paid + interest_amount
-        loan.principal_paid = current_principal_paid + principal_amount
-        loan.amount_paid = current_paid + interest_amount + principal_amount
-
-        return principal_amount, interest_amount
-
-    interest_due = Decimal(str(loan.outstanding_interest or 0))
-    principal_due = Decimal(str(loan.outstanding_principal or 0))
-
-    interest_amount = min(amount, interest_due)
-    principal_amount = amount - interest_amount
-    if principal_amount > principal_due:
-        principal_amount = principal_due
-
-    loan.interest_paid = Decimal(str(loan.interest_paid or 0)) + interest_amount
-    loan.principal_paid = Decimal(str(loan.principal_paid or 0)) + principal_amount
-    loan.amount_paid = Decimal(str(loan.amount_paid or 0)) + interest_amount + principal_amount
-
-    return principal_amount, interest_amount
-
-
-def refresh_active_loans():
-    changed = False
-    loans = Loan.query.filter(Loan.is_deleted == False, Loan.status != 'renewed').all()
-    for loan in loans:
-        changed = refresh_loan_state(loan) or changed
-    if changed:
-        db.session.commit()
-    return changed
-
-
-def summarize_outstanding_portfolio():
-    """Split the active portfolio into remaining principal and interest portions."""
-    loan_rows = Loan.query.filter(Loan.is_deleted == False, Loan.status != 'renewed', Loan.balance > 0).all()
-    group_rows = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.balance > 0).all()
-
-    principal_outstanding = sum((loan.outstanding_principal for loan in loan_rows), Decimal('0'))
-    principal_outstanding += sum((group.outstanding_principal for group in group_rows), Decimal('0'))
-
-    interest_outstanding = sum((loan.outstanding_interest for loan in loan_rows), Decimal('0'))
-    interest_outstanding += sum((group.outstanding_interest for group in group_rows), Decimal('0'))
-
-    return float(principal_outstanding), float(interest_outstanding)
 
 
 def parse_individual_loan_form(form):
@@ -406,40 +217,31 @@ def parse_group_loan_form(form):
 @login_required('finance')
 def index():
     """Finance overview"""
-    today = get_local_today()
-
+    load_error = False
     try:
         refresh_active_loans()
-
-        # Update loan statuses
-        Loan.query.filter(
-            Loan.is_deleted == False, Loan.status.in_(['active', 'due_soon']),
-            Loan.due_date < today, Loan.balance > 0
-        ).update({'status': 'overdue'}, synchronize_session=False)
-
-        GroupLoan.query.filter(
-            GroupLoan.is_deleted == False, GroupLoan.status == 'active',
-            GroupLoan.due_date < today, GroupLoan.balance > 0
-        ).update({'status': 'overdue'}, synchronize_session=False)
-        db.session.commit()
+        refresh_open_group_loans()
 
         active_loans = Loan.query.filter(Loan.is_deleted == False, Loan.status != 'renewed', Loan.balance > 0).count()
         active_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.balance > 0).count()
         overdue_loans = Loan.query.filter(Loan.is_deleted == False, Loan.status == 'overdue', Loan.balance > 0).count()
-        overdue_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.status == 'overdue').count()
+        overdue_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.status == 'overdue', GroupLoan.balance > 0).count()
 
-        total_outstanding, total_interest_expected = summarize_outstanding_portfolio()
+        portfolio = summarize_portfolio()
     except Exception as exc:
         db.session.rollback()
         current_app.logger.exception('Finance dashboard calculation failed: %s', exc)
+        load_error = True
         active_loans = active_groups = overdue_loans = overdue_groups = 0
-        total_outstanding = total_interest_expected = 0
+        portfolio = None
 
     return render_template('finance/index.html',
+        load_error=load_error,
         active_loans=active_loans, active_groups=active_groups,
         overdue_loans=overdue_loans, overdue_groups=overdue_groups,
-        total_outstanding=total_outstanding,
-        total_interest_expected=total_interest_expected
+        portfolio=portfolio,
+        total_outstanding=portfolio['combined_principal'] if portfolio else 0,
+        total_interest_expected=portfolio['combined_interest'] if portfolio else 0,
     )
 
 
@@ -551,18 +353,35 @@ def delete_client(id):
 @login_required('finance')
 def loans():
     refresh_active_loans()
-    show_renewed = request.args.get('show_renewed') == '1'
-    query = Loan.query.filter_by(is_deleted=False)
-    if not show_renewed:
+    status = (request.args.get('status') or '').strip().lower()
+    if request.args.get('show_renewed') == '1':  # older links
+        status = 'everything'
+    if status not in LOAN_LIST_FILTERS:
+        status = ''
+    search = (request.args.get('q') or '').strip()
+
+    query = Loan.query.filter(Loan.is_deleted == False)  # noqa: E712
+    if status == '':
         query = query.filter(Loan.status != 'renewed')
+    elif status != 'everything':
+        query = query.filter(Loan.status == status)
+    if search:
+        like = f'%{search}%'
+        query = query.join(LoanClient, Loan.client_id == LoanClient.id).filter(
+            db.or_(LoanClient.name.ilike(like), LoanClient.phone.ilike(like))
+        )
     all_loans = query.order_by(Loan.issue_date.desc()).all()
     clients = LoanClient.query.filter_by(is_active=True).order_by(LoanClient.name).all()
     return render_template(
         'finance/loans.html',
         loans=all_loans,
+        totals=loan_table_totals(all_loans),
         clients=clients,
         today=get_local_today(),
-        show_renewed=show_renewed,
+        status=status,
+        search=search,
+        filters=LOAN_LIST_FILTERS,
+        show_renewed=status in ('renewed', 'everything'),
     )
 
 
@@ -613,6 +432,7 @@ def view_loan(id):
         'finance/loan_detail.html',
         loan=loan,
         payments=payments,
+        adjustments=loan.adjustments.order_by(LoanAdjustment.created_at.desc()).all(),
         payment_schedule=get_loan_payment_schedule(loan),
         today=get_local_today(),
     )
@@ -621,13 +441,18 @@ def view_loan(id):
 @finance_bp.route('/loans/<int:id>/pay', methods=['POST'])
 @login_required('finance')
 def pay_loan(id):
-    loan = Loan.query.get_or_404(id)
+    # Lock the loan row so simultaneous submissions are processed one at a time.
+    loan = Loan.query.filter_by(id=id).with_for_update().first_or_404()
     try:
         amount = safe_decimal(request.form.get('amount', '0'))
         payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
         notes = request.form.get('notes', '').strip()
         user_section = session.get('section', '')
 
+        if find_recent_duplicate(LoanPayment, loan_id=loan.id, amount=amount, payment_date=payment_date):
+            db.session.rollback()
+            flash(DUPLICATE_MESSAGE, 'warning')
+            return redirect(url_for('finance.view_loan', id=id))
         if amount <= 0:
             flash('Amount must be greater than 0', 'error')
             return redirect(url_for('finance.view_loan', id=id))
@@ -668,6 +493,76 @@ def pay_loan(id):
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('finance.view_loan', id=id))
+
+
+@finance_bp.route('/loans/<int:id>/payment-preview')
+@login_required('finance')
+def preview_loan_payment_split(id):
+    """Read-only: how a payment would split into interest and principal."""
+    loan = Loan.query.get_or_404(id)
+    amount = safe_decimal(request.args.get('amount', '0'))
+    try:
+        payment_date = date.fromisoformat(request.args.get('date') or str(get_local_today()))
+    except ValueError:
+        payment_date = get_local_today()
+    if amount <= 0:
+        return jsonify({'ok': False})
+    preview = preview_loan_payment(loan, amount, payment_date)
+    db.session.rollback()  # the preview never writes
+    return jsonify({
+        'ok': True,
+        'interest': f"{preview['interest']:,.0f}",
+        'principal': f"{preview['principal']:,.0f}",
+        'balance_before': f"{preview['balance_before']:,.0f}",
+        'balance_after': f"{preview['balance_after']:,.0f}",
+        'exceeds_balance': amount > preview['balance_before'],
+        'settles_loan': preview['settles_loan'],
+    })
+
+
+@finance_bp.route('/loans/<int:loan_id>/payments/<int:payment_id>/reverse', methods=['POST'])
+@manager_required
+def reverse_loan_payment(loan_id, payment_id):
+    """Reverse a mistaken payment. Manager only; the record is kept for audit."""
+    loan = Loan.query.filter_by(id=loan_id).with_for_update().first_or_404()
+    payment = LoanPayment.query.filter_by(id=payment_id, loan_id=loan.id).first_or_404()
+    reason = (request.form.get('reason') or '').strip()
+
+    if payment.is_deleted:
+        flash('This payment has already been reversed.', 'warning')
+        return redirect(url_for('finance.view_loan', id=loan.id))
+    if (payment.payment_type or 'regular') == 'renewal':
+        flash('Renewal settlements cannot be reversed here.', 'error')
+        return redirect(url_for('finance.view_loan', id=loan.id))
+    if (loan.status or '') == 'renewed':
+        flash('Payments on a renewed loan cannot be reversed.', 'error')
+        return redirect(url_for('finance.view_loan', id=loan.id))
+    if len(reason) < 5:
+        flash('Give a reason for the reversal (at least 5 characters).', 'error')
+        return redirect(url_for('finance.view_loan', id=loan.id))
+
+    try:
+        before = {'balance': float(loan.balance or 0), 'principal_paid': float(loan.principal_paid or 0),
+                  'interest_paid': float(loan.interest_paid or 0), 'status': loan.status}
+        reverse_loan_payment_allocation(loan, payment)
+        payment.is_deleted = True
+        payment.reversed_at = get_local_now()
+        payment.reversed_by = session.get('username')
+        payment.reversal_reason = reason[:255]
+        refresh_loan_state(loan)
+        db.session.commit()
+
+        log_action(session['username'], 'finance', 'reverse', 'loan_payment', payment.id,
+                   {'loan_id': loan.id, 'client': loan.client.name if loan.client else 'Unknown',
+                    'amount': float(payment.amount), 'principal_amount': float(payment.principal_amount or 0),
+                    'interest_amount': float(payment.interest_amount or 0), 'reason': reason,
+                    'before': before,
+                    'after': {'balance': float(loan.balance or 0), 'status': loan.status}})
+        flash(f'Payment of UGX {payment.amount:,.0f} reversed. Balance is now UGX {loan.balance:,.0f}.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error reversing payment: {str(e)}', 'error')
+    return redirect(url_for('finance.view_loan', id=loan.id))
 
 
 @finance_bp.route('/loans/<int:id>/renew', methods=['POST'])
@@ -830,14 +725,8 @@ def edit_loan(id):
                 delta = due_date - issue_date
                 loan.duration_weeks = max(delta.days // 7, 1)
 
-            # Update status based on new due date
-            today = get_local_today()
-            if loan.balance <= 0:
-                loan.status = 'paid'
-            elif due_date < today:
-                loan.status = 'overdue'
-            else:
-                loan.status = 'active'
+            # New dates change accrued interest and status; recompute centrally.
+            refresh_loan_state(loan)
 
             db.session.commit()
 
@@ -868,8 +757,14 @@ def edit_loan(id):
 @finance_bp.route('/group-loans')
 @login_required('finance')
 def group_loans():
+    refresh_open_group_loans()
     all_groups = GroupLoan.query.filter_by(is_deleted=False).order_by(GroupLoan.created_at.desc()).all()
-    return render_template('finance/group_loans.html', groups=all_groups, today=get_local_today())
+    return render_template(
+        'finance/group_loans.html',
+        groups=all_groups,
+        totals=group_table_totals(all_groups),
+        today=get_local_today(),
+    )
 
 
 @finance_bp.route('/group-loans/create', methods=['POST'])
@@ -916,32 +811,33 @@ def create_group_loan():
 @login_required('finance')
 def view_group_loan(id):
     group = GroupLoan.query.get_or_404(id)
+    if refresh_group_loan_state(group):
+        db.session.commit()
     payments = group.payments.filter_by(is_deleted=False).order_by(GroupLoanPayment.payment_date.desc()).all()
-    return render_template('finance/group_loan_detail.html', group=group, payments=payments, today=get_local_today())
+    adjustments = group.adjustments.order_by(LoanAdjustment.created_at.desc()).all()
+    return render_template('finance/group_loan_detail.html', group=group, payments=payments,
+                           adjustments=adjustments, today=get_local_today())
 
 
 @finance_bp.route('/group-loans/<int:id>/pay', methods=['POST'])
 @login_required('finance')
 def pay_group_loan(id):
-    group = GroupLoan.query.get_or_404(id)
+    group = GroupLoan.query.filter_by(id=id).with_for_update().first_or_404()
     try:
         amount = safe_decimal(request.form.get('amount', '0'))
-        periods_covered = request.form.get('periods_covered', type=int, default=1)
         payment_date = date.fromisoformat(request.form.get('payment_date', str(get_local_today())))
         notes = request.form.get('notes', '').strip()
         user_section = session.get('section', '')
 
+        if find_recent_duplicate(GroupLoanPayment, group_loan_id=group.id, amount=amount, payment_date=payment_date):
+            db.session.rollback()
+            flash(DUPLICATE_MESSAGE, 'warning')
+            return redirect(url_for('finance.view_group_loan', id=id))
         if amount <= 0:
             flash('Amount must be greater than 0', 'error')
             return redirect(url_for('finance.view_group_loan', id=id))
         if amount > MAX_PRINCIPAL:
             flash('Payment amount is too large.', 'error')
-            return redirect(url_for('finance.view_group_loan', id=id))
-        if periods_covered <= 0:
-            flash('Periods covered must be at least 1.', 'error')
-            return redirect(url_for('finance.view_group_loan', id=id))
-        if periods_covered > max(group.total_periods - group.periods_paid, 1):
-            flash('Periods covered cannot exceed the remaining repayment periods.', 'error')
             return redirect(url_for('finance.view_group_loan', id=id))
         if not check_date_permission(payment_date, user_section):
             flash('You can only enter payments for today or yesterday. Contact a manager for older entries.', 'error')
@@ -950,12 +846,10 @@ def pay_group_loan(id):
             flash(f'Payment cannot exceed the current balance of UGX {group.balance:,.0f}.', 'error')
             return redirect(url_for('finance.view_group_loan', id=id))
 
+        periods_before = group.periods_paid or 0
         group.amount_paid += amount
-        group.balance = group.total_amount - group.amount_paid
-        group.periods_paid += periods_covered
-        if group.balance <= 0:
-            group.balance = Decimal('0')
-            group.status = 'paid'
+        refresh_group_loan_state(group)  # also derives periods paid from the money paid
+        periods_covered = (group.periods_paid or 0) - periods_before
 
         payment = GroupLoanPayment(
             group_loan_id=group.id, payment_date=payment_date,
@@ -973,6 +867,163 @@ def pay_group_loan(id):
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
     return redirect(url_for('finance.view_group_loan', id=id))
+
+
+@finance_bp.route('/group-loans/<int:group_id>/payments/<int:payment_id>/reverse', methods=['POST'])
+@manager_required
+def reverse_group_loan_payment(group_id, payment_id):
+    """Reverse a mistaken group payment. Manager only; the record is kept for audit."""
+    group = GroupLoan.query.filter_by(id=group_id).with_for_update().first_or_404()
+    payment = GroupLoanPayment.query.filter_by(id=payment_id, group_loan_id=group.id).first_or_404()
+    reason = (request.form.get('reason') or '').strip()
+
+    if payment.is_deleted:
+        flash('This payment has already been reversed.', 'warning')
+        return redirect(url_for('finance.view_group_loan', id=group.id))
+    if len(reason) < 5:
+        flash('Give a reason for the reversal (at least 5 characters).', 'error')
+        return redirect(url_for('finance.view_group_loan', id=group.id))
+
+    try:
+        before = {'balance': float(group.balance or 0), 'amount_paid': float(group.amount_paid or 0),
+                  'periods_paid': group.periods_paid, 'status': group.status}
+        group.amount_paid = max(Decimal(str(group.amount_paid or 0)) - Decimal(str(payment.amount or 0)), Decimal('0'))
+        payment.is_deleted = True
+        payment.reversed_at = get_local_now()
+        payment.reversed_by = session.get('username')
+        payment.reversal_reason = reason[:255]
+        refresh_group_loan_state(group)
+        db.session.commit()
+
+        log_action(session['username'], 'finance', 'reverse', 'group_loan_payment', payment.id,
+                   {'group_loan_id': group.id, 'group_name': group.group_name,
+                    'amount': float(payment.amount), 'periods_covered': payment.periods_covered,
+                    'reason': reason, 'before': before,
+                    'after': {'balance': float(group.balance or 0), 'status': group.status}})
+        flash(f'Payment of UGX {payment.amount:,.0f} reversed. Balance is now UGX {group.balance:,.0f}.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error reversing payment: {str(e)}', 'error')
+    return redirect(url_for('finance.view_group_loan', id=group.id))
+
+
+# ============ ADJUSTMENTS (discounts, waivers, write-offs, charges) ============
+
+def _adjustment_redirect(adjustment_or_target):
+    group_id = getattr(adjustment_or_target, 'group_loan_id', None)
+    if isinstance(adjustment_or_target, GroupLoan) or group_id:
+        return redirect(url_for('finance.view_group_loan', id=group_id or adjustment_or_target.id))
+    loan_id = getattr(adjustment_or_target, 'loan_id', None) or adjustment_or_target.id
+    return redirect(url_for('finance.view_loan', id=loan_id))
+
+
+def _create_adjustment(target, kind):
+    adjustment_type = (request.form.get('adjustment_type') or '').strip()
+    amount = round_money(safe_decimal(request.form.get('amount', '0')))
+    reason = (request.form.get('reason') or '').strip()
+    try:
+        effective_date = date.fromisoformat(request.form.get('effective_date') or str(get_local_today()))
+    except ValueError:
+        effective_date = get_local_today()
+
+    if adjustment_type not in LoanAdjustment.TYPES:
+        flash('Choose an adjustment type.', 'error')
+        return _adjustment_redirect(target)
+    if amount <= 0 or amount > MAX_PRINCIPAL:
+        flash('Enter an amount greater than 0.', 'error')
+        return _adjustment_redirect(target)
+    if len(reason) < 5:
+        flash('Give a reason for the adjustment (at least 5 characters).', 'error')
+        return _adjustment_redirect(target)
+    if (kind == 'loan' and (target.interest_mode or 'flat_rate') == 'reducing_balance_equal'
+            and adjustment_type in ('interest_discount', 'interest_waiver')):
+        flash('Interest discounts are not yet supported on reducing-balance loans.', 'error')
+        return _adjustment_redirect(target)
+    if kind == 'loan' and (target.status or '') == 'renewed':
+        flash('A renewed loan cannot be adjusted; adjust the new loan instead.', 'error')
+        return _adjustment_redirect(target)
+
+    if kind == 'loan':
+        refresh_loan_state(target)
+    else:
+        refresh_group_loan_state(target)
+    limit = adjustment_limit(target, adjustment_type)
+    if limit is not None and amount > limit:
+        flash(f'{LoanAdjustment.TYPES[adjustment_type]} cannot exceed UGX {limit:,.0f} outstanding.', 'error')
+        return _adjustment_redirect(target)
+
+    before = float(target.balance or 0)
+    adjustment = LoanAdjustment(
+        loan_id=target.id if kind == 'loan' else None,
+        group_loan_id=target.id if kind == 'group' else None,
+        adjustment_type=adjustment_type,
+        amount=amount,
+        effective_date=effective_date,
+        reason=reason[:500],
+        created_by=session.get('username'),
+    )
+    db.session.add(adjustment)
+    apply_adjustment(target, adjustment)
+    if kind == 'loan':
+        refresh_loan_state(target)
+    else:
+        refresh_group_loan_state(target)
+    db.session.commit()
+
+    log_action(session['username'], 'finance', 'create', 'loan_adjustment', adjustment.id,
+               {'kind': kind, 'target_id': target.id, 'type': adjustment_type, 'amount': float(amount),
+                'reason': reason, 'balance_before': before, 'balance_after': float(target.balance or 0)})
+    flash(f'{adjustment.type_label} of UGX {amount:,.0f} recorded. Balance is now UGX {target.balance:,.0f}.', 'success')
+    return _adjustment_redirect(target)
+
+
+@finance_bp.route('/loans/<int:id>/adjustments', methods=['POST'])
+@manager_required
+def create_loan_adjustment(id):
+    loan = Loan.query.filter_by(id=id).with_for_update().first_or_404()
+    return _create_adjustment(loan, 'loan')
+
+
+@finance_bp.route('/group-loans/<int:id>/adjustments', methods=['POST'])
+@manager_required
+def create_group_loan_adjustment(id):
+    group = GroupLoan.query.filter_by(id=id).with_for_update().first_or_404()
+    return _create_adjustment(group, 'group')
+
+
+@finance_bp.route('/adjustments/<int:id>/reverse', methods=['POST'])
+@manager_required
+def reverse_adjustment(id):
+    adjustment = LoanAdjustment.query.get_or_404(id)
+    reason = (request.form.get('reason') or '').strip()
+    if adjustment.is_reversed:
+        flash('This adjustment has already been reversed.', 'warning')
+        return _adjustment_redirect(adjustment)
+    if len(reason) < 5:
+        flash('Give a reason for the reversal (at least 5 characters).', 'error')
+        return _adjustment_redirect(adjustment)
+
+    if adjustment.loan_id:
+        target = Loan.query.filter_by(id=adjustment.loan_id).with_for_update().first_or_404()
+    else:
+        target = GroupLoan.query.filter_by(id=adjustment.group_loan_id).with_for_update().first_or_404()
+    before = float(target.balance or 0)
+    apply_adjustment(target, adjustment, reverse=True)
+    adjustment.is_reversed = True
+    adjustment.reversed_by = session.get('username')
+    adjustment.reversed_at = get_local_now()
+    adjustment.reversal_reason = reason[:255]
+    if adjustment.loan_id:
+        refresh_loan_state(target)
+    else:
+        refresh_group_loan_state(target)
+    db.session.commit()
+
+    log_action(session['username'], 'finance', 'reverse', 'loan_adjustment', adjustment.id,
+               {'type': adjustment.adjustment_type, 'amount': float(adjustment.amount), 'reason': reason,
+                'balance_before': before, 'balance_after': float(target.balance or 0)})
+    flash(f'{adjustment.type_label} reversed. Balance is now UGX {target.balance:,.0f}.', 'success')
+    return _adjustment_redirect(adjustment)
 
 
 @finance_bp.route('/group-loans/<int:id>/delete', methods=['POST'])
@@ -1085,7 +1136,7 @@ def preview_loan_agreement():
     default_terms = [
         "The Borrower agrees to repay the loan amount plus interest as specified above.",
         "Payments shall be made on or before the due date to avoid penalties.",
-        "Late payments may result in additional charges of 5% per week on the outstanding balance.",
+        "Late-payment charges, where applicable, are subject to management-approved terms.",
         "The Borrower may repay the loan early without any prepayment penalties.",
         "In case of default, the Lender reserves the right to take legal action to recover the debt.",
         "The Borrower agrees that all information provided is true and accurate.",
@@ -1352,7 +1403,8 @@ def download_loan_statement_pdf(id):
         db.session.commit()
 
     payments = loan.payments.filter_by(is_deleted=False).order_by(LoanPayment.payment_date.asc()).all()
-    buffer = generate_loan_statement_pdf(loan, payments, get_loan_payment_schedule(loan))
+    adjustments = loan.adjustments.order_by(LoanAdjustment.effective_date.asc()).all()
+    buffer = generate_loan_statement_pdf(loan, payments, get_loan_payment_schedule(loan), adjustments)
 
     log_action(session.get('username'), 'finance', 'view', 'loan_statement', loan.id,
                {'client': loan.client.name if loan.client else 'Unknown'})

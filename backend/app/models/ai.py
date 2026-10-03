@@ -1,4 +1,7 @@
-"""Models for AI features: morning briefing, manager chat, OCR extractions."""
+"""Models for AI features: morning briefing and OCR extractions.
+
+ChatMessage is kept only so the historical chat_messages table stays mapped;
+the manager chatbot itself has been removed."""
 
 import json
 

@@ -1,0 +1,69 @@
+{# Adjustments panel. Expects: adjustments, adjustment_action, allow_interest_adjustments #}
+<div class="section-card mt-4">
+    <h2 class="font-semibold text-lg mb-1">Adjustments</h2>
+    <p class="text-xs text-gray-500 mb-4">Discounts, waivers, write-offs and charges. Balances are never edited directly; each change is recorded here with a reason.</p>
+
+    {% if adjustments %}
+    <div class="space-y-2 mb-4">
+        {% for adj in adjustments %}
+        <div class="flex justify-between text-sm border-b pb-2 {% if adj.is_reversed %}opacity-60{% endif %}">
+            <div>
+                <span class="font-medium">{{ adj.type_label }}</span>
+                <span class="text-gray-500"> &middot; {{ adj.effective_date.strftime('%Y-%m-%d') }} &middot; by {{ adj.created_by }}</span>
+                <span class="text-gray-500 block text-xs">{{ adj.reason }}</span>
+                {% if adj.is_reversed %}
+                <span class="text-red-600 block text-xs">Reversed by {{ adj.reversed_by }}: {{ adj.reversal_reason }}</span>
+                {% endif %}
+            </div>
+            <div class="text-right">
+                <span class="font-medium {% if adj.increases_balance %}text-red-600{% else %}text-green-600{% endif %}">
+                    {{ '+' if adj.increases_balance else '−' }} UGX {{ "{:,.0f}".format(adj.amount) }}
+                </span>
+                {% if current_section == 'manager' and not adj.is_reversed %}
+                <form method="POST" action="{{ url_for('finance.reverse_adjustment', id=adj.id) }}" class="block mt-1"
+                      onsubmit="return askReversalReason(this, 'Why is this adjustment being reversed?')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="reason" value="">
+                    <button type="submit" class="text-red-600 hover:underline text-xs">Reverse</button>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500 mb-4">No adjustments.</p>
+    {% endif %}
+
+    {% if current_section == 'manager' %}
+    <form method="POST" action="{{ adjustment_action }}" class="pt-3" style="border-top:1px solid var(--border)">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <h3 class="font-semibold mb-3">Add adjustment (manager)</h3>
+        <div class="form-group">
+            <label class="form-label" for="adjustment-type">Type</label>
+            <select name="adjustment_type" id="adjustment-type" class="form-select" required>
+                {% if allow_interest_adjustments %}
+                <option value="interest_discount">Interest discount</option>
+                <option value="interest_waiver">Interest waiver</option>
+                {% endif %}
+                <option value="principal_write_off">Principal write-off</option>
+                <option value="charge">Additional charge</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="adjustment-amount">Amount (UGX)</label>
+            <input type="number" name="amount" id="adjustment-amount" min="1" step="1" required class="form-input">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="adjustment-date">Effective date</label>
+            <input type="date" name="effective_date" id="adjustment-date" value="{{ today }}" required class="form-input">
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="adjustment-reason">Reason</label>
+            <input type="text" name="reason" id="adjustment-reason" minlength="5" maxlength="500" required class="form-input"
+                   placeholder="e.g. Agreed discount for early settlement">
+        </div>
+        <button type="submit" class="btn btn-outline w-full">Record adjustment</button>
+    </form>
+    {% endif %}
+</div>
