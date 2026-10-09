@@ -68,17 +68,56 @@
     </div>
   </nav>
 
+  {% set hero_parts = (settings.hero_title or '').rsplit(' and ', 1) %}
+  {% set hero_loan = [settings.loan_max_amount, [settings.loan_min_amount, 1000000]|max]|min %}
+  {% set product_count = boutique_products|length + hardware_products|length %}
   <section class="hero">
-    <div class="hero__bg">{% if hero_image %}<img src="{{ hero_image }}" alt="{{ brand_display_name }}" referrerpolicy="no-referrer">{% endif %}</div>
-    <div class="hero__grad"></div>
-    <div class="container hero__content">
-      <div class="hero__tag"><span class="hero__tag-dot"></span>Serving {{ settings.service_area }}</div>
-      <h1 class="hero__title">{{ settings.hero_title|replace(' and ', '<br>&amp; ')|safe }}</h1>
-      <p class="hero__desc">{{ settings.hero_description }}</p>
-      <p class="hero__support">Strong roots in {{ settings.headquarters }}. Trusted service for customers across {{ settings.service_area }}.</p>
-      <div class="hero__btns">
-        <a href="#featured" class="hero__btn hero__btn--pri">Browse Products</a>
-        <a href="#loans" class="hero__btn hero__btn--gho">Apply for a Loan</a>
+    <div class="container hero__grid">
+      <div class="hero__copy">
+        <div class="hero__tag"><span class="hero__tag-dot"></span>{{ settings.headquarters }}<span class="hero__tag-extra">&nbsp;&middot; serving {{ settings.service_area }}</span></div>
+        <h1 class="hero__title">{% if hero_parts|length == 2 %}{{ hero_parts[0] }}<br>&amp; <em>{{ hero_parts[1] }}</em>{% else %}{{ settings.hero_title }}{% endif %}</h1>
+        <p class="hero__desc">{{ settings.hero_description }}</p>
+        <div class="hero__btns">
+          <a href="#featured" class="hero__btn hero__btn--pri">Browse products
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+          </a>
+          <a href="#loans" class="hero__btn hero__btn--gho">Apply for a loan</a>
+        </div>
+        <dl class="hero__facts">
+          <div class="hero__fact">
+            <dt>UGX {{ "{:,.0f}".format(settings.loan_min_amount) }} &ndash; {{ "{:,.0f}".format(settings.loan_max_amount) }}</dt>
+            <dd>Loan amounts</dd>
+          </div>
+          <div class="hero__fact">
+            <dt>{{ "{:g}".format(settings.loan_interest_rate|float) }}%</dt>
+            <dd>{{ settings.loan_interest_rate_label|capitalize }}</dd>
+          </div>
+          {% if product_count %}
+          <div class="hero__fact">
+            <dt>{{ product_count }}</dt>
+            <dd>Products to order online</dd>
+          </div>
+          {% endif %}
+        </dl>
+      </div>
+
+      <div class="hero__visual">
+        <a href="#boutique" class="hero__photo hero__photo--main">
+          <img src="{{ hero_image or url_for('static', filename='images/hero-boutique.jpg') }}" alt="{{ brand_display_name }} boutique" referrerpolicy="no-referrer" onerror="this.remove()">
+          {% if not hero_image %}<span class="hero__chip">Boutique</span>{% endif %}
+        </a>
+        <a href="#hardware" class="hero__photo hero__photo--side">
+          <img src="{{ url_for('static', filename='images/hero-hardware.jpg') }}" alt="Hardware and building materials" onerror="this.remove()">
+          <span class="hero__chip">Hardware</span>
+        </a>
+        <a href="#loans" class="hero__loan">
+          <span class="hero__loan-label">Loan estimate</span>
+          <span class="hero__loan-amount">UGX {{ "{:,.0f}".format(hero_loan) }}</span>
+          <span class="hero__loan-row"><span>Interest each month</span><b>UGX {{ "{:,.0f}".format(hero_loan|float * settings.loan_interest_rate|float / 100) }}</b></span>
+          <span class="hero__loan-cta">Work out your own loan
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+          </span>
+        </a>
       </div>
     </div>
   </section>
