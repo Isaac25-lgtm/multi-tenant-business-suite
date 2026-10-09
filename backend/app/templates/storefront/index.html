@@ -71,6 +71,7 @@
   {% set hero_parts = (settings.hero_title or '').rsplit(' and ', 1) %}
   {% set hero_loan = [settings.loan_max_amount, [settings.loan_min_amount, 1000000]|max]|min %}
   {% set product_count = boutique_products|length + hardware_products|length %}
+  {% macro short_ugx(amount) %}{% set n = amount|float %}{% if n >= 1000000 %}{{ "{:g}".format(n / 1000000) }}M{% elif n >= 1000 %}{{ "{:g}".format(n / 1000) }}K{% else %}{{ "{:,.0f}".format(n) }}{% endif %}{% endmacro %}
   <section class="hero">
     <div class="container hero__grid">
       <div class="hero__copy">
@@ -85,7 +86,7 @@
         </div>
         <dl class="hero__facts">
           <div class="hero__fact">
-            <dt>UGX {{ "{:,.0f}".format(settings.loan_min_amount) }} &ndash; {{ "{:,.0f}".format(settings.loan_max_amount) }}</dt>
+            <dt>UGX {{ short_ugx(settings.loan_min_amount) }} &ndash; {{ short_ugx(settings.loan_max_amount) }}</dt>
             <dd>Loan amounts</dd>
           </div>
           <div class="hero__fact">
@@ -95,7 +96,7 @@
           {% if product_count %}
           <div class="hero__fact">
             <dt>{{ product_count }}</dt>
-            <dd>Products to order online</dd>
+            <dd>Products online</dd>
           </div>
           {% endif %}
         </dl>
