@@ -137,3 +137,36 @@ def test_convert_open_flat_loans_to_monthly_interest(db_app):
 
     untouched = db.session.get(Loan, paid_loan.id)
     assert (untouched.interest_mode, untouched.status, untouched.balance) == ('flat_rate', 'paid', D('0'))
+
+
+def test_manager_converts_flat_loans_from_the_screen(client, make_user, login):
+    today = get_local_today()
+    borrower = _client()
+    issue = today - timedelta(days=70)
+    loan = Loan(client_id=borrower.id, principal=D('1000000'), interest_rate=D('15'), interest_mode='flat_rate',
+                interest_amount=D('150000'), total_amount=D('1150000'), amount_paid=D('0'), balance=D('1150000'),
+                duration_weeks=4, duration_type='weeks', issue_date=issue, due_date=issue + timedelta(days=28),
+                status='overdue')
+    db.session.add(loan)
+    db.session.commit()
+
+    login(make_user('officer', role='finance'))
+    assert client.get('/finance/convert-flat-loans').status_code == 302          # managers only
+
+    login(make_user('boss', role='manager'))
+    assert 'Review and convert' in client.get('/finance/').get_data(as_text=True)
+    preview = client.get('/finance/convert-flat-loans').get_data(as_text=True)
+    assert 'Borrower' in preview and '1,450,000' in preview                      # three monthly charges of 150,000
+    db.session.expire_all()
+    assert db.session.get(Loan, loan.id).interest_mode == 'flat_rate'            # preview changed nothing
+
+    client.post('/finance/convert-flat-loans', data={'confirm': 'yes'})          # wrong confirmation word
+    db.session.expire_all()
+    assert db.session.get(Loan, loan.id).interest_mode == 'flat_rate'
+
+    client.post('/finance/convert-flat-loans', data={'confirm': 'CONVERT'})
+    db.session.expire_all()
+    converted = db.session.get(Loan, loan.id)
+    assert converted.interest_mode == 'monthly_accrual'
+    assert converted.balance == D('1450000')
+    assert 'Review and convert' not in client.get('/finance/').get_data(as_text=True)

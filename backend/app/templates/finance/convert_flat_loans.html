@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Convert Older Loans - {{ brand_display_name }}{% endblock %}
+
+{% block page_header %}
+<a href="{{ url_for('finance.index') }}" class="back-link">&larr; Finance</a>
+<h2>Convert older loans to monthly interest</h2>
+<p>Loans entered as a one-time ("flat") rate that still owe money</p>
+{% endblock %}
+
+{% block content %}
+<div class="help-details mb-4" role="note">
+    <strong>What this does.</strong> Every loan now accumulates interest monthly on the unpaid principal. The loans below
+    were recorded with a one-time rate, so their interest has not been growing. Converting them charges the same rate
+    <em>every month since the loan was issued</em> and re-works their payments in date order (interest first).
+    Paid and renewed loans are not touched. Check the "after" balances with your own records before you convert.
+</div>
+
+{% if rows %}
+<div class="section-card mb-6" style="padding:0;">
+    <div class="overflow-x-auto">
+        <table class="data-table responsive-table">
+            <thead>
+                <tr>
+                    <th>Borrower</th>
+                    <th class="text-right">Principal (UGX)</th>
+                    <th>Rate</th>
+                    <th>Issued</th>
+                    <th class="text-right">Interest now</th>
+                    <th class="text-right">Interest after</th>
+                    <th class="text-right">Balance now</th>
+                    <th class="text-right">Balance after</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td data-label="Borrower"><a href="{{ url_for('finance.view_loan', id=row.loan_id) }}" class="row-link">{{ row.client }}</a></td>
+                    <td data-label="Principal" class="text-right">{{ "{:,.0f}".format(row.principal) }}</td>
+                    <td data-label="Rate" class="nowrap">{{ "{:g}".format(row.rate_per_month) }}% per month</td>
+                    <td data-label="Issued" class="nowrap">{{ row.issue_date }}</td>
+                    <td data-label="Interest now" class="text-right">{{ "{:,.0f}".format(row.interest_before) }}</td>
+                    <td data-label="Interest after" class="text-right">{{ "{:,.0f}".format(row.interest_after) }}</td>
+                    <td data-label="Balance now" class="text-right">{{ "{:,.0f}".format(row.balance_before) }}</td>
+                    <td data-label="Balance after" class="text-right font-semibold">{{ "{:,.0f}".format(row.balance_after) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot class="table-subtotal">
+                <tr>
+                    <td data-label="">Total <span class="cell-sub">{{ rows|length }} loan{{ '' if rows|length == 1 else 's' }}</span></td>
+                    <td colspan="5" class="hide-mobile"></td>
+                    <td data-label="Balance now" class="text-right">{{ "{:,.0f}".format(total_before) }}</td>
+                    <td data-label="Balance after" class="text-right">{{ "{:,.0f}".format(total_after) }}</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+{% if skipped %}
+<p class="text-sm text-gray-500 mb-4">Not converted: {% for item in skipped %}{{ item.client or ('loan ' ~ item.loan_id) }} ({{ item.reason }}){% if not loop.last %}, {% endif %}{% endfor %}.</p>
+{% endif %}
+
+<div class="section-card" style="max-width:520px;">
+    <h3 class="font-semibold mb-2">Convert these {{ rows|length }} loan{{ '' if rows|length == 1 else 's' }}</h3>
+    <p class="text-sm text-gray-500 mb-3">This changes real balances and is recorded in the audit trail. The figures before the system upgrade are kept in the database for reference.</p>
+    <form method="POST" onsubmit="return confirm('Convert these loans to monthly interest? Balances will change as shown.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label class="form-label" for="confirm-convert">Type CONVERT to confirm</label>
+            <input type="text" id="confirm-convert" name="confirm" autocomplete="off" required class="form-input" placeholder="CONVERT">
+        </div>
+        <button type="submit" class="btn btn-primary">Convert to monthly interest</button>
+    </form>
+</div>
+{% else %}
+<div class="section-card">
+    <p class="text-gray-600">There are no open flat-rate loans. Every loan that still owes money already accumulates monthly interest.</p>
+</div>
+{% endif %}
+{% endblock %}

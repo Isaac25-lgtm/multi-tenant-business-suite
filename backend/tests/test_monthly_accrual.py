@@ -205,3 +205,11 @@ def test_charge_dates_match_the_client_example(advance_app):
     assert monthly_charge_dates(ISSUE, date(2026, 2, 10)) == [date(2026, 1, 10)]
     assert monthly_charge_dates(ISSUE, date(2026, 2, 11)) == [date(2026, 1, 10), date(2026, 2, 11)]
     assert len(monthly_charge_dates(ISSUE, date(2026, 4, 10))) == 3
+
+
+def test_a_loan_paid_under_the_old_rule_is_never_reopened_by_the_new_rule(advance_app):
+    """Paid before its first monthly date under 'charge after each month': it owed no interest then."""
+    loan = make_loan(principal_paid=D('1000000'), amount_paid=D('1000000'), balance=D('0'),
+                     status='paid', settled_on=date(2026, 1, 25))
+    assert refresh_loan_state(loan, date(2026, 6, 1)) is False
+    assert (loan.status, loan.balance, loan.interest_amount) == ('paid', D('0'), D('0'))

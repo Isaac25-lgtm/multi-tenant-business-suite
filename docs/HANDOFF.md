@@ -85,7 +85,7 @@
 
 ### 3.7 Stack / ops
 - `SQLAlchemy==2.1.2` pinned; plain `postgres://`/`postgresql://` URLs rewritten to `postgresql+psycopg2://` (2.1 defaults to psycopg v3, which isn't installed — a fresh Render build would otherwise fail to connect).
-- `gunicorn==26.2.0` (supported line). **Untested — Gunicorn doesn't run on Windows. Verify on staging.**
+- `gunicorn` stays at **21.2.0** (what production runs). The upgrade to a supported release (26.x) was reverted because it could not be tested on Linux and there is no staging; do it once a staging environment exists.
 - `sentry-sdk[flask]==2.71.0`, off unless `SENTRY_DSN`; scrubs form data, cookies, auth headers, user.
 - `.github/workflows/tests.yml` (Postgres 16 service: migrate, doctor, downgrade, ruff, pytest), `.github/dependabot.yml`, `docker-compose.yml` (+ `docker/create-test-db.sql`), `requirements-dev.txt` (pytest, ruff 0.16.10).
 - `render.yaml`: added `PII_ENCRYPTION_KEY`, `MONTHLY_ACCRUAL_TIMING=arrears`, `SENTRY_DSN`, `OCR_MODEL` (all `sync:false` except timing).
@@ -205,3 +205,12 @@ Migration added: `c5d6e7f8a9b0` (payment method columns, registration fields, `r
   (the current set is generated); real product photos.
 - **Staff accounts** from answer 34 are created by the manager under Users (Chepkwemoi Femia's role was not stated).
 - UTC timestamp migration; Playwright journeys; restyling remaining pages beyond the shared mobile/help pass.
+
+### Go-live without server access (9 Oct 2026)
+The team could not reach the client's Render account, so the release was made safe to deploy by a plain push to `main`:
+- Migration `e1f2a3b4c5d6` first copies every existing table into the `pre_upgrade_snapshot` schema (original figures stay readable; drop it later with `DROP SCHEMA pre_upgrade_snapshot CASCADE`).
+- The same migration closes loans that were fully paid and then re-opened by the old accrual bug (payment reached zero, nothing paid after, principal fully repaid).
+- Settled loans are frozen in `refresh_loan_state`, so the switch to "first month on issue day" never reopens a loan paid under the old rule.
+- Managers convert open flat-rate loans from **Finance > Review and convert** (`/finance/convert-flat-loans`): preview, type CONVERT, apply. No shell needed.
+- Rehearsed locally: old-version database with legacy records -> upgrade -> 31 tables unchanged, 75 pages open, figures as expected; 136 tests pass on Python 3.12 and on a fresh Python 3.11 install.
+- Effect on open monthly-interest loans at deploy: each gains the issue-day month (the client's Option B), so their balances rise by one month's interest.

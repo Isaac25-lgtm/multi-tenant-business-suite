@@ -2109,3 +2109,19 @@ table tbody tr:hover {
     line-height: 1.45;
     color: var(--navy-700);
 }
+
+/* ============ NOTICE CARD ============ */
+.notice-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--terra-50);
+    border: 1px solid rgba(122, 31, 43, 0.25);
+    border-left: 4px solid var(--terra-600);
+    border-radius: 12px;
+    font-size: 14px;
+    color: var(--navy-800);
+}

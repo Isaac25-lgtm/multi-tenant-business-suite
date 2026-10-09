@@ -177,53 +177,17 @@ def finance_convert_flat_loans(apply_changes, csv_path):
     and their payments are re-allocated in date order (interest first).
     Paid and renewed loans are left exactly as they are.
     """
-    from decimal import Decimal
-
-    from app.models.finance import Loan
     from app.modules.auth import log_action
-    from app.services.loan_accounting import refresh_loan_state, replay_loan_payments, round_money
+    from app.services.loan_conversion import convert_open_flat_loans
 
-    rows, skipped = [], []
-    loans = Loan.query.filter(
-        Loan.is_deleted == False,  # noqa: E712
-        Loan.status.in_(['active', 'overdue']),
-        db.or_(Loan.interest_mode.is_(None), Loan.interest_mode == 'flat_rate'),
-    ).order_by(Loan.id).all()
-    for loan in loans:
-        refresh_loan_state(loan)
-        if (loan.balance or 0) <= 0:
-            continue
-        rate = Decimal(str(loan.interest_rate or 0))
-        if rate <= 0:
-            skipped.append((loan, 'no interest rate recorded'))
-            continue
-        before = {'balance': float(loan.balance or 0), 'interest': float(loan.interest_amount or 0),
-                  'principal_paid': float(loan.principal_paid or 0), 'interest_paid': float(loan.interest_paid or 0)}
-        loan.interest_mode = 'monthly_accrual'
-        loan.monthly_interest_amount = round_money(Decimal(str(loan.principal)) * rate / Decimal('100'))
-        replay_loan_payments(loan)
-        rows.append({
-            'loan_id': loan.id,
-            'client': loan.client.name if loan.client else '',
-            'principal': float(loan.principal or 0),
-            'rate_per_month': float(rate),
-            'issue_date': loan.issue_date.isoformat() if loan.issue_date else '',
-            'interest_before': before['interest'],
-            'interest_after': float(loan.interest_amount or 0),
-            'interest_paid_after': float(loan.interest_paid or 0),
-            'principal_paid_before': before['principal_paid'],
-            'principal_paid_after': float(loan.principal_paid or 0),
-            'balance_before': before['balance'],
-            'balance_after': float(loan.balance or 0),
-            'status_after': loan.status,
-        })
+    rows, skipped = convert_open_flat_loans()
 
     for row in rows:
         click.echo(f"Loan {row['loan_id']} {row['client']}: {row['rate_per_month']:g}%/month from {row['issue_date']}; "
                    f"interest {row['interest_before']:,.0f} -> {row['interest_after']:,.0f}; "
                    f"balance {row['balance_before']:,.0f} -> {row['balance_after']:,.0f} ({row['status_after']})")
-    for loan, reason in skipped:
-        click.echo(f"SKIPPED loan {loan.id} ({loan.client.name if loan.client else '?'}): {reason}")
+    for item in skipped:
+        click.echo(f"SKIPPED loan {item['loan_id']} ({item['client'] or '?'}): {item['reason']}")
     if csv_path and rows:
         with open(csv_path, 'w', newline='', encoding='utf-8') as handle:
             writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))

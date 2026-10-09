@@ -19,6 +19,16 @@
     </ol>
 </details>
 
+{% if open_flat_loans and current_section == 'manager' %}
+<div class="notice-card mb-6">
+    <div>
+        <strong>{{ open_flat_loans }} older loan{{ '' if open_flat_loans == 1 else 's' }} still charge interest only once.</strong>
+        They were entered before every loan was set to accumulate monthly interest.
+    </div>
+    <a href="{{ url_for('finance.convert_flat_loans') }}" class="btn btn-sm btn-primary">Review and convert</a>
+</div>
+{% endif %}
+
 <!-- Finance Overview - Display Only -->
 {% if load_error %}
 <div class="flash-message flash-error mb-6">

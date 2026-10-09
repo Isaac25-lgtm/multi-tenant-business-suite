@@ -110,6 +110,7 @@
             <!-- Dual Timezone Display -->
             <div class="text-right text-sm">
                 {% set tz_info = convert_to_dual_timezone(log.created_at) %}
+                {% if tz_info %}
                 <div class="flex items-center gap-2" style="color:var(--navy-700);">
                     <span style="width:8px;height:8px;border-radius:50%;background:var(--navy-500);display:inline-block;"></span>
                     <span class="font-medium">{{ tz_info.uganda.formatted }}</span>
@@ -120,6 +121,9 @@
                     <span class="font-medium">{{ tz_info.germany.formatted }}</span>
                     <span style="color:var(--forest-400);" class="text-xs">(Germany {{ tz_info.germany.timezone.split()[0] }})</span>
                 </div>
+                {% else %}
+                <span style="color:var(--navy-400);">Time not recorded</span>
+                {% endif %}
             </div>
         </div>
 

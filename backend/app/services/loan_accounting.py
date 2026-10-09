@@ -262,6 +262,14 @@ def refresh_loan_state(loan, as_of_date=None):
     as_of_date = as_of_date or get_local_today()
     changed = False
 
+    # A settled loan is frozen: it was cleared under the rules of its time, so
+    # later rule or setting changes never reopen it. Reversing a payment or
+    # adding a charge clears settled_on first, which unfreezes it.
+    if (getattr(loan, 'settled_on', None) is not None
+            and (loan.status or '') in ('paid', 'renewed')
+            and _d(loan.balance) <= 0):
+        return False
+
     principal = _d(loan.principal)
     principal_paid = _d(loan.principal_paid)
     interest_paid = _d(loan.interest_paid)

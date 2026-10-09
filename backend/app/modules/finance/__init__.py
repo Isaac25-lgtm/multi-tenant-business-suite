@@ -243,18 +243,22 @@ def index():
         overdue_groups = GroupLoan.query.filter(GroupLoan.is_deleted == False, GroupLoan.status == 'overdue', GroupLoan.balance > 0).count()
 
         portfolio = summarize_portfolio()
+        from app.services.loan_conversion import count_open_flat_loans
+        open_flat_loans = count_open_flat_loans()
     except Exception as exc:
         db.session.rollback()
         current_app.logger.exception('Finance dashboard calculation failed: %s', exc)
         load_error = True
         active_loans = active_groups = overdue_loans = overdue_groups = 0
         portfolio = None
+        open_flat_loans = 0
 
     return render_template('finance/index.html',
         load_error=load_error,
         active_loans=active_loans, active_groups=active_groups,
         overdue_loans=overdue_loans, overdue_groups=overdue_groups,
         portfolio=portfolio,
+        open_flat_loans=open_flat_loans,
         total_outstanding=portfolio['combined_principal'] if portfolio else 0,
         total_interest_expected=portfolio['combined_interest'] if portfolio else 0,
     )
@@ -940,6 +944,47 @@ def reverse_group_loan_payment(group_id, payment_id):
         db.session.rollback()
         flash(f'Error reversing payment: {str(e)}', 'error')
     return redirect(url_for('finance.view_group_loan', id=group.id))
+
+
+# ============ CONVERT OLD FLAT-RATE LOANS (manager) ============
+
+@finance_bp.route('/convert-flat-loans', methods=['GET', 'POST'])
+@manager_required
+def convert_flat_loans():
+    """Preview, then apply, the conversion of open flat-rate loans to monthly interest."""
+    from app.services.loan_conversion import convert_open_flat_loans
+
+    if request.method == 'POST':
+        if request.form.get('confirm') != 'CONVERT':
+            flash('Type CONVERT in the box to confirm.', 'error')
+            return redirect(url_for('finance.convert_flat_loans'))
+        try:
+            rows, skipped = convert_open_flat_loans()
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('Flat-rate loan conversion failed')
+            flash('The conversion could not be completed. Nothing was changed.', 'error')
+            return redirect(url_for('finance.convert_flat_loans'))
+        for row in rows:
+            log_action(session['username'], 'finance', 'correct', 'loan', row['loan_id'],
+                       {'action': 'convert_flat_to_monthly', 'rate_per_month': row['rate_per_month'],
+                        'balance_before': row['balance_before'], 'balance_after': row['balance_after']})
+        flash(f'{len(rows)} loan(s) now accumulate monthly interest.', 'success')
+        return redirect(url_for('finance.loans'))
+
+    # Preview: run the conversion, capture the figures, then undo it.
+    try:
+        rows, skipped = convert_open_flat_loans()
+    finally:
+        db.session.rollback()
+    return render_template(
+        'finance/convert_flat_loans.html',
+        rows=rows,
+        skipped=skipped,
+        total_before=sum(row['balance_before'] for row in rows),
+        total_after=sum(row['balance_after'] for row in rows),
+    )
 
 
 # ============ REMINDERS (SMS / WhatsApp) ============
