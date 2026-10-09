@@ -8,6 +8,12 @@
 {% endblock %}
 
 {% block content %}
+<form method="GET" action="{{ url_for('dashboard.monthly_report') }}" class="report-bar">
+    <label for="report-month">Monthly report</label>
+    <input type="month" id="report-month" name="month" value="{{ today.strftime('%Y-%m') }}" max="{{ today.strftime('%Y-%m') }}" class="form-input form-input-sm">
+    <button type="submit" class="btn btn-sm btn-outline">Download PDF</button>
+    <span class="text-xs text-gray-500">Sales, profit, expenses and stock, compared with the two months before.</span>
+</form>
 <div id="dashboard-content" data-refresh-url="{{ url_for('dashboard.summary_fragment') }}">
     {% include 'dashboard/_content.html' %}
 </div>

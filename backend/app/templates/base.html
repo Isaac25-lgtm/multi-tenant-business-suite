@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='images/favicon-32.png') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#7a1f2b">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
     {% block extra_css %}{% endblock %}
@@ -194,6 +194,15 @@
                 Website
             </a>
 
+            <a href="{{ url_for('expenses.index') }}"
+                class="nav-item {% if request.endpoint and request.endpoint.startswith('expenses.') %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                </svg>
+                Expenses
+            </a>
+
             {% elif current_section == 'hardware' %}
             <p class="nav-label">Hardware</p>
             <a href="{{ url_for('hardware.index') }}"
@@ -238,6 +247,15 @@
                 Website
             </a>
 
+            <a href="{{ url_for('expenses.index') }}"
+                class="nav-item {% if request.endpoint and request.endpoint.startswith('expenses.') %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                </svg>
+                Expenses
+            </a>
+
             {% elif current_section == 'finance' %}
             <p class="nav-label">Finance</p>
             <a href="{{ url_for('finance.index') }}"
@@ -272,6 +290,14 @@
                 </svg>
                 Clients
             </a>
+            <a href="{{ url_for('finance.reminders') }}"
+                class="nav-item {% if request.endpoint == 'finance.reminders' %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0" />
+                </svg>
+                Reminders
+            </a>
             <a href="{{ url_for('finance.payments') }}"
                 class="nav-item {% if request.endpoint == 'finance.payments' %}active{% endif %}">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -289,6 +315,15 @@
                 </svg>
                 Website
             </a>
+            <a href="{{ url_for('expenses.index') }}"
+                class="nav-item {% if request.endpoint and request.endpoint.startswith('expenses.') %}active{% endif %}">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
+                </svg>
+                Expenses
+            </a>
+
             {% endif %}
 
         </nav>

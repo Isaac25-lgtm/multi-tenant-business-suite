@@ -51,6 +51,38 @@ def summary_fragment():
     return render_template('dashboard/_content.html', today=today, load_error=False, metrics=metrics)
 
 
+@dashboard_bp.route('/reports/monthly')
+@manager_required
+def monthly_report():
+    """Monthly PDF report with a three-month comparison."""
+    from datetime import date
+
+    from flask import Response
+
+    from app.services.loan_accounting import refresh_active_loans, refresh_open_group_loans
+    from app.services.monthly_report import build_monthly_report
+    from app.utils.report_pdf import generate_monthly_report_pdf
+
+    today = get_local_today()
+    try:
+        month_start = date.fromisoformat((request.args.get('month') or today.strftime('%Y-%m')) + '-01')
+    except ValueError:
+        month_start = today.replace(day=1)
+    if month_start > today:
+        month_start = today.replace(day=1)
+
+    refresh_active_loans()
+    refresh_open_group_loans()
+    report = build_monthly_report(month_start, today)
+    buffer = generate_monthly_report_pdf(report)
+    log_action(session.get('username'), 'manager', 'view', 'monthly_report', None, {'month': month_start.strftime('%Y-%m')})
+    return Response(
+        buffer.getvalue(),
+        mimetype='application/pdf',
+        headers={'Content-Disposition': f"attachment; filename=monthly_report_{month_start.strftime('%Y_%m')}.pdf"},
+    )
+
+
 def _analytics_page(template, builder):
     from app.services.periods import resolve_period
 

@@ -74,12 +74,14 @@ def create_app(config_class=Config):
     def inject_utilities():
         from flask import session
         from app.utils.branding import get_company_display_name, get_site_settings
+        from app.services.loan_accounting import current_monthly_interest
         from app.utils.timezone import convert_to_dual_timezone
         site_settings = get_site_settings()
         return {
             'current_user': session.get('username'),
             'current_section': session.get('section'),
             'convert_to_dual_timezone': convert_to_dual_timezone,
+            'current_monthly_interest': current_monthly_interest,
             'site_settings': site_settings,
             'brand_display_name': get_company_display_name(site_settings),
         }
@@ -204,7 +206,6 @@ def create_app(config_class=Config):
             'rate_limit_states',
             'daily_briefings',
             'briefing_dismissals',
-            'chat_messages',
             'ocr_extractions',
         }
         has_app_tables = bool(app_tables.intersection(tables))
@@ -258,8 +259,10 @@ def create_app(config_class=Config):
             'hardware_sales',
             'daily_briefings',
             'briefing_dismissals',
-            'chat_messages',
             'ocr_extractions',
+            'loan_adjustments',
+            'expenses',
+            'reminder_logs',
         ]
 
         # Required columns  (table, column)
@@ -284,6 +287,10 @@ def create_app(config_class=Config):
             ('group_loan_payments', 'reversed_at'),
             ('boutique_sale_items', 'unit_cost_at_sale'),
             ('hardware_sale_items', 'unit_cost_at_sale'),
+            ('loans', 'interest_waived'),
+            ('loan_payments', 'payment_method'),
+            ('boutique_sales', 'payment_method'),
+            ('website_settings', 'registration_number'),
         ]
 
         missing_tables = []

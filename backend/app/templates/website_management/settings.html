@@ -72,6 +72,14 @@
                         <input type="email" name="contact_email" value="{{ settings.contact_email }}" class="form-input" placeholder="norongir@gmail.com">
                     </div>
                     <div class="form-group">
+                        <label class="form-label">Company registration number</label>
+                        <input type="text" name="registration_number" value="{{ settings.registration_number or '' }}" maxlength="60" class="form-input" placeholder="Shown on receipts and agreements">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Postal address</label>
+                        <input type="text" name="postal_address" value="{{ settings.postal_address or '' }}" maxlength="160" class="form-input" placeholder="P.O. Box, Barawa, Kapchorwa">
+                    </div>
+                    <div class="form-group">
                         <label class="form-label">Headquarters</label>
                         <input type="text" name="headquarters" value="{{ settings.headquarters }}" class="form-input" placeholder="Bukwo and Kapchorwa">
                     </div>

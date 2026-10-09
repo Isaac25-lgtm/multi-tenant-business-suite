@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, render_template, request, redirect, url_fo
 from app.models.finance import LoanClient, Loan, LoanPayment, GroupLoan, GroupLoanPayment, LoanDocument, LoanAdjustment
 from app.modules.auth import login_required, log_action, manager_required
 from app.utils.integrity import DUPLICATE_MESSAGE, find_recent_duplicate
+from app.utils.payments import read_payment_details
 from app.extensions import db
 from app.utils.timezone import get_local_now, get_local_today
 from app.utils.pdf_generator import (
@@ -27,6 +28,7 @@ from app.services.loan_accounting import (
     refresh_group_loan_state,
     refresh_loan_state,
     refresh_open_group_loans,
+    replay_loan_payments,
     reverse_loan_payment_allocation,
     round_money,
     summarize_portfolio,
@@ -50,6 +52,7 @@ MAX_DURATION_UNITS = 120
 MAX_GROUP_PERIODS = 240
 MONEY_QUANT = Decimal('1')
 INDIVIDUAL_INTEREST_MODES = {'flat_rate', 'monthly_accrual', 'reducing_balance_equal'}
+WRITE_OFF_MIN_DAYS_OVERDUE = 180  # business rule: write off only after 6 months unpaid
 # Loan list filters: '' = all except renewed.
 LOAN_LIST_FILTERS = {
     '': 'Open & paid',
@@ -111,7 +114,11 @@ def check_date_permission(entry_date, user_section):
 def parse_individual_loan_form(form):
     client_id = get_form_value(form, 'client_id', cast=int)
     principal = safe_decimal(get_form_value(form, 'principal', '0'))
-    interest_mode = get_form_value(form, 'interest_mode', 'flat_rate')
+    interest_mode = get_form_value(form, 'interest_mode', 'monthly_accrual') or 'monthly_accrual'
+    # Every individual loan accumulates monthly interest (business rule), so a
+    # legacy "flat rate" request is issued as a monthly-interest loan.
+    if interest_mode == 'flat_rate':
+        interest_mode = 'monthly_accrual'
     interest_rate = safe_decimal(get_form_value(form, 'interest_rate', '0'))
     monthly_interest_amount = safe_decimal(get_form_value(form, 'monthly_interest_amount', '0'))
     duration_weeks = get_form_value(form, 'duration_weeks', cast=int)
@@ -130,11 +137,19 @@ def parse_individual_loan_form(form):
         raise ValueError('Invalid interest mode selected.')
 
     if interest_mode == 'monthly_accrual':
-        if duration_type != 'months':
-            raise ValueError('Monthly accrual loans must use a monthly duration.')
+        # The rate is per month. An explicit monthly amount is still accepted
+        # (older forms) and converted to its rate.
+        if interest_rate > 0:
+            if interest_rate > MAX_INTEREST_RATE:
+                raise ValueError('Monthly interest rate must be between 0 and 100.')
+            monthly_interest_amount = round_money(principal * interest_rate / Decimal('100'))
+        elif monthly_interest_amount > 0:
+            interest_rate = (monthly_interest_amount / principal) * Decimal('100')
+        else:
+            raise ValueError('Enter the monthly interest rate.')
         if monthly_interest_amount <= 0 or monthly_interest_amount > MAX_MONTHLY_INTEREST:
             raise ValueError('Monthly interest must be between 1 and 100,000,000.')
-        interest_rate = (monthly_interest_amount / principal) * Decimal('100')
+        # refresh_loan_state charges the first month according to the timing rule.
         interest_amount = Decimal('0')
         total_amount = principal
     elif interest_mode == 'reducing_balance_equal':
@@ -408,6 +423,8 @@ def create_loan():
             status='active'
         )
         db.session.add(loan)
+        db.session.flush()
+        refresh_loan_state(loan)  # charges the first month where the rule says so
         db.session.commit()
 
         client = LoanClient.query.get(loan_data['client_id'])
@@ -471,6 +488,7 @@ def pay_loan(id):
         principal_amount, interest_amount = allocate_loan_payment(loan, amount)
         refresh_loan_state(loan, payment_date)
         balance_after_payment = loan.balance
+        payment_method, payment_reference = read_payment_details(request.form)
 
         payment = LoanPayment(
             loan_id=loan.id, payment_date=payment_date,
@@ -478,11 +496,25 @@ def pay_loan(id):
             principal_amount=principal_amount,
             interest_amount=interest_amount,
             payment_type='regular',
+            payment_method=payment_method,
+            payment_reference=payment_reference,
             balance_after=balance_after_payment,
             notes=notes
         )
         db.session.add(payment)
-        refresh_loan_state(loan)
+        db.session.flush()
+        entered_out_of_order = LoanPayment.query.filter(
+            LoanPayment.loan_id == loan.id,
+            LoanPayment.is_deleted == False,  # noqa: E712
+            LoanPayment.id != payment.id,
+            LoanPayment.payment_date > payment_date,
+        ).count() > 0
+        if entered_out_of_order:
+            # A backdated payment changes what later payments should have covered.
+            replay_loan_payments(loan)
+            balance_after_payment = payment.balance_after
+        else:
+            refresh_loan_state(loan)
         db.session.commit()
 
         log_action(session['username'], 'finance', 'create', 'loan_payment', payment.id,
@@ -549,7 +581,8 @@ def reverse_loan_payment(loan_id, payment_id):
         payment.reversed_at = get_local_now()
         payment.reversed_by = session.get('username')
         payment.reversal_reason = reason[:255]
-        refresh_loan_state(loan)
+        db.session.flush()
+        replay_loan_payments(loan)  # later payments are re-split without this one
         db.session.commit()
 
         log_action(session['username'], 'finance', 'reverse', 'loan_payment', payment.id,
@@ -680,7 +713,7 @@ def renew_loan(id):
 
 
 @finance_bp.route('/loans/<int:id>/delete', methods=['POST'])
-@login_required('finance')
+@manager_required
 def delete_loan(id):
     loan = Loan.query.get_or_404(id)
     loan.is_deleted = True
@@ -850,10 +883,12 @@ def pay_group_loan(id):
         group.amount_paid += amount
         refresh_group_loan_state(group)  # also derives periods paid from the money paid
         periods_covered = (group.periods_paid or 0) - periods_before
+        payment_method, payment_reference = read_payment_details(request.form)
 
         payment = GroupLoanPayment(
             group_loan_id=group.id, payment_date=payment_date,
             amount=amount, periods_covered=periods_covered,
+            payment_method=payment_method, payment_reference=payment_reference,
             balance_after=group.balance, notes=notes
         )
         db.session.add(payment)
@@ -907,6 +942,65 @@ def reverse_group_loan_payment(group_id, payment_id):
     return redirect(url_for('finance.view_group_loan', id=group.id))
 
 
+# ============ REMINDERS (SMS / WhatsApp) ============
+
+@finance_bp.route('/reminders')
+@login_required('finance')
+def reminders():
+    from app.services import reminders as reminder_service
+
+    refresh_active_loans()
+    today = get_local_today()
+    rows = reminder_service.due_reminders(today)
+    return render_template(
+        'finance/reminders.html',
+        rows=rows,
+        due_soon=[row for row in rows if row['kind'] == 'due_soon'],
+        overdue=[row for row in rows if row['kind'] == 'overdue'],
+        sms_enabled=reminder_service.sms_enabled(),
+        today=today,
+    )
+
+
+def _reminder_row(loan_id):
+    from app.services import reminders as reminder_service
+
+    today = get_local_today()
+    for row in reminder_service.due_reminders(today):
+        if row['loan'].id == loan_id:
+            return row, today, reminder_service
+    return None, today, reminder_service
+
+
+@finance_bp.route('/reminders/<int:loan_id>/whatsapp', methods=['POST'])
+@login_required('finance')
+def reminder_whatsapp(loan_id):
+    """Log the reminder, then open WhatsApp with the message filled in."""
+    row, today, reminder_service = _reminder_row(loan_id)
+    if not row or not row['whatsapp_url']:
+        flash('This borrower has no valid phone number for WhatsApp.', 'error')
+        return redirect(url_for('finance.reminders'))
+    reminder_service.record(row['loan'], row['kind'], 'whatsapp', row['phone'], row['message'], 'opened',
+                            today, sent_by=session.get('username'))
+    return redirect(row['whatsapp_url'])
+
+
+@finance_bp.route('/reminders/<int:loan_id>/sms', methods=['POST'])
+@login_required('finance')
+def reminder_sms(loan_id):
+    row, today, reminder_service = _reminder_row(loan_id)
+    if not row or not row['phone']:
+        flash('This borrower has no valid phone number.', 'error')
+    elif not reminder_service.sms_enabled():
+        flash('SMS is not set up yet. Use the WhatsApp button, or ask the administrator to add the SMS account.', 'error')
+    elif not row['sms_allowed']:
+        flash('An SMS reminder was already sent to this borrower in the last 7 days.', 'warning')
+    else:
+        ok, detail = reminder_service.send_reminder_sms(row, today, sent_by=session.get('username'))
+        flash('SMS reminder sent.' if ok else f'SMS could not be sent ({detail}).', 'success' if ok else 'error')
+    return redirect(url_for('finance.reminders'))
+
+
 # ============ ADJUSTMENTS (discounts, waivers, write-offs, charges) ============
 
 def _adjustment_redirect(adjustment_or_target):
@@ -942,6 +1036,12 @@ def _create_adjustment(target, kind):
     if kind == 'loan' and (target.status or '') == 'renewed':
         flash('A renewed loan cannot be adjusted; adjust the new loan instead.', 'error')
         return _adjustment_redirect(target)
+    if adjustment_type == 'principal_write_off':
+        days_overdue = (get_local_today() - target.due_date).days if target.due_date else 0
+        if days_overdue < WRITE_OFF_MIN_DAYS_OVERDUE:
+            flash('Principal can only be written off once a loan is 6 months overdue. '
+                  'Use an interest discount instead.', 'error')
+            return _adjustment_redirect(target)
 
     if kind == 'loan':
         refresh_loan_state(target)
@@ -964,8 +1064,9 @@ def _create_adjustment(target, kind):
     )
     db.session.add(adjustment)
     apply_adjustment(target, adjustment)
+    db.session.flush()
     if kind == 'loan':
-        refresh_loan_state(target)
+        replay_loan_payments(target)
     else:
         refresh_group_loan_state(target)
     db.session.commit()
@@ -1013,8 +1114,9 @@ def reverse_adjustment(id):
     adjustment.reversed_by = session.get('username')
     adjustment.reversed_at = get_local_now()
     adjustment.reversal_reason = reason[:255]
+    db.session.flush()
     if adjustment.loan_id:
-        refresh_loan_state(target)
+        replay_loan_payments(target)
     else:
         refresh_group_loan_state(target)
     db.session.commit()
@@ -1027,7 +1129,7 @@ def reverse_adjustment(id):
 
 
 @finance_bp.route('/group-loans/<int:id>/delete', methods=['POST'])
-@login_required('finance')
+@manager_required
 def delete_group_loan(id):
     group = GroupLoan.query.get_or_404(id)
     group.is_deleted = True
@@ -1135,8 +1237,9 @@ def preview_loan_agreement():
     # Default agreement terms that can be edited
     default_terms = [
         "The Borrower agrees to repay the loan amount plus interest as specified above.",
-        "Payments shall be made on or before the due date to avoid penalties.",
-        "Late-payment charges, where applicable, are subject to management-approved terms.",
+        "Interest is charged every month on the unpaid principal, starting on the issue date, and reduces as principal is repaid.",
+        "If the loan is not fully repaid by the due date, monthly interest continues to be charged until it is cleared.",
+        "Payments are applied to interest first and then to principal.",
         "The Borrower may repay the loan early without any prepayment penalties.",
         "In case of default, the Lender reserves the right to take legal action to recover the debt.",
         "The Borrower agrees that all information provided is true and accurate.",
@@ -1195,6 +1298,7 @@ def create_loan_with_agreement():
         )
         db.session.add(loan)
         db.session.flush()
+        refresh_loan_state(loan)  # charges the first month where the rule says so
 
         # Handle collateral document upload
         if 'collateral_file' in request.files:
@@ -1361,9 +1465,9 @@ def download_loan_agreement_pdf(id):
     c.setFont("Helvetica", 9)
     terms = [
         "1. The Borrower agrees to repay the loan amount plus interest as specified above.",
-        "2. Payments shall be made on or before the due date to avoid penalties.",
-        "3. Late payments may result in additional charges.",
-        "4. Early repayment is allowed without penalty.",
+        "2. Interest is charged monthly on the unpaid principal from the issue date.",
+        "3. If not fully repaid by the due date, monthly interest continues until cleared.",
+        "4. Payments are applied to interest first, then principal. Early repayment is allowed.",
         "5. This agreement is binding upon signing by both parties."
     ]
     for term in terms:
@@ -1572,7 +1676,7 @@ def preview_group_loan_agreement():
     default_terms = [
         "All members of the group are jointly and severally liable for the loan repayment.",
         "Payments shall be made according to the schedule specified in this agreement.",
-        "Late payments may result in additional charges and affect future loan eligibility.",
+        "The total repayable is fixed; late payments may affect future loan eligibility.",
         "The group may repay the loan early without any prepayment penalties.",
         "In case of default by any member, other members are responsible for covering the payment.",
         "All group members agree to attend mandatory group meetings as required.",

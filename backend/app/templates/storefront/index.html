@@ -69,7 +69,7 @@
   </nav>
 
   <section class="hero">
-    <div class="hero__bg"><img src="{{ hero_image or 'https://images.unsplash.com/photo-1520607162513-77705c0f0d4a?q=80&w=1400&auto=format&fit=crop' }}" alt="{{ brand_display_name }}" referrerpolicy="no-referrer"></div>
+    <div class="hero__bg">{% if hero_image %}<img src="{{ hero_image }}" alt="{{ brand_display_name }}" referrerpolicy="no-referrer">{% endif %}</div>
     <div class="hero__grad"></div>
     <div class="container hero__content">
       <div class="hero__tag"><span class="hero__tag-dot"></span>Serving {{ settings.service_area }}</div>
@@ -107,8 +107,8 @@
     <div class="container">
       <div class="sec__header reveal">
         <div class="sec__tag">{{ brand_display_name }}</div>
-        <h2 class="sec__title">What customers can do online</h2>
-        <p class="sec__desc">Browse what you have published, submit an order request, or send a loan inquiry so your team can follow up quickly.</p>
+        <h2 class="sec__title">Shop, build and borrow in one place</h2>
+        <p class="sec__desc">Browse our products, send an order request, or apply for a loan. We call you back to confirm.</p>
       </div>
       <div class="cats">
         <a href="#boutique" class="cat cat--boutique reveal">
@@ -141,7 +141,7 @@
       <div class="sec__header reveal">
         <div class="sec__tag">Boutique Collection</div>
         <h2 class="sec__title">Fashion that feels intentional</h2>
-        <p class="sec__desc">Published pieces from your {{ brand_display_name }} boutique inventory. Customers can submit an order request and your team follows up offline.</p>
+        <p class="sec__desc">Pieces from the {{ brand_display_name }} boutique. Send an order request and we will call you to confirm.</p>
       </div>
       <div class="products">
         {% for product in boutique_products %}
@@ -156,12 +156,12 @@
               <span class="carousel__dot{% if loop.first %} active{% endif %}"></span>
               {% endfor %}
             </div>
-            <span class="img-label" style="display:none;">{{ product.name[:24] }}</span>
+            <span class="img-label" style="display:none;" data-initial="{{ product.name[:1]|upper }}">{{ product.name[:40] }}</span>
             {% elif product.image_url %}
             <img src="{{ product.image_url }}" alt="{{ product.name }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.querySelector('.img-label').style.display='grid';">
-            <span class="img-label" style="display:none;">{{ product.name[:24] }}</span>
+            <span class="img-label" style="display:none;" data-initial="{{ product.name[:1]|upper }}">{{ product.name[:40] }}</span>
             {% else %}
-            <span class="img-label">{{ product.name[:24] }}</span>
+            <span class="img-label" data-initial="{{ product.name[:1]|upper }}">{{ product.name[:40] }}</span>
             {% endif %}
             <span class="prod__badge prod__badge--new">{{ product.availability }}</span>
           </div>
@@ -186,8 +186,8 @@
     <div class="container">
       <div class="sec__header reveal">
         <div class="sec__tag">Hardware Store</div>
-        <h2 class="sec__title">Building supplies your team chose to publish</h2>
-        <p class="sec__desc">Customers see only what your website-management team has approved for public display.</p>
+        <h2 class="sec__title">Building supplies you can count on</h2>
+        <p class="sec__desc">Cement, roofing and hardware for your next project. Send an order request and we will call you to confirm.</p>
       </div>
       <div class="products">
         {% for product in hardware_products %}
@@ -202,12 +202,12 @@
               <span class="carousel__dot{% if loop.first %} active{% endif %}"></span>
               {% endfor %}
             </div>
-            <span class="img-label" style="display:none;">{{ product.name[:24] }}</span>
+            <span class="img-label" style="display:none;" data-initial="{{ product.name[:1]|upper }}">{{ product.name[:40] }}</span>
             {% elif product.image_url %}
             <img src="{{ product.image_url }}" alt="{{ product.name }}" loading="lazy" referrerpolicy="no-referrer" onerror="this.style.display='none';this.parentElement.querySelector('.img-label').style.display='grid';">
-            <span class="img-label" style="display:none;">{{ product.name[:24] }}</span>
+            <span class="img-label" style="display:none;" data-initial="{{ product.name[:1]|upper }}">{{ product.name[:40] }}</span>
             {% else %}
-            <span class="img-label">{{ product.name[:24] }}</span>
+            <span class="img-label" data-initial="{{ product.name[:1]|upper }}">{{ product.name[:40] }}</span>
             {% endif %}
             <span class="prod__badge prod__badge--hot">{{ product.availability }}</span>
           </div>
@@ -251,14 +251,32 @@
         </div>
         <div class="loan__info reveal">
           <div class="sec__tag">{{ brand_display_name }} Microfinance</div>
-          <h2 class="sec__title" style="font-size:clamp(26px,3.2vw,40px);text-align:left">Loan terms your team can update</h2>
-          <p class="sec__desc" style="text-align:left;margin-top:8px">These figures come directly from Website Management, so the public site always reflects the latest offer.</p>
+          <h2 class="sec__title" style="font-size:clamp(26px,3.2vw,40px);text-align:left">Loans that keep your plans moving</h2>
+          <p class="sec__desc" style="text-align:left;margin-top:8px">Clear terms, quick answers. Use the calculator to see what a loan would cost before you apply.</p>
           <ul class="loan__perks">
             <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12" /></svg></span>Loans from UGX {{ "{:,.0f}".format(settings.loan_min_amount) }} to UGX {{ "{:,.0f}".format(settings.loan_max_amount) }}</li>
             <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12" /></svg></span>{{ "{:.0f}".format(settings.loan_interest_rate) }}% {{ settings.loan_interest_rate_label }}</li>
             <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12" /></svg></span>{{ settings.loan_repayment_note }}</li>
             <li class="loan__perk"><span class="loan__chk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20,6 9,17 4,12" /></svg></span>Approval within {{ settings.loan_approval_hours }} hours</li>
           </ul>
+          <div class="loan-calc" id="loan-calculator" data-rate="{{ settings.loan_interest_rate }}">
+            <h3 class="loan-calc__title">Loan calculator</h3>
+            <div class="loan-calc__inputs">
+              <label>Amount (UGX)
+                <input type="number" id="calc-amount" inputmode="numeric" step="50000"
+                       min="{{ settings.loan_min_amount|int }}" max="{{ settings.loan_max_amount|int }}" value="{{ settings.loan_min_amount|int }}">
+              </label>
+              <label>Months
+                <input type="number" id="calc-months" inputmode="numeric" min="1" max="24" value="1">
+              </label>
+            </div>
+            <dl class="loan-calc__out">
+              <div><dt>Interest each month ({{ "{:g}".format(settings.loan_interest_rate|float) }}%)</dt><dd id="calc-monthly">-</dd></div>
+              <div><dt>Total interest</dt><dd id="calc-interest">-</dd></div>
+              <div class="loan-calc__total"><dt>Total to repay</dt><dd id="calc-total">-</dd></div>
+            </dl>
+            <p class="loan-calc__note">An estimate. Interest is charged monthly on the amount you still owe, starting when the loan is issued, so paying back early costs less. Final terms are confirmed by our team.</p>
+          </div>
 
           <div class="loan-form">
             <div class="lf__title">Apply for a Loan</div>
@@ -709,6 +727,27 @@
       <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
     </svg>
   </a>
+  <script>
+  (function () {
+    var box = document.getElementById('loan-calculator');
+    if (!box) return;
+    var rate = parseFloat(box.dataset.rate || '0') / 100;
+    var amount = document.getElementById('calc-amount');
+    var months = document.getElementById('calc-months');
+    function ugx(value) { return 'UGX ' + Math.round(value).toLocaleString('en'); }
+    function update() {
+      var principal = Math.max(parseFloat(amount.value) || 0, 0);
+      var n = Math.min(Math.max(parseInt(months.value, 10) || 1, 1), 24);
+      var monthly = principal * rate;
+      document.getElementById('calc-monthly').textContent = ugx(monthly);
+      document.getElementById('calc-interest').textContent = ugx(monthly * n);
+      document.getElementById('calc-total').textContent = ugx(principal + monthly * n);
+    }
+    amount.addEventListener('input', update);
+    months.addEventListener('input', update);
+    update();
+  })();
+  </script>
 </body>
 
 </html>

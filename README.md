@@ -38,7 +38,9 @@ This is a full-stack Flask application built for a multi-section retail and lend
 | **Manager Dashboard** | Sales, cash received, gross and net profit, interest earned — each compared like-for-like with yesterday; refreshes itself every minute |
 | **Manager Analytics** | Retail, finance-portfolio and inventory drill-down pages with shared date filters (today, 7 days, this/last month, custom) |
 | **Loan Accounting** | One calculation service for every balance: monthly interest stops at settlement, payment reversals, approved discounts/waivers/write-offs with an audit trail |
-| **Expenses** | Operating-expense ledger by category and business unit, feeding a real net-profit figure |
+| **Expenses** | Each unit records its own expenses (staff for their unit, managers for all), feeding net profit per business and for the company |
+| **Monthly report** | Manager PDF: three-month comparison of sales, gross and net profit, expenses, the three businesses, weekly profit, stock, best and least selling products |
+| **Loan reminders** | Due-soon and overdue borrowers with a ready-written message: one-tap WhatsApp, and SMS through Africa's Talking when configured |
 | **Morning Briefing** | Role-aware daily welcome with yesterday's metrics, attention flags, and optional AI narration |
 | **Document OCR** | Upload documents for AI-powered text extraction with user review before save; requires a vision-capable model/provider |
 
@@ -184,7 +186,9 @@ Run from `backend/` with `python -m flask --app run:app <command>`:
 |---|---|
 | `finance-audit [--csv file]` | Read-only report of every loan with review flags (reopened after settlement, flat-rate loans on monthly terms, legacy payment splits, interest overpaid) |
 | `finance-backfill-settlement [--apply]` | Stops interest on loans that were cleared but later reopened by the old accrual bug; dry run unless `--apply` |
+| `finance-convert-flat-loans [--apply] [--csv file]` | Converts open flat-rate loans to monthly interest at the same rate and re-splits their payments; prints before/after per loan; dry run unless `--apply` |
 | `refresh-loans` | Recalculates every open loan; safe to run repeatedly (optional daily job) |
+| `send-loan-reminders [--dry-run]` | SMS reminders for loans due within 3 days or overdue (daily job; needs `AT_USERNAME`, `AT_API_KEY`) |
 | `pii-reencrypt [--apply]` | Re-encrypts stored ID numbers after setting `PII_ENCRYPTION_KEY` |
 | `db-doctor` | Verifies the schema has every expected table and column |
 
@@ -192,12 +196,15 @@ Run from `backend/` with `python -m flask --app run:app <command>`:
 
 | Mode | Rule |
 |---|---|
-| Flat rate | Interest = principal × rate, charged once. Never grows. |
-| Monthly interest | A fixed amount per month. `MONTHLY_ACCRUAL_TIMING=arrears` (default) charges on each monthly anniversary of the issue date; `advance` charges the first month on the issue date and each later month the day after an anniversary. Charges stop on the day the loan is settled. |
+| Flat rate (older loans only) | Interest = principal × rate, charged once. No longer offered; open ones are converted with `finance-convert-flat-loans`. |
+| Monthly interest (every new loan) | The rate is per month and is charged on the **unpaid principal**, so interest falls when principal is repaid. `MONTHLY_ACCRUAL_TIMING=advance` (default, confirmed by the business) charges the first month on the issue date and each later month the day after a monthly date; `arrears` charges on each anniversary instead. Charges continue after the due date and stop on the day the loan is settled. |
 | Reducing balance | Equal monthly payments; interest on the remaining principal. |
 
-Payments go to interest first, then principal. Discounts, waivers, write-offs and extra charges are
-recorded as manager-approved adjustments with a reason; balances are never edited directly.
+Payments go to interest first, then principal; a backdated payment or a reversal re-splits later payments
+in date order. Group loans have a fixed total repaid in equal instalments, and each instalment is a sum of
+principal and interest in the loan's own proportion. Interest discounts and waivers are manager-approved
+adjustments with a reason; principal can only be written off once a loan is 6 months overdue. Balances are
+never edited directly.
 
 ## Documentation
 

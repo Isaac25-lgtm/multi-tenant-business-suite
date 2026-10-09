@@ -64,8 +64,14 @@ services:
       - key: PII_ENCRYPTION_KEY
         sync: false  # Fernet key for ID numbers; then run `flask pii-reencrypt --apply` once
       - key: MONTHLY_ACCRUAL_TIMING
-        value: arrears  # change to "advance" only after the business confirms the rule
+        value: advance  # first month charged on the issue date (confirmed by the business)
       - key: SENTRY_DSN
         sync: false  # optional error monitoring
       - key: OCR_MODEL
         sync: false  # e.g. claude-haiku-4-5 (the old claude-3-5-haiku model is retired)
+      - key: AT_USERNAME
+        sync: false  # optional: Africa's Talking account for SMS loan reminders
+      - key: AT_API_KEY
+        sync: false
+      - key: AT_SENDER_ID
+        sync: false

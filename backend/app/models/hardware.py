@@ -72,6 +72,8 @@ class HardwareSale(db.Model):
     payment_type = db.Column(db.String(10), nullable=False)
     total_amount = db.Column(db.Numeric(12, 2), nullable=False)
     amount_paid = db.Column(db.Numeric(12, 2), nullable=False)
+    payment_method = db.Column(db.String(20), nullable=True)
+    payment_reference = db.Column(db.String(100), nullable=True)
     balance = db.Column(db.Numeric(12, 2), default=0)
     is_credit_cleared = db.Column(db.Boolean, default=False)
     is_deleted = db.Column(db.Boolean, default=False)
@@ -135,6 +137,8 @@ class HardwareCreditPayment(db.Model):
     payment_date = db.Column(db.Date, nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     remaining_balance = db.Column(db.Numeric(12, 2), nullable=False)
+    payment_method = db.Column(db.String(20), nullable=True)
+    payment_reference = db.Column(db.String(100), nullable=True)
     created_at = db.Column(db.DateTime, default=get_local_now)
 
     def to_dict(self):

@@ -33,7 +33,7 @@ def db_app():
         WTF_CSRF_ENABLED = False
         SQLALCHEMY_DATABASE_URI = normalize_postgres_url(TEST_DATABASE_URL)
         SQLALCHEMY_ENGINE_OPTIONS = {'pool_pre_ping': True}
-        MONTHLY_ACCRUAL_TIMING = 'arrears'
+        MONTHLY_ACCRUAL_TIMING = 'advance'
 
     app = create_app(TestConfig)
     with app.app_context():

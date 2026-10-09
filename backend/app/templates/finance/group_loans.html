@@ -60,10 +60,12 @@
                             {% if current_section == 'manager' %}
                             <a href="{{ url_for('finance.edit_group_loan', id=group.id) }}">Edit dates</a>
                             {% endif %}
-                            <form method="POST" action="{{ url_for('finance.delete_group_loan', id=group.id) }}" onsubmit="return confirm('Delete the group loan for {{ group.group_name|e }}? It will be hidden from all lists.')">
+                            {% if current_section == 'manager' %}
+                                <form method="POST" action="{{ url_for('finance.delete_group_loan', id=group.id) }}" onsubmit="return confirm('Delete the group loan for {{ group.group_name|e }}? It will be hidden from all lists.')">
                                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                 <button type="submit" class="is-danger">Delete loan</button>
                             </form>
+                                {% endif %}
                         </div>
                     </details>
                 </td>

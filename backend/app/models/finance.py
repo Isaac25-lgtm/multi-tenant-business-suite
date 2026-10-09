@@ -170,6 +170,8 @@ class LoanPayment(db.Model):
     principal_amount = db.Column(db.Numeric(12, 2), default=0, nullable=False)
     interest_amount = db.Column(db.Numeric(12, 2), default=0, nullable=False)
     payment_type = db.Column(db.String(30), default='regular', nullable=False)
+    payment_method = db.Column(db.String(20), nullable=True)
+    payment_reference = db.Column(db.String(100), nullable=True)
     balance_after = db.Column(db.Numeric(12, 2), nullable=False)
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
@@ -228,11 +230,16 @@ class GroupLoan(db.Model):
 
     @property
     def outstanding_principal(self):
+        # Each instalment is "a sum of both": a payment repays principal and
+        # interest in the same proportion as the loan (principal : total).
         principal = Decimal(str(self.principal or 0))
+        total = Decimal(str(self.total_amount or 0))
         amount_paid = Decimal(str(self.amount_paid or 0))
         written_off = Decimal(str(self.principal_written_off or 0))
         balance = Decimal(str(self.balance or 0))
-        remaining_principal = principal - amount_paid - written_off
+        principal_share = (principal / total) if total > 0 else Decimal('1')
+        principal_repaid = (amount_paid * principal_share).quantize(Decimal('1'))
+        remaining_principal = principal - principal_repaid - written_off
         if remaining_principal < 0:
             remaining_principal = Decimal('0')
         if remaining_principal > balance:
@@ -315,6 +322,8 @@ class GroupLoanPayment(db.Model):
     payment_date = db.Column(db.Date, nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     periods_covered = db.Column(db.Integer, default=1)
+    payment_method = db.Column(db.String(20), nullable=True)
+    payment_reference = db.Column(db.String(100), nullable=True)
     balance_after = db.Column(db.Numeric(12, 2), nullable=False)
     notes = db.Column(db.String(200), nullable=True)
     is_deleted = db.Column(db.Boolean, default=False)
@@ -404,3 +413,21 @@ class LoanAdjustment(db.Model):
     @property
     def increases_balance(self):
         return self.adjustment_type == 'charge'
+
+
+class ReminderLog(db.Model):
+    """One reminder sent (or prepared) for a loan, so nobody is reminded twice a day."""
+    __tablename__ = 'reminder_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    loan_id = db.Column(db.Integer, db.ForeignKey('loans.id'), nullable=True)
+    group_loan_id = db.Column(db.Integer, db.ForeignKey('group_loans.id'), nullable=True)
+    reminder_date = db.Column(db.Date, nullable=False)
+    kind = db.Column(db.String(20), nullable=False)       # 'due_soon' or 'overdue'
+    channel = db.Column(db.String(20), nullable=False)    # 'sms' or 'whatsapp'
+    phone = db.Column(db.String(30), nullable=True)
+    message = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False)     # 'sent', 'failed', 'opened'
+    detail = db.Column(db.String(255), nullable=True)
+    sent_by = db.Column(db.String(50), nullable=True)
+    created_at = db.Column(db.DateTime, default=get_local_now)

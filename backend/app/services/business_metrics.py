@@ -11,11 +11,9 @@ Cash received
                               any later credit payments on that sale)
       credit collections    = credit payments dated in the period
       hire collections      = deposits taken on the hire date + hire payments
-      loan collections      = individual loan payments (principal + interest)
+      loan collections      = individual loan payments (principal + interest),
+                              including interest paid in cash at renewal
       group collections     = group loan payments
-    Renewal settlements are reported separately and are not counted as cash,
-    because a renewal records interest as settled whether or not money changed
-    hands (pending the client's confirmation of the renewal rule).
 Gross profit (retail)
     Sales value minus the cost of goods sold, using the cost recorded at the
     moment of sale. Older lines without a recorded cost use today's stock cost
@@ -23,9 +21,8 @@ Gross profit (retail)
     profit and reported as unknown instead of being treated as 100% margin.
 Interest earned
     Interest collected on individual and group loans. Principal repaid is not
-    income. Group payments are applied principal-first (the current group
-    rule), so a group payment counts as interest only once the group's
-    principal has been fully repaid.
+    income. Each group instalment carries interest in the same proportion as
+    the loan (interest : total).
 Net profit
     Retail gross profit + interest earned + hire income
     - operating expenses - principal written off.
@@ -210,7 +207,7 @@ def hire_collections(start, end):
 # ---------------------------------------------------------------------------
 
 def loan_collections(start, end):
-    def _sum(column, renewal):
+    def _sum(column, renewal_only=False):
         query = db.session.query(func.coalesce(func.sum(column), 0)).join(
             Loan, LoanPayment.loan_id == Loan.id
         ).filter(
@@ -219,10 +216,8 @@ def loan_collections(start, end):
             LoanPayment.is_deleted == False,  # noqa: E712
             Loan.is_deleted == False,  # noqa: E712
         )
-        if renewal:
+        if renewal_only:
             query = query.filter(LoanPayment.payment_type == 'renewal')
-        else:
-            query = query.filter(LoanPayment.payment_type != 'renewal')
         return _d(query.scalar())
 
     group_total = _d(db.session.query(func.coalesce(func.sum(GroupLoanPayment.amount), 0)).join(
@@ -234,8 +229,9 @@ def loan_collections(start, end):
         GroupLoan.is_deleted == False,  # noqa: E712
     ).scalar())
 
-    principal = _sum(LoanPayment.principal_amount, renewal=False)
-    interest = _sum(LoanPayment.interest_amount, renewal=False)
+    # Renewal settlements are paid in cash by the borrower, so they are included.
+    principal = _sum(LoanPayment.principal_amount)
+    interest = _sum(LoanPayment.interest_amount)
     group_interest = group_interest_collected(start, end)
     return {
         'individual_principal': principal,
@@ -245,30 +241,28 @@ def loan_collections(start, end):
         'group_interest': group_interest,
         'group_principal': group_total - group_interest,
         'total': principal + interest + group_total,
-        'renewal_settlements': _sum(LoanPayment.amount, renewal=True),
+        'renewal_settlements': _sum(LoanPayment.amount, renewal_only=True),
     }
 
 
 def group_interest_collected(start, end):
-    """Interest share of group payments dated in the period (principal-first rule)."""
-    group_ids = [row[0] for row in db.session.query(GroupLoanPayment.group_loan_id).filter(
+    """Interest share of group payments dated in the period.
+
+    A group instalment is "a sum of both": each payment carries interest in
+    the same proportion as the loan (interest : total).
+    """
+    rows = db.session.query(
+        GroupLoanPayment.amount, GroupLoan.interest_amount, GroupLoan.total_amount
+    ).join(GroupLoan, GroupLoanPayment.group_loan_id == GroupLoan.id).filter(
         GroupLoanPayment.payment_date >= start,
         GroupLoanPayment.payment_date <= end,
         GroupLoanPayment.is_deleted == False,  # noqa: E712
-    ).distinct().all()]
+        GroupLoan.is_deleted == False,  # noqa: E712
+    ).all()
     total = ZERO
-    for group in GroupLoan.query.filter(GroupLoan.id.in_(group_ids), GroupLoan.is_deleted == False).all():  # noqa: E712
-        principal = _d(group.principal)
-        paid_so_far = ZERO
-        payments = GroupLoanPayment.query.filter_by(group_loan_id=group.id, is_deleted=False).order_by(
-            GroupLoanPayment.payment_date.asc(), GroupLoanPayment.id.asc()
-        ).all()
-        for payment in payments:
-            before = paid_so_far
-            paid_so_far += _d(payment.amount)
-            interest_part = max(paid_so_far - principal, ZERO) - max(before - principal, ZERO)
-            if start <= payment.payment_date <= end:
-                total += interest_part
+    for amount, interest_amount, total_amount in rows:
+        if _d(total_amount) > 0:
+            total += (_d(amount) * _d(interest_amount) / _d(total_amount)).quantize(Decimal('1'))
     return total
 
 
@@ -278,6 +272,16 @@ def expenses_total(start, end):
         Expense.expense_date <= end,
         Expense.is_deleted == False,  # noqa: E712
     ).scalar())
+
+
+def expenses_by_unit(start, end):
+    """Expenses per business unit; every unit carries its own costs."""
+    rows = dict(db.session.query(Expense.business_unit, func.coalesce(func.sum(Expense.amount), 0)).filter(
+        Expense.expense_date >= start,
+        Expense.expense_date <= end,
+        Expense.is_deleted == False,  # noqa: E712
+    ).group_by(Expense.business_unit).all())
+    return {unit: _d(rows.get(unit)) for unit in ('boutique', 'hardware', 'finance', 'shared')}
 
 
 def principal_written_off(start, end):
@@ -304,6 +308,7 @@ def period_summary(start, end):
     hire = hire_collections(start, end)
     loans = loan_collections(start, end)
     expenses = expenses_total(start, end)
+    unit_expenses = expenses_by_unit(start, end)
     write_offs = principal_written_off(start, end)
 
     sales_value = boutique['sales_value'] + hardware['sales_value']
@@ -336,6 +341,14 @@ def period_summary(start, end):
         'expenses': expenses,
         'write_offs': write_offs,
         'net_profit': gross_profit + loans['individual_interest'] + loans['group_interest'] + hire - expenses - write_offs,
+        'expenses_by_unit': unit_expenses,
+        # Each unit's own result: its income minus its own expenses.
+        'unit_profit': {
+            'boutique': boutique['gross_profit'] + hire - unit_expenses['boutique'],
+            'hardware': hardware['gross_profit'] - unit_expenses['hardware'],
+            'finance': (loans['individual_interest'] + loans['group_interest']
+                        - unit_expenses['finance'] - write_offs),
+        },
         'loans': loans,
         'boutique': boutique,
         'hardware': hardware,

@@ -285,7 +285,7 @@ def website_settings():
             return redirect(url_for('website.website_settings'))
 
         settings.company_name = request.form.get('company_name', 'NoRongir').strip() or 'NoRongir'
-        settings.company_suffix = request.form.get('company_suffix', 'APS').strip() or 'APS'
+        settings.company_suffix = request.form.get('company_suffix', '').strip() or 'Investments Limited'
         settings.tagline = request.form.get('tagline', '').strip() or None
         settings.announcement_text = request.form.get('announcement_text', '').strip() or None
         settings.hero_title = request.form.get('hero_title', '').strip() or None
@@ -293,6 +293,8 @@ def website_settings():
         settings.contact_phone = request.form.get('contact_phone', '').strip() or None
         settings.whatsapp_number = request.form.get('whatsapp_number', '').strip() or None
         settings.contact_email = request.form.get('contact_email', '').strip() or None
+        settings.registration_number = request.form.get('registration_number', '').strip()[:60] or None
+        settings.postal_address = request.form.get('postal_address', '').strip()[:160] or None
         settings.headquarters = request.form.get('headquarters', '').strip() or None
         settings.service_area = request.form.get('service_area', '').strip() or None
         settings.loan_interest_rate = loan_interest_rate

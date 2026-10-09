@@ -62,13 +62,26 @@ def _draw_logo_image(c, x, y, width, height, image_path):
 
 
 def _draw_vector_brand_mark(c, x, y, size, initial='N'):
-    c.setFillColor(HexColor('#0f172a'))
+    c.setFillColor(HexColor('#7a1f2b'))
     c.roundRect(x, y, size, size, 12, fill=1, stroke=0)
-    c.setFillColor(HexColor('#f8fafc'))
+    c.setFillColor(HexColor('#f1f1f3'))
     c.setFont("Helvetica-Bold", 28)
     c.drawCentredString(x + (size / 2), y + 12, (initial or 'N')[:1].upper())
-    c.setFillColor(HexColor('#c24b28'))
+    c.setFillColor(HexColor('#b9b9c0'))
     c.circle(x + size - 10, y + size - 10, 4, fill=1, stroke=0)
+
+
+def company_legal_line(settings=None):
+    """Registration number and postal address, as printed on every document."""
+    settings = settings or get_site_settings()
+    parts = []
+    registration = getattr(settings, 'registration_number', None)
+    if isinstance(registration, str) and registration.strip():
+        parts.append(f"Reg. No. {registration.strip()}")
+    address = getattr(settings, 'postal_address', None)
+    if isinstance(address, str) and address.strip():
+        parts.append(address.strip())
+    return ' | '.join(parts)
 
 
 def draw_logo_header(c, width, y):
@@ -96,6 +109,10 @@ def draw_logo_header(c, width, y):
     c.setFillColor(HexColor('#64748b'))
     c.setFont("Helvetica", 9)
     c.drawString(text_x, y - 30, tagline[:90])
+    legal_line = company_legal_line(settings)
+    if legal_line:
+        c.setFont("Helvetica", 8)
+        c.drawString(text_x, y - 42, legal_line[:110])
     c.setStrokeColor(HexColor('#e2e8f0'))
     c.line(50, y - logo_height - 10, width - 50, y - logo_height - 10)
     return y - logo_height - 22
@@ -449,7 +466,7 @@ def generate_group_agreement_pdf(group_loan):
     c.setFont("Helvetica", 9)
     terms = [
         "1. The group agrees to make payments on the scheduled dates.",
-        "2. Late payments may result in additional charges.",
+        "2. The total repayable is fixed and is paid in equal instalments.",
         "3. All members are jointly responsible for the loan repayment.",
         "4. Early repayment is allowed without penalty.",
         "5. This agreement is binding upon signing by all parties."

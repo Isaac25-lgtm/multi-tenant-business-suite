@@ -166,3 +166,42 @@ def test_flat_rate_never_grows():
         refresh_loan_state(loan, as_of)
         assert loan.interest_amount == D('200000')
         assert loan.total_amount == D('1200000')
+
+
+# --- interest falls when principal is repaid ----------------------------------
+
+def test_interest_goes_down_after_principal_is_repaid(advance_app):
+    """Client rule: owes 1,000,000 at 100,000/month, repays 500,000 -> next month is 50,000."""
+    loan = make_loan()
+    loan._principal_events = [(date(2026, 1, 20), D('500000'))]
+    loan.principal_paid = D('500000')
+
+    refresh_loan_state(loan, date(2026, 2, 10))       # still only the issue-day charge
+    assert loan.interest_amount == D('100000')
+    refresh_loan_state(loan, date(2026, 2, 11))       # second month charged on 500,000
+    assert loan.interest_amount == D('150000')
+    refresh_loan_state(loan, date(2026, 3, 11))
+    assert loan.interest_amount == D('200000')
+    assert loan.balance == D('700000')                # 500,000 principal + 200,000 interest
+
+
+def test_principal_repaid_on_the_monthly_date_lowers_the_next_charge(advance_app):
+    loan = make_loan()
+    loan._principal_events = [(date(2026, 2, 10), D('400000'))]   # paid on the due date
+    loan.principal_paid = D('400000')
+    refresh_loan_state(loan, date(2026, 2, 11))
+    assert loan.interest_amount == D('160000')        # 100,000 + 10% of 600,000
+
+
+def test_interest_keeps_adding_after_the_due_date_until_paid(advance_app):
+    loan = make_loan()                                 # due 10 Feb, never paid
+    refresh_loan_state(loan, date(2026, 8, 15))
+    assert loan.interest_amount == D('800000')        # issue + 7 monthly dates passed
+    assert loan.status == 'overdue'
+
+
+def test_charge_dates_match_the_client_example(advance_app):
+    from app.services.loan_accounting import monthly_charge_dates
+    assert monthly_charge_dates(ISSUE, date(2026, 2, 10)) == [date(2026, 1, 10)]
+    assert monthly_charge_dates(ISSUE, date(2026, 2, 11)) == [date(2026, 1, 10), date(2026, 2, 11)]
+    assert len(monthly_charge_dates(ISSUE, date(2026, 4, 10))) == 3

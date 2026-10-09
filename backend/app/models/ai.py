@@ -1,7 +1,4 @@
-"""Models for AI features: morning briefing and OCR extractions.
-
-ChatMessage is kept only so the historical chat_messages table stays mapped;
-the manager chatbot itself has been removed."""
+"""Models for AI features: morning briefing and OCR extractions."""
 
 import json
 
@@ -38,18 +35,6 @@ class BriefingDismissal(db.Model):
     __table_args__ = (
         db.UniqueConstraint('user_id', 'briefing_date', name='uq_user_briefing_date'),
     )
-
-
-class ChatMessage(db.Model):
-    """Audit log for manager AI chat interactions."""
-    __tablename__ = 'chat_messages'
-
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # 'user' or 'assistant'
-    content = db.Column(db.Text, nullable=False)
-    intent = db.Column(db.String(50))  # classified intent, e.g. 'overdue_loans'
-    created_at = db.Column(db.DateTime, default=get_local_now)
 
 
 class OcrExtraction(db.Model):

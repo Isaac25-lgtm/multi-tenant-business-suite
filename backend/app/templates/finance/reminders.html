@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Loan Reminders - {{ brand_display_name }}{% endblock %}
+
+{% block page_header %}
+<h2>Loan reminders</h2>
+<p>{{ rows|length }} borrower{{ '' if rows|length == 1 else 's' }} to remind &middot; due within 3 days or overdue</p>
+{% endblock %}
+
+{% block content %}
+{% if not sms_enabled %}
+<div class="help-details mb-4" role="note">
+    <strong>SMS is not set up yet.</strong> Use the WhatsApp button: it opens the chat with the message already written.
+    To send SMS, the administrator adds the Africa's Talking account details (AT_USERNAME, AT_API_KEY).
+</div>
+{% endif %}
+
+{% macro reminder_table(items, empty_text) %}
+<div class="section-card mb-6" style="padding:0;">
+    <div class="overflow-x-auto">
+        <table class="data-table responsive-table">
+            <thead>
+                <tr>
+                    <th>Borrower</th>
+                    <th class="text-right">Balance (UGX)</th>
+                    <th>Due date</th>
+                    <th>Message</th>
+                    <th>Last reminder</th>
+                    <th><span class="sr-only">Send</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in items %}
+                <tr>
+                    <td data-label="Borrower">
+                        <a href="{{ url_for('finance.view_loan', id=row.loan.id) }}" class="row-link">{{ row.loan.client.name }}</a>
+                        <span class="cell-sub">{{ ('+' ~ row.phone) if row.phone else 'No valid phone number' }}</span>
+                    </td>
+                    <td data-label="Balance" class="text-right font-semibold">{{ "{:,.0f}".format(row.loan.balance) }}</td>
+                    <td data-label="Due" class="nowrap">
+                        <span>{{ row.loan.due_date.strftime('%d %b %Y') }}
+                        <span class="cell-sub">{% if row.days > 0 %}{{ row.days }} day{{ '' if row.days == 1 else 's' }} late{% elif row.days == 0 %}due today{% else %}in {{ -row.days }} day{{ '' if row.days == -1 else 's' }}{% endif %}</span></span>
+                    </td>
+                    <td data-label="Message"><span class="reminder-message">{{ row.message }}</span></td>
+                    <td data-label="Last reminder">
+                        {% if row.last %}<span>{{ row.last.channel|upper }} {{ row.last.reminder_date.strftime('%d %b') }}<span class="cell-sub">{{ row.last.status }}{% if row.last.sent_by %} by {{ row.last.sent_by }}{% endif %}</span></span>{% else %}<span class="text-gray-400">None yet</span>{% endif %}
+                    </td>
+                    <td class="row-actions">
+                        {% if row.phone %}
+                        <form method="POST" action="{{ url_for('finance.reminder_whatsapp', loan_id=row.loan.id) }}" target="_blank" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline">WhatsApp</button>
+                        </form>
+                        {% if sms_enabled %}
+                        <form method="POST" action="{{ url_for('finance.reminder_sms', loan_id=row.loan.id) }}" class="inline">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline" {% if not row.sms_allowed %}disabled title="Already sent in the last 7 days"{% endif %}>SMS</button>
+                        </form>
+                        {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-center text-gray-500 py-8">{{ empty_text }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endmacro %}
+
+<h3 class="section-heading">Overdue <span class="text-gray-500">({{ overdue|length }})</span></h3>
+{{ reminder_table(overdue, 'No overdue loans.') }}
+
+<h3 class="section-heading">Due within 3 days <span class="text-gray-500">({{ due_soon|length }})</span></h3>
+{{ reminder_table(due_soon, 'No loans are due in the next 3 days.') }}
+{% endblock %}

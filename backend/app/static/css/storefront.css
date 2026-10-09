@@ -19,28 +19,28 @@
   --ink-10: #D9D9D9;
   --ink-05: #ECECEC;
   --ink-02: #F5F5F5;
-  --cream: #FBF9F5;
-  --warm: #F9F6F1;
-  --linen: #F3EDE4;
-  --sand: #E8DFD1;
-  --clay: #C9B99A;
-  --terra: #B85C38;
-  --terra-deep: #8B3A1F;
-  --terra-glow: #D4845C;
-  --terra-pale: #F5DED0;
+  --cream: #FAFAFB;
+  --warm: #F6F6F7;
+  --linen: #EFEFF1;
+  --sand: #E2E2E6;
+  --clay: #B9B9C0;
+  --terra: #7A1F2B;
+  --terra-deep: #5A1420;
+  --terra-glow: #A8465A;
+  --terra-pale: #F3DCE0;
   --forest: #1B6B45;
   --forest-deep: #0F4D30;
   --forest-light: #2D9B65;
   --forest-pale: #D8F0E3;
-  --gold: #C89B3C;
-  --gold-light: #E8D5A0;
+  --gold: #8E8E98;
+  --gold-light: #D9D9DE;
   --danger: #C0392B;
   --white: #FFF;
   --sh-sm: 0 1px 3px rgba(0, 0, 0, .06), 0 1px 2px rgba(0, 0, 0, .04);
   --sh-md: 0 4px 14px rgba(0, 0, 0, .07), 0 2px 6px rgba(0, 0, 0, .04);
   --sh-lg: 0 10px 30px rgba(0, 0, 0, .09), 0 4px 10px rgba(0, 0, 0, .04);
   --sh-xl: 0 20px 50px rgba(0, 0, 0, .12);
-  --sh-glow: 0 4px 24px rgba(184, 92, 56, .2);
+  --sh-glow: 0 4px 24px rgba(122, 31, 43, .2);
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 16px;
@@ -219,10 +219,11 @@ img {
 }
 
 .nav__logo {
-  width: 152px;
+  height: 44px;
+  width: auto;
   max-width: 42vw;
-  height: auto;
-  object-fit: contain
+  object-fit: contain;
+  border-radius: 10px
 }
 
 .nav__mark {
@@ -633,7 +634,10 @@ img {
 
 .hero__bg {
   position: absolute;
-  inset: 0
+  inset: 0;
+  /* Brand background; an uploaded hero image (Website > Images) sits on top. */
+  background: radial-gradient(1200px 600px at 85% 10%, rgba(168, 70, 90, .55), transparent 60%),
+    linear-gradient(135deg, #3a0d15 0%, #5a1420 45%, #7a1f2b 100%)
 }
 
 .hero__bg img {
@@ -647,7 +651,7 @@ img {
 .hero__grad {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(13, 13, 13, .88) 0%, rgba(26, 39, 68, .5) 50%, rgba(184, 92, 56, .08) 100%)
+  background: linear-gradient(135deg, rgba(20, 8, 11, .72) 0%, rgba(58, 13, 21, .38) 55%, rgba(122, 31, 43, .05) 100%)
 }
 
 .hero__content {
@@ -808,7 +812,7 @@ img {
 }
 
 .hero__float-ic.t {
-  background: rgba(184, 92, 56, .2);
+  background: rgba(122, 31, 43, .2);
   color: var(--terra-glow)
 }
 
@@ -919,7 +923,7 @@ img {
 }
 
 .cat__ic.b {
-  background: rgba(184, 92, 56, .22);
+  background: rgba(122, 31, 43, .22);
   color: var(--terra-glow)
 }
 
@@ -1279,12 +1283,34 @@ img {
   grid-column: 1/-1
 }
 
+/* Generated tile for products without a photo yet: name over a large initial. */
 .img-label {
-  color: rgba(255, 255, 255, .6);
-  font-size: 13px;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  text-align: center;
+  overflow: hidden;
+  background: linear-gradient(140deg, var(--terra-deep), var(--terra) 70%, var(--terra-glow));
+  color: #fff;
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 24px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .08em
+  line-height: 1.15;
+  letter-spacing: .01em
+}
+
+.img-label::before {
+  content: attr(data-initial);
+  position: absolute;
+  right: -8px;
+  bottom: -52px;
+  font-size: 220px;
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(255, 255, 255, .1);
+  pointer-events: none
 }
 
 .sec--gallery {
@@ -1730,7 +1756,7 @@ select.lf__input {
 .cta__grad {
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, rgba(184, 92, 56, .25), rgba(13, 13, 13, .88))
+  background: linear-gradient(135deg, rgba(122, 31, 43, .25), rgba(13, 13, 13, .88))
 }
 
 .cta__content {
@@ -1801,10 +1827,11 @@ select.lf__input {
 }
 
 .footer__brand-logo {
-  width: 140px;
+  height: 64px;
+  width: auto;
   max-width: 100%;
-  height: auto;
-  object-fit: contain
+  object-fit: contain;
+  border-radius: 12px
 }
 
 .footer__brand-mk {
@@ -2017,4 +2044,94 @@ select.lf__input {
     width: 28px;
     height: 28px
   }
+}
+
+/* ---- Loan calculator ---- */
+.loan-calc {
+  margin-top: 26px;
+  padding: 22px;
+  background: var(--white);
+  border: 1px solid var(--ink-10);
+  border-radius: 16px;
+  box-shadow: var(--sh-sm)
+}
+
+.loan-calc__title {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink)
+}
+
+.loan-calc__inputs {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px
+}
+
+.loan-calc__inputs label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-60)
+}
+
+.loan-calc__inputs input {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--ink-10);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: 0
+}
+
+.loan-calc__inputs input:focus {
+  outline: 2px solid var(--terra);
+  outline-offset: 1px
+}
+
+.loan-calc__out {
+  margin: 16px 0 0;
+  display: grid;
+  gap: 8px
+}
+
+.loan-calc__out > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--ink-60)
+}
+
+.loan-calc__out dd {
+  margin: 0;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums
+}
+
+.loan-calc__total {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ink-10)
+}
+
+.loan-calc__total dd {
+  font-size: 18px;
+  color: var(--terra)
+}
+
+.loan-calc__note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-50)
 }

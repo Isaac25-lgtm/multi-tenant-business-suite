@@ -42,13 +42,15 @@ def test_expense_validation_and_soft_delete(client, make_user, login):
     login(make_user())
     today = get_local_today()
     client.post('/expenses/add', data={'expense_date': (today + timedelta(days=1)).isoformat(), 'amount': '5000',
-                                       'description': 'Future', 'category': 'other', 'business_unit': 'shared'})
+                                       'description': 'Future', 'category': 'other', 'business_unit': 'finance'})
     client.post('/expenses/add', data={'expense_date': today.isoformat(), 'amount': '0',
-                                       'description': 'Zero', 'category': 'other', 'business_unit': 'shared'})
+                                       'description': 'Zero', 'category': 'other', 'business_unit': 'finance'})
+    client.post('/expenses/add', data={'expense_date': today.isoformat(), 'amount': '5000',
+                                       'description': 'No shared pool', 'category': 'other', 'business_unit': 'shared'})
     assert Expense.query.count() == 0
 
     client.post('/expenses/add', data={'expense_date': today.isoformat(), 'amount': '5000',
-                                       'description': 'Airtime', 'category': 'communications', 'business_unit': 'shared'})
+                                       'description': 'Airtime', 'category': 'communications', 'business_unit': 'finance'})
     expense = Expense.query.one()
     client.post(f'/expenses/{expense.id}/delete', data={'reason': 'duplicate entry'})
     db.session.expire_all()
@@ -56,30 +58,58 @@ def test_expense_validation_and_soft_delete(client, make_user, login):
     assert period_summary(today, today)['expenses'] == 0
 
 
-def test_expenses_are_manager_only(client, make_user, login):
+def test_staff_record_expenses_for_their_own_unit_only(client, make_user, login):
     login(make_user('shop', role='boutique'))
-    response = client.post('/expenses/add', data={'expense_date': get_local_today().isoformat(), 'amount': '5000',
-                                                   'description': 'Airtime', 'category': 'other', 'business_unit': 'shared'})
-    assert response.status_code == 302
+    today = get_local_today()
+    base = {'expense_date': today.isoformat(), 'amount': '5000', 'description': 'Airtime', 'category': 'communications'}
+
+    client.post('/expenses/add', data={**base, 'business_unit': 'hardware'})       # not their unit
+    assert Expense.query.count() == 0
+    client.post('/expenses/add', data={**base, 'expense_date': (today - timedelta(days=5)).isoformat(),
+                                       'business_unit': 'boutique'})               # too old for staff
     assert Expense.query.count() == 0
 
+    client.post('/expenses/add', data={**base, 'business_unit': 'boutique'})
+    expense = Expense.query.one()
+    assert expense.business_unit == 'boutique'
+    assert client.get('/expenses/').status_code == 200
 
-def test_group_payments_count_as_interest_only_after_principal(db_app):
+    client.post(f'/expenses/{expense.id}/delete', data={'reason': 'staff cannot delete'})
+    db.session.expire_all()
+    assert db.session.get(Expense, expense.id).is_deleted is False
+
+
+def test_each_unit_carries_its_own_expenses(client, make_user, login):
+    login(make_user(), boutique_branch='K')
     today = get_local_today()
-    group = GroupLoan(group_name='Savers', member_count=5, principal=D('500000'), interest_rate=D('20'),
-                      interest_amount=D('100000'), total_amount=D('600000'), amount_per_period=D('100000'),
-                      total_periods=6, balance=D('600000'), amount_paid=D('0'), periods_paid=0, status='active',
-                      issue_date=today - timedelta(days=60), due_date=today + timedelta(days=120))
+    _sale(client, qty=2, price='80000', cost='50000')                              # boutique gross profit 60,000
+    for unit, amount in (('boutique', '10000'), ('hardware', '4000')):
+        client.post('/expenses/add', data={'expense_date': today.isoformat(), 'amount': amount, 'description': 'Cost',
+                                           'category': 'other', 'business_unit': unit})
+    summary = period_summary(today, today)
+    assert summary['unit_profit']['boutique'] == D('50000')
+    assert summary['unit_profit']['hardware'] == D('-4000')
+    assert summary['net_profit'] == D('46000')
+
+
+def test_group_payment_is_a_sum_of_principal_and_interest(db_app):
+    today = get_local_today()
+    group = GroupLoan(group_name='Savers', member_count=5, principal=D('1000000'), interest_rate=D('40'),
+                      interest_amount=D('400000'), total_amount=D('1400000'), amount_per_period=D('100000'),
+                      total_periods=14, balance=D('1100000'), amount_paid=D('300000'), periods_paid=3, status='active',
+                      issue_date=today - timedelta(days=21), due_date=today + timedelta(days=77))
     db.session.add(group)
     db.session.flush()
-    db.session.add(GroupLoanPayment(group_loan_id=group.id, payment_date=today - timedelta(days=10),
-                                    amount=D('450000'), balance_after=D('150000')))
+    db.session.add(GroupLoanPayment(group_loan_id=group.id, payment_date=today - timedelta(days=7),
+                                    amount=D('200000'), balance_after=D('1200000')))
     db.session.add(GroupLoanPayment(group_loan_id=group.id, payment_date=today,
-                                    amount=D('100000'), balance_after=D('50000')))
+                                    amount=D('100000'), balance_after=D('1100000')))
     db.session.commit()
 
-    assert group_interest_collected(today, today) == D('50000')               # 450k+100k crosses 500k principal
-    assert group_interest_collected(today - timedelta(days=10), today - timedelta(days=10)) == 0
+    # Each 100,000 instalment carries 400/1400 interest = 28,571.
+    assert group_interest_collected(today, today) == D('28571')
+    assert group.outstanding_principal == D('785714')          # 1,000,000 - 300,000 x 1000/1400
+    assert group.outstanding_principal + group.outstanding_interest == group.balance
 
 
 def test_analytics_pages_render_with_data(client, make_user, login):

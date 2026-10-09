@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import payment_fields %}
 
 {% block title %}New Boutique Sale - {{ brand_display_name }}{% endblock %}
 
@@ -92,6 +93,7 @@
 
     <div class="flex justify-end gap-2">
         <a href="{{ url_for('boutique.sales') }}" class="btn btn-secondary">Cancel</a>
+        {{ payment_fields() }}
         <button type="submit" class="btn btn-primary">Create Sale</button>
     </div>
 </form>

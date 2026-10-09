@@ -28,7 +28,7 @@
     {{ kpi('Interest earned', ugx(col.individual_interest + col.group_interest), 'Individual ' ~ num(col.individual_interest) ~ ' · group ' ~ num(col.group_interest), data.growth.interest, 'vs previous period', 'tone-emerald') }}
     {{ kpi('Active clients', num(data.client_count)) }}
     {% if col.renewal_settlements %}
-    {{ kpi('Renewal settlements', ugx(col.renewal_settlements), 'Recorded at renewal; not counted as cash') }}
+    {{ kpi('Renewal settlements', ugx(col.renewal_settlements), 'Interest paid in cash at renewal (already included in collections)') }}
     {% else %}
     {{ kpi('Collection rate', '—', 'Needs per-installment schedules for every loan type before it can be measured honestly') }}
     {% endif %}

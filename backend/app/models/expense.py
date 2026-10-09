@@ -19,12 +19,15 @@ class Expense(db.Model):
         'inventory_related': 'Inventory related',
         'other': 'Other',
     }
+    # Every unit handles its own expenses. 'shared' is kept only as a label
+    # for any older company-wide entries; it can no longer be selected.
     BUSINESS_UNITS = {
         'boutique': 'Boutique',
         'hardware': 'Hardware',
         'finance': 'Finance',
-        'shared': 'Shared (whole company)',
+        'shared': 'Company-wide',
     }
+    SELECTABLE_UNITS = ('boutique', 'hardware', 'finance')
     PAYMENT_METHODS = {
         'cash': 'Cash',
         'mobile_money': 'Mobile money',
@@ -35,7 +38,7 @@ class Expense(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     expense_date = db.Column(db.Date, nullable=False)
     category = db.Column(db.String(40), nullable=False)
-    business_unit = db.Column(db.String(20), nullable=False, default='shared')
+    business_unit = db.Column(db.String(20), nullable=False)
     amount = db.Column(db.Numeric(12, 2), nullable=False)
     description = db.Column(db.String(255), nullable=False)
     payment_method = db.Column(db.String(20), nullable=True)

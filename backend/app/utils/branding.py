@@ -14,6 +14,8 @@ DEFAULT_SITE_SETTINGS = {
     'contact_phone': '+256 788 066 808',
     'whatsapp_number': '256788066808',
     'contact_email': 'norongir@gmail.com',
+    'registration_number': '80041359477794',
+    'postal_address': 'P.O. Box, Barawa, Kapchorwa',
     'headquarters': 'Bukwo and Kapchorwa',
     'service_area': 'all of Uganda',
     'loan_min_amount': Decimal('200000'),

@@ -15,7 +15,9 @@ from app.extensions import db
 def register_cli(app):
     app.cli.add_command(finance_audit)
     app.cli.add_command(finance_backfill_settlement)
+    app.cli.add_command(finance_convert_flat_loans)
     app.cli.add_command(refresh_loans)
+    app.cli.add_command(send_loan_reminders)
     app.cli.add_command(pii_reencrypt)
 
 
@@ -163,6 +165,87 @@ def finance_backfill_settlement(apply_changes):
                    'Re-run with --apply to save.')
 
 
+@click.command('finance-convert-flat-loans')
+@click.option('--apply', 'apply_changes', is_flag=True, help='Write the changes. Without this flag nothing is saved.')
+@click.option('--csv', 'csv_path', default=None, help='Also write the before/after report to this CSV file.')
+def finance_convert_flat_loans(apply_changes, csv_path):
+    """Convert open flat-rate loans to monthly interest.
+
+    Business rule (confirmed by the client): the rate entered on a loan is a
+    monthly rate and every loan accumulates. Loans that still owe money and
+    were stored as "flat rate" become monthly-interest loans at the same rate,
+    and their payments are re-allocated in date order (interest first).
+    Paid and renewed loans are left exactly as they are.
+    """
+    from decimal import Decimal
+
+    from app.models.finance import Loan
+    from app.modules.auth import log_action
+    from app.services.loan_accounting import refresh_loan_state, replay_loan_payments, round_money
+
+    rows, skipped = [], []
+    loans = Loan.query.filter(
+        Loan.is_deleted == False,  # noqa: E712
+        Loan.status.in_(['active', 'overdue']),
+        db.or_(Loan.interest_mode.is_(None), Loan.interest_mode == 'flat_rate'),
+    ).order_by(Loan.id).all()
+    for loan in loans:
+        refresh_loan_state(loan)
+        if (loan.balance or 0) <= 0:
+            continue
+        rate = Decimal(str(loan.interest_rate or 0))
+        if rate <= 0:
+            skipped.append((loan, 'no interest rate recorded'))
+            continue
+        before = {'balance': float(loan.balance or 0), 'interest': float(loan.interest_amount or 0),
+                  'principal_paid': float(loan.principal_paid or 0), 'interest_paid': float(loan.interest_paid or 0)}
+        loan.interest_mode = 'monthly_accrual'
+        loan.monthly_interest_amount = round_money(Decimal(str(loan.principal)) * rate / Decimal('100'))
+        replay_loan_payments(loan)
+        rows.append({
+            'loan_id': loan.id,
+            'client': loan.client.name if loan.client else '',
+            'principal': float(loan.principal or 0),
+            'rate_per_month': float(rate),
+            'issue_date': loan.issue_date.isoformat() if loan.issue_date else '',
+            'interest_before': before['interest'],
+            'interest_after': float(loan.interest_amount or 0),
+            'interest_paid_after': float(loan.interest_paid or 0),
+            'principal_paid_before': before['principal_paid'],
+            'principal_paid_after': float(loan.principal_paid or 0),
+            'balance_before': before['balance'],
+            'balance_after': float(loan.balance or 0),
+            'status_after': loan.status,
+        })
+
+    for row in rows:
+        click.echo(f"Loan {row['loan_id']} {row['client']}: {row['rate_per_month']:g}%/month from {row['issue_date']}; "
+                   f"interest {row['interest_before']:,.0f} -> {row['interest_after']:,.0f}; "
+                   f"balance {row['balance_before']:,.0f} -> {row['balance_after']:,.0f} ({row['status_after']})")
+    for loan, reason in skipped:
+        click.echo(f"SKIPPED loan {loan.id} ({loan.client.name if loan.client else '?'}): {reason}")
+    if csv_path and rows:
+        with open(csv_path, 'w', newline='', encoding='utf-8') as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+
+    total_before = sum(row['balance_before'] for row in rows)
+    total_after = sum(row['balance_after'] for row in rows)
+    click.echo('')
+    click.echo(f"{len(rows)} loan(s); total balance {total_before:,.0f} -> {total_after:,.0f}; {len(skipped)} skipped.")
+    if apply_changes and rows:
+        db.session.commit()
+        for row in rows:
+            log_action('system', 'finance', 'correct', 'loan', row['loan_id'],
+                       {'action': 'convert_flat_to_monthly', 'rate_per_month': row['rate_per_month'],
+                        'balance_before': row['balance_before'], 'balance_after': row['balance_after']})
+        click.echo('Applied.')
+    else:
+        db.session.rollback()
+        click.echo('Dry run: nothing saved. Re-run with --apply to save.')
+
+
 @click.command('refresh-loans')
 def refresh_loans():
     """Recalculate every open loan's balance and status. Safe to run repeatedly."""
@@ -171,6 +254,37 @@ def refresh_loans():
     changed = refresh_active_loans()
     changed = refresh_open_group_loans() or changed
     click.echo('Loans refreshed (changes saved).' if changed else 'Loans refreshed (no changes).')
+
+
+@click.command('send-loan-reminders')
+@click.option('--dry-run', is_flag=True, help='List who would be reminded without sending anything.')
+def send_loan_reminders(dry_run):
+    """Send SMS reminders for loans due within 3 days or overdue.
+
+    Meant for a daily scheduled job. Due-soon loans are reminded once; overdue
+    loans at most once every 7 days. Needs AT_USERNAME and AT_API_KEY.
+    """
+    from app.services import reminders
+    from app.services.loan_accounting import refresh_active_loans
+    from app.utils.timezone import get_local_today
+
+    refresh_active_loans()
+    today = get_local_today()
+    rows = [row for row in reminders.due_reminders(today) if row['sms_allowed']]
+    if not rows:
+        click.echo('No reminders due.')
+        return
+    if dry_run or not reminders.sms_enabled():
+        for row in rows:
+            click.echo(f"{row['kind']:9s} +{row['phone']}  {row['message']}")
+        click.echo('')
+        click.echo(f"{len(rows)} reminder(s) would be sent." + ('' if reminders.sms_enabled() else ' SMS is not configured.'))
+        return
+    sent = 0
+    for row in rows:
+        ok, _ = reminders.send_reminder_sms(row, today, sent_by='system')
+        sent += 1 if ok else 0
+    click.echo(f'{sent} of {len(rows)} reminder(s) sent.')
 
 
 @click.command('pii-reencrypt')

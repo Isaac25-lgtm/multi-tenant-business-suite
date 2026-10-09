@@ -153,22 +153,25 @@ def test_duplicate_credit_payment_is_rejected(client, make_user, login):
 def test_duplicate_loan_payment_is_rejected_and_reversal_restores_balance(client, make_user, login):
     manager = make_user()
     login(manager)
-    loan = _monthly_loan(get_local_today() - timedelta(days=65))  # two charges so far
-    form = {'amount': '50000', 'payment_date': get_local_today().isoformat()}
+    loan = _monthly_loan(get_local_today() - timedelta(days=65))  # three charges: owes 1,300,000
+    form = {'amount': '50000', 'payment_date': get_local_today().isoformat(),
+            'payment_method': 'mobile_money', 'payment_reference': 'MM123'}
 
     client.post(f'/finance/loans/{loan.id}/pay', data=form)
     client.post(f'/finance/loans/{loan.id}/pay', data=form)
     payments = LoanPayment.query.filter_by(loan_id=loan.id, is_deleted=False).all()
     assert len(payments) == 1
+    assert (payments[0].payment_method, payments[0].payment_reference) == ('mobile_money', 'MM123')
+    assert (payments[0].interest_amount, payments[0].principal_amount) == (D('50000'), D('0'))
     db.session.expire_all()
-    assert db.session.get(Loan, loan.id).balance == D('1150000')
+    assert db.session.get(Loan, loan.id).balance == D('1250000')
 
     client.post(f'/finance/loans/{loan.id}/payments/{payments[0].id}/reverse', data={'reason': 'entered twice'})
     db.session.expire_all()
     reversed_payment = db.session.get(LoanPayment, payments[0].id)
     assert reversed_payment.is_deleted is True
     assert reversed_payment.reversed_by == 'manager'
-    assert db.session.get(Loan, loan.id).balance == D('1200000')
+    assert db.session.get(Loan, loan.id).balance == D('1300000')
 
 
 def test_reversal_is_manager_only(client, make_user, login):
@@ -187,8 +190,8 @@ def test_reversal_is_manager_only(client, make_user, login):
 def test_paid_loan_stays_paid_after_months_pass(client, make_user, login):
     manager = make_user()
     login(manager)
-    loan = _monthly_loan(get_local_today() - timedelta(days=40))  # one charge: owes 1,100,000
-    client.post(f'/finance/loans/{loan.id}/pay', data={'amount': '1100000',
+    loan = _monthly_loan(get_local_today() - timedelta(days=40))  # two charges: owes 1,200,000
+    client.post(f'/finance/loans/{loan.id}/pay', data={'amount': '1200000',
                                                         'payment_date': get_local_today().isoformat()})
     db.session.expire_all()
     loan = db.session.get(Loan, loan.id)

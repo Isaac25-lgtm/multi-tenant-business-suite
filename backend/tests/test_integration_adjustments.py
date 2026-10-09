@@ -45,35 +45,48 @@ def _adjust(client, url, adjustment_type, amount, reason='Agreed with management
 
 def test_interest_discount_reduces_balance_and_is_reversible(client, make_user, login):
     login(make_user())
-    loan = _monthly_loan()  # two charges: owes 1,200,000
+    loan = _monthly_loan()  # 65 days: charged on issue + after 2 monthly dates = 300,000 interest
     _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'interest_discount', 50000)
     db.session.expire_all()
     loan = db.session.get(Loan, loan.id)
-    assert loan.balance == D('1150000')
-    assert loan.outstanding_interest == D('150000')
-    assert loan.total_amount == D('1200000')      # current due is unchanged by a discount
+    assert loan.balance == D('1250000')
+    assert loan.outstanding_interest == D('250000')
+    assert loan.total_amount == D('1300000')      # current due is unchanged by a discount
 
     adjustment = LoanAdjustment.query.one()
     client.post(f'/finance/adjustments/{adjustment.id}/reverse', data={'reason': 'entered on wrong loan'})
     db.session.expire_all()
-    assert db.session.get(Loan, loan.id).balance == D('1200000')
+    assert db.session.get(Loan, loan.id).balance == D('1300000')
     assert db.session.get(LoanAdjustment, adjustment.id).is_reversed is True
 
 
 def test_discount_cannot_exceed_interest_owed(client, make_user, login):
     login(make_user())
     loan = _monthly_loan()
-    _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'interest_waiver', 250000)
+    _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'interest_waiver', 350000)
     assert LoanAdjustment.query.count() == 0
     db.session.expire_all()
-    assert db.session.get(Loan, loan.id).balance == D('1200000')
+    assert db.session.get(Loan, loan.id).balance == D('1300000')
+
+
+def test_write_off_needs_six_months_overdue(client, make_user, login):
+    login(make_user())
+    loan = _monthly_loan()  # only about a month overdue
+    _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'principal_write_off', 100000)
+    assert LoanAdjustment.query.count() == 0
 
 
 def test_full_waiver_and_write_off_settle_the_loan(client, make_user, login):
     login(make_user())
-    loan = _monthly_loan()
-    _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'interest_waiver', 200000)
-    _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'principal_write_off', 1000000)
+    loan = _monthly_loan(days_ago=250)  # more than six months overdue
+    client.get(f'/finance/loans/{loan.id}')
+    db.session.expire_all()
+    loan = db.session.get(Loan, loan.id)
+    interest_owed, principal_owed = loan.outstanding_interest, loan.outstanding_principal
+    assert interest_owed > 0 and principal_owed == D('1000000')
+
+    _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'interest_waiver', int(interest_owed))
+    _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'principal_write_off', int(principal_owed))
     db.session.expire_all()
     loan = db.session.get(Loan, loan.id)
     assert loan.balance == 0
@@ -87,8 +100,8 @@ def test_charge_increases_balance(client, make_user, login):
     _adjust(client, f'/finance/loans/{loan.id}/adjustments', 'charge', 30000)
     db.session.expire_all()
     loan = db.session.get(Loan, loan.id)
-    assert loan.balance == D('1230000')
-    assert loan.total_amount == D('1230000')
+    assert loan.balance == D('1330000')
+    assert loan.total_amount == D('1330000')
 
 
 def test_adjustments_are_manager_only(client, make_user, login):

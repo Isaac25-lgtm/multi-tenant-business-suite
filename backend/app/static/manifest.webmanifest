@@ -5,8 +5,8 @@
   "start_url": "/auth/login",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f3f1ed",
-  "theme_color": "#0f172a",
+  "background_color": "#f1f1f3",
+  "theme_color": "#7a1f2b",
   "icons": [
     { "src": "/static/images/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
     { "src": "/static/images/norongir-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }

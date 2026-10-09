@@ -139,11 +139,11 @@ class Config:
     SESSION_COOKIE_SECURE = _env_bool('SESSION_COOKIE_SECURE', is_render() or is_production())
     PERMANENT_SESSION_LIFETIME = timedelta(hours=12)
 
-    # Monthly-accrual interest timing: 'arrears' (charge on each monthly
-    # anniversary; historical behaviour) or 'advance' (first month charged on
-    # the issue date). Changing this changes live balances; confirm with the
-    # business before switching.
-    MONTHLY_ACCRUAL_TIMING = os.getenv('MONTHLY_ACCRUAL_TIMING', 'arrears').strip().lower()
+    # Monthly-interest timing. 'advance' (confirmed by the business): the first
+    # month is charged on the issue date, then the day after each monthly date.
+    # 'arrears': charge on each monthly anniversary instead. Changing this
+    # changes live balances.
+    MONTHLY_ACCRUAL_TIMING = os.getenv('MONTHLY_ACCRUAL_TIMING', 'advance').strip().lower()
 
     # Dedicated key for encrypting personal ID numbers (Fernet key). When set,
     # new values are encrypted with it and values written under the old

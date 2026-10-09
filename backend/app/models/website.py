@@ -267,6 +267,8 @@ class WebsiteSettings(db.Model):
     contact_phone = db.Column(db.String(50), nullable=True)
     whatsapp_number = db.Column(db.String(50), nullable=True)
     contact_email = db.Column(db.String(120), nullable=True)
+    registration_number = db.Column(db.String(60), nullable=True)
+    postal_address = db.Column(db.String(160), nullable=True)
     headquarters = db.Column(db.String(120), nullable=True)
     service_area = db.Column(db.String(120), nullable=True)
     loan_min_amount = db.Column(db.Numeric(12, 2), nullable=True)

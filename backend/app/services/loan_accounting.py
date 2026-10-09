@@ -8,14 +8,16 @@ Interest modes
 flat_rate
     Interest is charged once: principal x rate. It never grows.
 monthly_accrual
-    A fixed monthly interest amount is charged per chargeable month. Accrual
-    stops on the date the loan is settled, so a cleared loan never reopens.
-    When the charges start is controlled by MONTHLY_ACCRUAL_TIMING:
-      * 'arrears' (default, historical behaviour): one charge on each monthly
-        anniversary of the issue date. Nothing is charged on the issue date.
-      * 'advance': the first month is charged on the issue date and each later
-        month is charged the day *after* an anniversary, so a borrower who pays
-        on the due date is not charged the next month.
+    Interest is charged once per month on the principal still unpaid on the
+    charge date (rate = monthly_interest_amount / original principal), so the
+    charge falls when principal is repaid. Charges continue after the due date
+    until the loan is settled, and stop on the settlement date, so a cleared
+    loan never reopens. Charge dates follow MONTHLY_ACCRUAL_TIMING:
+      * 'advance' (default, the business rule confirmed by the client): the
+        first month is charged on the issue date and each later month the day
+        *after* a monthly anniversary, so paying on the due date costs exactly
+        the months already charged.
+      * 'arrears': one charge on each monthly anniversary; nothing on issue.
 reducing_balance_equal
     Equal monthly payments on a reducing principal (annuity schedule).
 
@@ -36,7 +38,7 @@ from app.utils.timezone import get_local_today
 MONEY_QUANT = Decimal('1')
 ZERO = Decimal('0')
 ACCRUAL_TIMINGS = ('arrears', 'advance')
-DEFAULT_ACCRUAL_TIMING = 'arrears'
+DEFAULT_ACCRUAL_TIMING = 'advance'
 
 
 def _d(value):
@@ -98,6 +100,22 @@ def chargeable_months(issue_date, as_of_date, timing=None):
     if timing == 'advance':
         return 1 + anniversaries_reached(issue_date, as_of_date, inclusive=False)
     return anniversaries_reached(issue_date, as_of_date, inclusive=True)
+
+
+def monthly_charge_dates(issue_date, as_of_date, timing=None):
+    """Every date on which a monthly interest charge falls, up to `as_of_date`."""
+    if not issue_date or not as_of_date or as_of_date < issue_date:
+        return []
+    timing = timing or get_accrual_timing()
+    dates = [issue_date] if timing == 'advance' else []
+    offset = timedelta(days=1) if timing == 'advance' else timedelta(0)
+    k = 1
+    while True:
+        charge_date = monthly_anniversary(issue_date, k) + offset
+        if charge_date > as_of_date:
+            return dates
+        dates.append(charge_date)
+        k += 1
 
 
 def calculate_due_date(issue_date, duration_units, duration_type):
@@ -170,6 +188,46 @@ def get_loan_payment_schedule(loan):
 # Individual loans
 # ---------------------------------------------------------------------------
 
+def principal_reductions(loan):
+    """(date, amount) for everything that has reduced a loan's principal.
+
+    Principal repaid through payments and principal written off. Tests and
+    replays may supply `loan._principal_events` to avoid touching the database.
+    """
+    supplied = getattr(loan, '_principal_events', None)
+    if supplied is not None:
+        return supplied
+    loan_id = getattr(loan, 'id', None)
+    if not loan_id or not has_app_context():
+        return []
+    from app.models.finance import LoanAdjustment, LoanPayment
+
+    events = [(row.payment_date, _d(row.principal_amount)) for row in LoanPayment.query.filter(
+        LoanPayment.loan_id == loan_id,
+        LoanPayment.is_deleted == False,  # noqa: E712
+        LoanPayment.principal_amount > 0,
+    ).all()]
+    events += [(row.effective_date, _d(row.amount)) for row in LoanAdjustment.query.filter(
+        LoanAdjustment.loan_id == loan_id,
+        LoanAdjustment.adjustment_type == 'principal_write_off',
+        LoanAdjustment.is_reversed == False,  # noqa: E712
+    ).all()]
+    return events
+
+
+def monthly_rate(loan):
+    """Monthly interest as a fraction of principal (e.g. 0.15 for 15%)."""
+    principal = _d(loan.principal)
+    if principal <= 0:
+        return ZERO
+    return _d(loan.monthly_interest_amount) / principal
+
+
+def current_monthly_interest(loan):
+    """The next monthly charge at today's unpaid principal."""
+    return round_money(monthly_rate(loan) * _d(loan.outstanding_principal))
+
+
 def accrued_interest(loan, as_of_date):
     """Interest charged on a loan up to `as_of_date` (before any payments)."""
     interest_mode = loan.interest_mode or 'flat_rate'
@@ -179,8 +237,15 @@ def accrued_interest(loan, as_of_date):
         settled_on = getattr(loan, 'settled_on', None)
         if settled_on and settled_on < accrual_date:
             accrual_date = settled_on
-        months = chargeable_months(loan.issue_date, accrual_date)
-        return _d(loan.monthly_interest_amount) * months
+        principal = _d(loan.principal)
+        rate = monthly_rate(loan)
+        reductions = principal_reductions(loan)
+        total = ZERO
+        for charge_date in monthly_charge_dates(loan.issue_date, accrual_date):
+            # Principal repaid before the charge date lowers that month's interest.
+            repaid = sum((amount for when, amount in reductions if when < charge_date), ZERO)
+            total += round_money(rate * max(principal - repaid, ZERO))
+        return total
 
     if interest_mode == 'reducing_balance_equal':
         return sum((row['interest'] for row in get_loan_payment_schedule(loan)), ZERO)
@@ -329,6 +394,72 @@ def preview_loan_payment(loan, amount, payment_date):
     }
 
 
+def replay_loan_payments(loan, as_of_date=None):
+    """Re-allocate every payment in date order under the current rules.
+
+    Needed whenever history changes out of order (a backdated payment, a
+    reversal, or a loan converted to monthly interest), because how a payment
+    splits into interest and principal depends on what was owed on its date.
+    Adjustments are applied from their effective dates. Deterministic:
+    running it twice gives the same result.
+    """
+    from app.models.finance import LoanAdjustment, LoanPayment
+
+    if (loan.status or '') == 'renewed':
+        return False
+    payments = LoanPayment.query.filter(
+        LoanPayment.loan_id == loan.id,
+        LoanPayment.is_deleted == False,  # noqa: E712
+    ).order_by(LoanPayment.payment_date.asc(), LoanPayment.id.asc()).all()
+    adjustments = LoanAdjustment.query.filter(
+        LoanAdjustment.loan_id == loan.id,
+        LoanAdjustment.is_reversed == False,  # noqa: E712
+    ).all()
+
+    def apply_adjustments_as_of(when):
+        totals = {field: ZERO for field in set(ADJUSTMENT_FIELDS.values())}
+        for adjustment in adjustments:
+            if when is None or adjustment.effective_date <= when:
+                totals[ADJUSTMENT_FIELDS[adjustment.adjustment_type]] += _d(adjustment.amount)
+        for field, total in totals.items():
+            setattr(loan, field, total)
+
+    loan.principal_paid = ZERO
+    loan.interest_paid = ZERO
+    loan.amount_paid = ZERO
+    loan.settled_on = None
+    if (loan.status or '') == 'paid':
+        loan.status = 'active'
+    events = [(adjustment.effective_date, _d(adjustment.amount)) for adjustment in adjustments
+              if adjustment.adjustment_type == 'principal_write_off']
+    loan._principal_events = events
+    try:
+        for payment in payments:
+            apply_adjustments_as_of(payment.payment_date)
+            refresh_loan_state(loan, payment.payment_date)
+            usable = min(_d(payment.amount), _d(loan.balance))
+            principal, interest = allocate_loan_payment(loan, usable)
+            payment.principal_amount = principal
+            payment.interest_amount = interest
+            if principal > 0:
+                events.append((payment.payment_date, principal))
+            refresh_loan_state(loan, payment.payment_date)
+            payment.balance_after = loan.balance
+            if _d(loan.balance) > 0:
+                loan.settled_on = None
+        apply_adjustments_as_of(None)
+        if loan.settled_on:
+            # Re-check the settlement with every adjustment applied: it only
+            # stands if the balance is still zero on that date.
+            settled = loan.settled_on
+            loan.settled_on = None
+            refresh_loan_state(loan, settled)
+        refresh_loan_state(loan, as_of_date)
+    finally:
+        del loan._principal_events
+    return True
+
+
 def reverse_loan_payment_allocation(loan, payment):
     """Undo a payment's principal/interest allocation and reopen accrual."""
     loan.principal_paid = max(_d(loan.principal_paid) - _d(payment.principal_amount), ZERO)
@@ -380,11 +511,41 @@ def refresh_active_loans(as_of_date=None):
         Loan.status != 'renewed',
         Loan.settled_on.is_(None),
     ).all()
+    events = _principal_events_by_loan([loan.id for loan in loans])
     for loan in loans:
-        changed = refresh_loan_state(loan, as_of_date) or changed
+        loan._principal_events = events.get(loan.id, [])
+        try:
+            changed = refresh_loan_state(loan, as_of_date) or changed
+        finally:
+            del loan._principal_events
     if changed:
         db.session.commit()
     return changed
+
+
+def _principal_events_by_loan(loan_ids):
+    from app.models.finance import LoanAdjustment, LoanPayment
+
+    events = {}
+    if not loan_ids:
+        return events
+    for loan_id, when, amount in db.session.query(
+        LoanPayment.loan_id, LoanPayment.payment_date, LoanPayment.principal_amount
+    ).filter(
+        LoanPayment.loan_id.in_(loan_ids),
+        LoanPayment.is_deleted == False,  # noqa: E712
+        LoanPayment.principal_amount > 0,
+    ).all():
+        events.setdefault(loan_id, []).append((when, _d(amount)))
+    for loan_id, when, amount in db.session.query(
+        LoanAdjustment.loan_id, LoanAdjustment.effective_date, LoanAdjustment.amount
+    ).filter(
+        LoanAdjustment.loan_id.in_(loan_ids),
+        LoanAdjustment.adjustment_type == 'principal_write_off',
+        LoanAdjustment.is_reversed == False,  # noqa: E712
+    ).all():
+        events.setdefault(loan_id, []).append((when, _d(amount)))
+    return events
 
 
 # ---------------------------------------------------------------------------

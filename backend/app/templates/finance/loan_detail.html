@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros.html' import payment_fields, paid_by %}
 
 {% block title %}Loan - {{ loan.client.name }} - {{ brand_display_name }}{% endblock %}
 
@@ -67,25 +68,25 @@
                         <td class="text-gray-500">Interest Plan</td>
                         <td class="text-right font-medium">
                             {% if loan.interest_mode == 'monthly_accrual' %}
-                            Monthly accrual
+                            Monthly interest
                             {% elif loan.interest_mode == 'reducing_balance_equal' %}
                             Reducing balance - equal monthly payments
                             {% else %}
-                            Flat rate
+                            Flat rate (charged once; older loan)
                             {% endif %}
                         </td>
                     </tr>
                     <tr>
-                        <td class="text-gray-500">Equivalent Rate</td>
-                        <td class="text-right font-medium">{{ "{:.1f}".format(loan.interest_rate) }}%</td>
+                        <td class="text-gray-500">Interest Rate</td>
+                        <td class="text-right font-medium">{{ "{:g}".format(loan.interest_rate|float) }}%{% if loan.interest_mode != 'flat_rate' and loan.interest_mode %} per month{% endif %}</td>
                     </tr>
                     {% if loan.interest_mode == 'monthly_accrual' %}
                     <tr>
-                        <td class="text-gray-500">Monthly Interest</td>
-                        <td class="text-right font-medium">UGX {{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }}</td>
+                        <td class="text-gray-500">Next Month's Interest</td>
+                        <td class="text-right font-medium">UGX {{ "{:,.0f}".format(current_monthly_interest(loan)) }} <span class="text-xs text-gray-500">on UGX {{ "{:,.0f}".format(loan.outstanding_principal) }} unpaid</span></td>
                     </tr>
                     <tr>
-                        <td class="text-gray-500">Accrued Interest So Far</td>
+                        <td class="text-gray-500">Interest Charged So Far</td>
                         <td class="text-right font-medium">UGX {{ "{:,.0f}".format(loan.interest_amount) }}</td>
                     </tr>
                     {% elif loan.interest_mode == 'reducing_balance_equal' %}
@@ -117,7 +118,7 @@
                     {% if loan.interest_mode == 'monthly_accrual' %}
                     <tr>
                         <td class="text-gray-500">Repayment Rule</td>
-                        <td class="text-right font-medium">Adds UGX {{ "{:,.0f}".format(loan.monthly_interest_amount or 0) }} {% if config.MONTHLY_ACCRUAL_TIMING == 'advance' %}on the issue date and after each monthly date passes{% else %}for every completed month{% endif %}, until paid</td>
+                        <td class="text-right font-medium">{{ "{:g}".format(loan.interest_rate|float) }}% of the unpaid principal {% if config.MONTHLY_ACCRUAL_TIMING == 'advance' %}on the issue date and again after each monthly date passes{% else %}for every completed month{% endif %}, until the loan is cleared. Payments go to interest first.</td>
                     </tr>
                     {% endif %}
                 </tbody>
@@ -294,6 +295,7 @@
                     <label class="form-label" for="payment-notes">Notes</label>
                     <input type="text" id="payment-notes" name="notes" class="form-input" placeholder="e.g. Mobile money ref 1234">
                 </div>
+                {{ payment_fields() }}
                 <button type="submit" class="btn btn-success w-full">Record payment</button>
             </form>
             <script>
@@ -342,6 +344,7 @@
                             Principal: UGX {{ "{:,.0f}".format(payment.principal_amount or 0) }} &middot;
                             Interest: UGX {{ "{:,.0f}".format(payment.interest_amount or 0) }}
                             {% if payment.payment_type and payment.payment_type != 'regular' %} &middot; {{ payment.payment_type|replace('_', ' ')|title }}{% endif %}
+                            {% if payment.payment_method %} &middot; {{ paid_by(payment) }}{% endif %}
                         </span>
                         {% if payment.notes %}
                         <span class="text-gray-500 block text-xs">{{ payment.notes }}</span>

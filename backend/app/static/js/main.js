@@ -378,3 +378,43 @@ function displayUploadedFile(file) {
     `;
     container.appendChild(fileDiv);
 }
+
+// ============ SITE-WIDE USABILITY ============
+document.addEventListener('DOMContentLoaded', function () {
+    // 1. Long guide panels become a collapsed "Help" line that opens on tap.
+    document.querySelectorAll('.guideline').forEach(function (panel) {
+        if (panel.closest('.modal') || panel.closest('details')) return;
+        var heading = panel.querySelector('.font-semibold, strong');
+        var details = document.createElement('details');
+        details.className = 'help-details ' + (panel.classList.contains('mb-6') ? 'mb-6' : 'mb-4');
+        var summary = document.createElement('summary');
+        summary.textContent = 'Help: ' + (heading ? heading.textContent.trim().replace(/[:\-–]\s*$/, '') : 'how this page works');
+        details.appendChild(summary);
+        panel.parentNode.insertBefore(details, panel);
+        panel.classList.remove('guideline', 'mb-6', 'mb-4');
+        panel.style.marginTop = '10px';
+        details.appendChild(panel);
+    });
+
+    // 2. Every data table gets labelled cells so it reads as cards on phones.
+    document.querySelectorAll('table.data-table').forEach(function (table) {
+        if (table.classList.contains('responsive-table') || table.closest('.modal')) return;
+        var headers = Array.prototype.map.call(table.querySelectorAll('thead th'), function (th) {
+            return th.textContent.trim();
+        });
+        if (!headers.length) return;
+        // Entry grids (rows of form inputs) keep their normal layout.
+        if (table.querySelector('tbody input:not([type="hidden"]), tbody select, tbody textarea')) return;
+        table.querySelectorAll('tbody tr, tfoot tr').forEach(function (row) {
+            var index = 0;
+            Array.prototype.forEach.call(row.children, function (cell) {
+                var span = cell.colSpan || 1;
+                if (span === 1 && !cell.hasAttribute('data-label') && headers[index]) {
+                    cell.setAttribute('data-label', headers[index]);
+                }
+                index += span;
+            });
+        });
+        table.classList.add('responsive-table');
+    });
+});

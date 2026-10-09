@@ -10,6 +10,7 @@ from app.models.customer import Customer
 from app.models.user import User
 from app.modules.auth import login_required, log_action
 from app.utils.integrity import DUPLICATE_MESSAGE, find_recent_duplicate
+from app.utils.payments import read_payment_details
 from app.extensions import db
 from app.utils.timezone import get_local_now, get_local_today
 from app.utils.utils import generate_reference_number
@@ -683,6 +684,8 @@ def create_sale():
                 db.session.flush()
                 customer_id = customer.id
 
+        sale_payment_method, sale_payment_reference = read_payment_details(request.form)
+
         # Create sale
         sale = BoutiqueSale(
             reference_number=generate_reference_number('DNV-B-', BoutiqueSale),
@@ -693,7 +696,9 @@ def create_sale():
             total_amount=total_amount,
             amount_paid=amount_paid,
             balance=balance,
-            is_credit_cleared=(balance <= 0)
+            is_credit_cleared=(balance <= 0),
+            payment_method=sale_payment_method if amount_paid > 0 else None,
+            payment_reference=sale_payment_reference if amount_paid > 0 else None,
         )
         db.session.add(sale)
         db.session.flush()
@@ -928,11 +933,14 @@ def pay_credit(id):
             sale.is_credit_cleared = True
 
         # Create payment record
+        payment_method, payment_reference = read_payment_details(request.form)
         payment = BoutiqueCreditPayment(
             sale_id=sale.id,
             payment_date=payment_date,
             amount=amount,
-            remaining_balance=sale.balance
+            remaining_balance=sale.balance,
+            payment_method=payment_method,
+            payment_reference=payment_reference,
         )
         db.session.add(payment)
         db.session.commit()
@@ -1214,11 +1222,14 @@ def pay_hire(id):
         if hire.balance < 0:
             hire.balance = Decimal('0')
 
+        payment_method, payment_reference = read_payment_details(request.form)
         payment = BoutiqueHirePayment(
             hire_id=hire.id,
             payment_date=payment_date,
             amount=amount,
-            remaining_balance=hire.balance
+            remaining_balance=hire.balance,
+            payment_method=payment_method,
+            payment_reference=payment_reference,
         )
         db.session.add(payment)
         db.session.commit()
